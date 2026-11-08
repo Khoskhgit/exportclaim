@@ -13,6 +13,7 @@ from fastapi.templating import Jinja2Templates
 from . import auth, nhso18, nhso18_service as svc
 from .config import Settings
 from .store import Store
+from .aipn import number
 from .validate import text
 
 log = logging.getLogger("ssop.nhso18")
@@ -104,7 +105,7 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
         dx = q(f"SELECT diagtype, icd10, icdname(icd10) name FROM {table} WHERE {col}={nhso18.lit(key)} ORDER BY diagtype, icd10")
         return {
             "items": [{"icode": text(i["icode"]), "name": text(i["name"]), "billmaud": text(i["billmaud"]), "adp": text(i["adp"]),
-                       "qty": nhso18.fmt(i["qty"], "C", 12), "amount": svc.money(i["amount"]),
+                       "qty": number(i["qty"]), "amount": svc.money(i["amount"]),
                        "hosxp_excluded": bool(i["hosxp_noexport"]), "excluded": (key, text(i["icode"])) in excluded}
                       for i in items],
             "dx": [{"type": text(d["diagtype"]), "code": text(d["icd10"]), "name": text(d["name"])} for d in dx],
