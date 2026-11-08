@@ -7,6 +7,7 @@ form.addEventListener("submit", async (e) => {
   errorBox.hidden = true;
   const button = form.querySelector("button");
   button.disabled = true;
+  button.textContent = "กำลังตรวจสอบ…";
   try {
     const response = await fetch("/auth/login", {
       method: "POST", headers: { "Content-Type": "application/json" },
@@ -16,11 +17,12 @@ form.addEventListener("submit", async (e) => {
     if (!response.ok) throw new Error(data.detail || `เข้าสู่ระบบไม่สำเร็จ (${response.status})`);
     window.location.assign(data.next || "/");
   } catch (err) {
-    errorBox.textContent = err.message;
+    errorBox.querySelector(".notice-text").textContent = err.message;
     errorBox.hidden = false;
     form.password.value = "";
     form.password.focus();
   } finally {
     button.disabled = false;
+    button.textContent = "เข้าสู่ระบบ";
   }
 });

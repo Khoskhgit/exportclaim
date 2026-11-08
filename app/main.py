@@ -111,7 +111,7 @@ def create_app(settings: Settings | None = None, hosxp: Any = None, store: Store
 
     @app.get("/", response_class=HTMLResponse)
     def index(request: Request):
-        return templates.TemplateResponse(request, "index.html", {"station": settings.station})
+        return templates.TemplateResponse(request, "index.html", {"station": settings.station, "hname": settings.hname})
 
     @app.get("/api/status")
     def status():

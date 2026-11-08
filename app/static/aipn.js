@@ -1,16 +1,17 @@
 "use strict";
-const state = { rows: [], selected: new Set(), filter: "all", text: "", current: null };
+const state = { rows: [], selected: new Set(), filter: "all", text: "", current: null, sort: { key: "", dir: "asc" } };
 const CARE_AS = { M: "M: Main", B: "B: suB", A: "A: suprA", X: "X: eXt" };
 
 const CATEGORIES = {
-  all: ["ทั้งหมด", () => true],
-  ready: ["พร้อมส่ง", (r) => r.selectable && !r.has_warn && !r.status],
-  warn: ["มีคำเตือน", (r) => r.selectable && r.has_warn],
-  error: ["Error", (r) => r.has_error],
-  special: ["เคสพิเศษ", (r) => r.special],
-  sent: ["ส่งแล้ว/ติด C", (r) => r.status],
+  all: ["ทั้งหมด", () => true, "all"],
+  ready: ["พร้อมส่ง", (r) => r.selectable && !r.has_warn && !r.status, "ok"],
+  warn: ["มีคำเตือน", (r) => r.selectable && r.has_warn, "warn"],
+  error: ["Error", (r) => r.has_error, "error"],
+  special: ["เคสพิเศษ", (r) => r.special, "special"],
+  sent: ["ส่งแล้ว/ติด C", (r) => r.status, "sent"],
 };
 
+function rank(r) { return r.special ? 3 : r.has_error ? 2 : r.has_warn ? 1 : 0; }
 function resultBadge(r) {
   if (r.special) return el("span", { class: "badge b-special", title: "ต้องส่งด้วยโปรแกรมเดิม" }, r.special);
   if (r.has_error) return el("span", { class: "badge b-error" }, "Error");
@@ -21,97 +22,111 @@ function resultBadge(r) {
 function visible() {
   const q = state.text.toLowerCase();
   const test = CATEGORIES[state.filter][1];
-  return state.rows.filter((r) => test(r) && (!q || `${r.ptname} ${r.an} ${r.hn} ${r.pdx}`.toLowerCase().includes(q)));
+  const list = state.rows.filter((r) => test(r) && (!q || `${r.ptname} ${r.an} ${r.hn} ${r.pdx}`.toLowerCase().includes(q)));
+  return sortRows(list.map((r) => Object.assign(r, { rank: rank(r) })), state.sort, ["send_amount", "rank"]);
 }
 
 function renderChips() {
-  $("summary").replaceChildren(...Object.entries(CATEGORIES).map(([key, [label, test]]) =>
-    el("button", { class: "chip", type: "button", "aria-pressed": String(state.filter === key), onclick: () => { state.filter = key; render(); } },
-      label, el("b", {}, String(state.rows.filter(test).length)))));
+  renderCards($("summary"), CATEGORIES, state.rows, state.filter, (r) => r.send_amount, (key) => { state.filter = key; render(); });
 }
 
 async function setCareAs(r, value) {
   try {
     await api("/api/aipn/careas", { an: r.an, care_as: value === r.care_as_default ? "" : value });
     r.care_as = value;
+    notice(`AN ${r.an} ใช้ CareAs ${value}`, "ok");
   } catch (err) { notice(err.message); renderRows(); }
 }
 
 function renderRows() {
   const list = visible();
+  showSort($("thead"), state.sort);
   $("rows").replaceChildren(...list.map((r) => {
     const box = el("input", {
       type: "checkbox", checked: state.selected.has(r.an), disabled: !r.selectable,
-      title: r.selectable ? "" : "รายการนี้ส่งไม่ได้", "aria-label": `เลือก AN ${r.an}`,
+      title: r.selectable ? "เลือกส่ง" : "รายการนี้ส่งไม่ได้", "aria-label": `เลือก AN ${r.an}`,
       onclick: (e) => e.stopPropagation(),
       onchange: (e) => { e.target.checked ? state.selected.add(r.an) : state.selected.delete(r.an); renderTotals(); },
     });
     const care = el("select", { class: "care-as", "aria-label": `CareAs ของ AN ${r.an}`, onclick: (e) => e.stopPropagation(), onchange: (e) => setCareAs(r, e.target.value) },
-      ...Object.entries(CARE_AS).map(([code, label]) => el("option", { value: code, selected: r.care_as === code }, code === r.care_as_default ? `${label} (ค่าเริ่มต้น)` : label)));
-    const problems = r.special ? "ต้องส่งด้วยโปรแกรมเดิม" : r.issues.map((i) => i.message).join(", ");
+      ...Object.entries(CARE_AS).map(([code, label]) => el("option", { value: code, selected: r.care_as === code }, code === r.care_as_default ? `${label} ★` : label)));
+    const problems = r.special ? ["ต้องส่งด้วยโปรแกรมเดิม"] : r.issues.map((i) => i.message);
     return el("tr", { class: state.current === r.an ? "current" : "", onclick: () => openDrawer(r) },
-      el("td", {}, box), el("td", {}, resultBadge(r)),
-      el("td", {}, r.status ? el("span", { class: "badge b-sent" }, r.status) : ""),
-      el("td", {}, r.an), el("td", {}, r.hn), el("td", {}, r.ptname), el("td", {}, r.discharge_at),
-      el("td", {}, r.pdx), el("td", {}, r.pay_plan), el("td", {}, care),
-      el("td", { class: "num" }, baht.format(Number(r.send_amount)), r.excluded_count ? el("div", { class: "muted-note" }, `ไม่ส่ง ${r.excluded_count} รายการ`) : ""),
-      el("td", { class: "problems" }, problems));
+      el("td", { class: "check" }, box), el("td", {}, resultBadge(r)),
+      el("td", {}, r.status ? el("span", { class: "badge b-sent" }, r.status) : el("span", { class: "muted" }, "—")),
+      el("td", { class: "mono" }, r.an), el("td", { class: "mono" }, r.hn),
+      el("td", { class: "name-cell", title: r.ptname }, r.ptname, el("span", { class: "sub" }, r.pttype)),
+      el("td", { class: "mono" }, r.discharge_at), el("td", {}, r.pdx || el("span", { class: "muted" }, "—")), el("td", {}, r.pay_plan), el("td", {}, care),
+      el("td", { class: "num" }, baht.format(Number(r.send_amount)), r.excluded_count ? el("span", { class: "excluded-note" }, `ไม่ส่ง ${r.excluded_count} รายการ`) : ""),
+      el("td", { class: "problems" }, problemText(problems)));
   }));
   $("empty").hidden = list.length > 0;
-  if (!list.length && state.rows.length) $("empty").textContent = "ไม่มีรายการตามตัวกรองนี้";
+  if (!list.length && state.rows.length) $("empty").replaceChildren(...emptyState("ไม่มีรายการตามตัวกรองนี้"));
+  $("result-count").textContent = state.rows.length ? `แสดง ${count.format(list.length)} จาก ${count.format(state.rows.length)} รายการ` : "";
 }
 
 function selectedRows() { return state.rows.filter((r) => state.selected.has(r.an)); }
 function renderTotals() {
   const list = selectedRows();
   const total = list.reduce((sum, r) => sum + Number(r.send_amount), 0);
-  $("selected-count").textContent = `เลือก ${list.length.toLocaleString("th-TH")} คน`;
+  $("selected-count").textContent = `เลือก ${count.format(list.length)} คน`;
   $("selected-total").textContent = `ยอดส่ง ${baht.format(total)} บาท`;
   $("export").disabled = list.length === 0;
 }
 function render() { renderChips(); renderRows(); renderTotals(); }
 
 function table(headers, rows) {
-  return el("table", {}, el("thead", {}, el("tr", {}, ...headers.map((h) => el("th", {}, h)))), el("tbody", {}, ...rows));
+  return el("table", {}, el("thead", {}, el("tr", {}, ...headers.map((h) => el("th", { class: h.num ? "num" : "" }, h.label || h)))), el("tbody", {}, ...rows));
+}
+function info(pairs) {
+  return el("dl", { class: "info-grid" }, ...pairs.map(([k, v]) => el("div", {}, el("dt", {}, k), el("dd", {}, v || "—"))));
 }
 
 async function openDrawer(r) {
   state.current = r.an; renderRows();
-  $("drawer").hidden = false;
-  $("drawer-title").textContent = `AN ${r.an}`;
+  $("drawer").hidden = false; $("drawer-backdrop").hidden = false;
+  $("drawer-title").textContent = r.ptname || `AN ${r.an}`;
+  $("drawer-sub").textContent = `AN ${r.an} · HN ${r.hn} · จำหน่าย ${r.discharge_at}`;
   const body = $("drawer-body");
-  body.replaceChildren(el("p", {}, "กำลังโหลด…"));
+  if (!body.children.length || body.dataset.an !== r.an) body.replaceChildren(el("p", { class: "muted" }, "กำลังโหลด…"));
+  body.dataset.an = r.an;
   try {
     const data = await api("/api/aipn/detail", { an: r.an });
     if (state.current !== r.an) return;
-    const parts = [el("dl", { class: "sum" },
-      el("dt", {}, "ชื่อ"), el("dd", {}, r.ptname), el("dt", {}, "HN"), el("dd", {}, r.hn), el("dt", {}, "เลขบัตร"), el("dd", {}, r.cid),
-      el("dt", {}, "สิทธิ"), el("dd", {}, r.pttype), el("dt", {}, "Admit"), el("dd", {}, r.admit_at), el("dt", {}, "จำหน่าย"), el("dd", {}, r.discharge_at),
-      el("dt", {}, "HospMain ที่จะส่ง"), el("dd", {}, r.hmain || "(ว่าง)"), el("dt", {}, "AuthCode"), el("dd", {}, r.auth_code || "(ไม่มี)"),
-      el("dt", {}, "UPayPlan"), el("dd", {}, r.pay_plan))];
+
+    const check = [info([["เลขบัตร", r.cid], ["สิทธิ", r.pttype], ["Admit", r.admit_at], ["จำหน่าย", r.discharge_at],
+      ["HospMain ที่จะส่ง", r.hmain || "(ว่าง)"], ["AuthCode", r.auth_code || "(ไม่มี)"], ["UPayPlan", r.pay_plan], ["CareAs", r.care_as]])];
     if (r.special || r.issues.length) {
-      parts.push(el("h3", {}, "ผลตรวจ"));
-      const items = r.issues.map((i) => el("li", {}, el("span", { class: `badge ${i.level === "error" ? "b-error" : "b-warn"}` }, i.message),
-        ...i.items.map((name) => el("div", { class: "flag-note" }, name))));
-      if (r.special) items.unshift(el("li", {}, el("span", { class: "badge b-special" }, `${r.special}: ต้องส่งด้วยโปรแกรมเดิม`)));
-      parts.push(el("ul", { class: "issues" }, ...items));
-      if (r.issues.length) parts.push(el("p", {}, "แก้ข้อมูลใน HOSxP แล้วกดค้นหาอีกครั้ง"));
+      check.push(el("h3", {}, "ผลตรวจ"));
+      const items = r.issues.map((i) => el("li", { class: `issue ${i.level}` },
+        el("div", { class: "issue-title" }, el("span", { class: `badge ${i.level === "error" ? "b-error" : "b-warn"}` }, i.level === "error" ? "Error" : "เตือน"), " ", i.message),
+        i.items.length ? el("ul", {}, ...i.items.map((name) => el("li", {}, name))) : null));
+      if (r.special) items.unshift(el("li", { class: "issue special" }, el("div", { class: "issue-title" }, el("span", { class: "badge b-special" }, r.special), " ต้องส่งด้วยโปรแกรมเดิม")));
+      check.push(el("ul", { class: "issues" }, ...items));
+      if (r.issues.some((i) => i.code === "UNITPRICE_WRONG")) check.push(el("p", { class: "hint" }, "ราคาไม่ตรง สกส.: ไปที่แท็บ \"ค่าใช้จ่าย\" แล้วกด \"ใช้ราคา สกส.\" หรือแก้ราคาเอง"));
+      if (r.issues.some((i) => i.level === "error")) check.push(el("p", { class: "hint" }, "Error: แก้ข้อมูลใน HOSxP หรือติ๊กไม่ส่งรายการที่มีปัญหา แล้วกดค้นหาอีกครั้ง"));
+    } else {
+      check.push(el("div", { class: "all-good" }, "✓ ผ่านการตรวจทั้งหมด พร้อมส่ง"));
     }
-    parts.push(el("h3", {}, "การวินิจฉัย"));
-    parts.push(data.dx.length ? table(["ประเภท", "รหัส", "ชื่อโรค"], data.dx.map((d) => el("tr", {}, el("td", {}, d.type), el("td", {}, d.code), el("td", {}, d.name)))) : el("p", {}, "ไม่มีข้อมูล"));
-    parts.push(el("h3", {}, "หัตถการที่จะส่ง"));
-    parts.push(data.ops.length ? el("ol", { class: "op-lines" }, ...data.ops.map((o) => el("li", {}, o.line.split("|").slice(2).join(" | ")))) : el("p", {}, "ไม่มี"));
-    parts.push(el("h3", {}, "รายการค่าใช้จ่าย (ติ๊กเพื่อไม่ส่งรายการนั้น)"));
-    const amount = el("p", { class: "send-amount" });
-    const showAmount = () => { amount.textContent = `ยอดส่ง ${baht.format(Number(r.send_amount))} บาท DRGCharge ${baht.format(Number(r.drg_charge))} บาท (ไม่ส่ง ${r.excluded_count} รายการ)`; };
+
+    const dx = [data.dx.length ? table(["ประเภท", "รหัส", "ชื่อโรค"], data.dx.map((d) => el("tr", {}, el("td", {}, d.type), el("td", { class: "mono" }, d.code), el("td", {}, d.name)))) : el("p", { class: "muted" }, "ไม่มีข้อมูลการวินิจฉัย")];
+    const ops = [data.ops.length ? table(["รหัส", "ชื่อหัตถการ", "แพทย์", "เริ่ม", "สิ้นสุด"], data.ops.map((o) => {
+      const f = o.line.split("|");
+      return el("tr", {}, el("td", { class: "mono" }, f[2]), el("td", {}, f[3]), el("td", {}, f[4]), el("td", { class: "mono" }, f[5].replace("T", " ")), el("td", { class: "mono" }, f[6].replace("T", " ")));
+    })) : el("p", { class: "muted" }, "ไม่มีหัตถการ")];
+
+    const amount = el("div", { class: "amount-bar" });
+    const showAmount = () => amount.replaceChildren(
+      el("div", {}, el("span", {}, "ยอดส่ง "), el("b", {}, baht.format(Number(r.send_amount)))),
+      el("div", {}, el("span", {}, "DRGCharge "), el("b", {}, baht.format(Number(r.drg_charge)))),
+      el("div", {}, el("span", {}, `ไม่ส่ง ${r.excluded_count} รายการ`)));
     showAmount();
-    parts.push(amount);
-    if (data.skipped.length) parts.push(el("p", { class: "muted-note" }, `ไม่ส่งตามกฎเดิม (ไม่มีชื่อหรือชื่อขึ้นต้น "ยา."): ${data.skipped.join(", ")}`));
     const setPrice = async (item, value) => {
       try {
         Object.assign(r, await api("/api/aipn/price", { an: r.an, item: item.key, unitprice: value }));
         if (!r.selectable) state.selected.delete(r.an);
         render(); await openDrawer(r);
+        notice(value === null ? `${item.name}: กลับไปใช้ราคา HOSxP` : `${item.name}: ใช้ราคา ${baht.format(Number(value))} บาท`, "ok");
       } catch (err) { notice(err.message); await openDrawer(r); }
     };
     const priceCell = (item) => {
@@ -121,37 +136,47 @@ async function openDrawer(r) {
         onkeydown: (e) => { if (e.key === "Enter") e.target.blur(); } });
       const notes = [];
       if (item.chi_price !== null) {
-        notes.push(el("div", { class: item.price_wrong ? "flag-note" : "muted-note" }, `สกส. ${baht.format(Number(item.chi_price))}`));
-        if (item.price_wrong) notes.push(el("button", { type: "button", class: "small", onclick: () => setPrice(item, item.chi_price) }, "ใช้ราคา สกส."));
+        notes.push(el("div", { class: "price-note" }, el("span", { class: item.price_wrong ? "flag-note" : "muted-note" }, `สกส. ${baht.format(Number(item.chi_price))}`),
+          item.price_wrong ? el("button", { type: "button", class: "small", onclick: () => setPrice(item, item.chi_price) }, "ใช้ราคา สกส.") : null));
       }
       if (item.price_edited) {
-        notes.push(el("div", { class: "muted-note" }, `HOSxP ${baht.format(Number(item.hosxp_unitprice))}`));
-        notes.push(el("button", { type: "button", class: "small", onclick: () => setPrice(item, null) }, "กลับไปใช้ราคา HOSxP"));
+        notes.push(el("div", { class: "price-note" }, el("span", { class: "muted-note" }, `HOSxP ${baht.format(Number(item.hosxp_unitprice))}`),
+          el("button", { type: "button", class: "small ghost", onclick: () => setPrice(item, null) }, "คืนค่า")));
       }
       return el("td", { class: "num" }, input, ...notes);
     };
-    parts.push(el("p", { class: "muted-note" }, "แก้ราคาต่อหน่วยได้ในช่องราคา ค่าที่แก้ใช้เฉพาะไฟล์ที่ส่งจากโปรแกรมนี้ และไม่แก้ราคาใน HOSxP"));
-    parts.push(table(["ไม่ส่ง", "หมวด", "รายการ", "รหัสมาตรฐาน", "จำนวน", "ราคา/หน่วย", "รวม"], data.items.map((item) => {
-      const row = el("tr", { class: `${item.excluded ? "excluded" : ""} ${item.price_wrong && !item.excluded ? "flagged" : ""}`.trim() });
-      const override = el("div", { class: "muted-note", hidden: !item.hosxp_excluded || item.excluded }, "HOSxP กำหนดไม่ส่ง แต่โปรแกรมนี้จะส่งรายการนี้");
-      row.append(
-        el("td", {}, el("input", { type: "checkbox", checked: item.excluded, "aria-label": `ไม่ส่ง ${item.name}`,
-          onchange: async (e) => {
-            try {
-              Object.assign(r, await api("/api/aipn/item", { an: r.an, item: item.key, excluded: e.target.checked }));
-              row.classList.toggle("excluded", e.target.checked); override.hidden = !item.hosxp_excluded || e.target.checked;
-              if (!r.selectable) state.selected.delete(r.an);
-              showAmount(); render();
-            } catch (err) { e.target.checked = !e.target.checked; notice(err.message); }
-          } })),
-        el("td", {}, `${item.billgroup}${item.claimcat === "D" ? "" : ` (${item.claimcat})`}`),
-        el("td", {}, item.name, override), el("td", {}, item.std), el("td", { class: "num" }, item.qty), priceCell(item), el("td", { class: "num" }, baht.format(Number(item.amount))));
-      return row;
-    })));
-    body.replaceChildren(...parts);
+    const costs = [amount,
+      el("p", { class: "muted-note" }, "ติ๊ก \"ไม่ส่ง\" เพื่อเอารายการออก หรือแก้ราคาต่อหน่วยในช่องราคา ค่าที่แก้ใช้เฉพาะไฟล์ที่ส่งจากโปรแกรมนี้ ไม่แก้ข้อมูลใน HOSxP"),
+      data.skipped.length ? el("p", { class: "muted-note" }, `ไม่ส่งตามกฎเดิม (ไม่มีชื่อหรือชื่อขึ้นต้น "ยา."): ${data.skipped.join(", ")}`) : null,
+      table(["ไม่ส่ง", "หมวด", "รายการ", "รหัสมาตรฐาน", { label: "จำนวน", num: true }, { label: "ราคา/หน่วย", num: true }, { label: "รวม", num: true }], data.items.map((item) => {
+        const row = el("tr", { class: `${item.excluded ? "excluded" : ""} ${item.price_wrong && !item.excluded ? "flagged" : ""}`.trim() });
+        const override = el("div", { class: "muted-note", hidden: !item.hosxp_excluded || item.excluded }, "HOSxP กำหนดไม่ส่ง แต่โปรแกรมนี้จะส่งรายการนี้");
+        row.append(
+          el("td", { class: "check" }, el("input", { type: "checkbox", checked: item.excluded, "aria-label": `ไม่ส่ง ${item.name}`,
+            onchange: async (e) => {
+              try {
+                Object.assign(r, await api("/api/aipn/item", { an: r.an, item: item.key, excluded: e.target.checked }));
+                row.classList.toggle("excluded", e.target.checked); override.hidden = !item.hosxp_excluded || e.target.checked;
+                if (!r.selectable) state.selected.delete(r.an);
+                showAmount(); render();
+              } catch (err) { e.target.checked = !e.target.checked; notice(err.message); }
+            } })),
+          el("td", {}, item.billgroup, item.claimcat === "D" ? "" : el("span", { class: "sub" }, `ClaimCat ${item.claimcat}`)),
+          el("td", {}, item.name, override), el("td", { class: "mono" }, item.std), el("td", { class: "num" }, item.qty), priceCell(item),
+          el("td", { class: "num" }, baht.format(Number(item.amount))));
+        return row;
+      }))];
+
+    const flagged = data.items.filter((i) => i.price_wrong && !i.excluded).length;
+    body.replaceChildren(...tabs([
+      { id: "check", label: "สรุปและผลตรวจ", badge: r.issues.length + (r.special ? 1 : 0) || undefined, alert: r.has_error || !!r.special, content: check },
+      { id: "dx", label: "การวินิจฉัย", badge: data.dx.length, content: dx },
+      { id: "ops", label: "หัตถการ", badge: data.ops.length, content: ops },
+      { id: "cost", label: "ค่าใช้จ่าย", badge: flagged ? `${flagged} ราคาไม่ตรง` : data.items.length, alert: flagged > 0, content: costs },
+    ]));
   } catch (err) { body.replaceChildren(el("p", {}, err.message)); }
 }
-function closeDrawer() { $("drawer").hidden = true; state.current = null; renderRows(); }
+function closeDrawer() { $("drawer").hidden = true; $("drawer-backdrop").hidden = true; state.current = null; renderRows(); }
 
 async function runExport() {
   clearNotices();
@@ -175,7 +200,7 @@ async function runExport() {
       if (!await confirmDialog("ยืนยันการส่งซ้ำ", [again], "ส่งซ้ำ")) return;
       result = await api("/api/aipn/export", { ...payload, confirm_resend: true });
     }
-    const box = notice(`สร้าง ${result.file} แล้ว: ${result.count} คน ยอดส่ง ${baht.format(Number(result.total))} บาท `, "ok", true);
+    const box = notice(`สร้าง ${result.file} แล้ว: ${result.count} คน ยอดส่ง ${baht.format(Number(result.total))} บาท`, "ok", true);
     box.append(el("a", { href: `/api/aipn/exports/${result.id}/download` }, "ดาวน์โหลด ZIP"));
     state.selected.clear();
     $("session").value = "";
@@ -188,18 +213,18 @@ async function runExport() {
 
 async function search() {
   const form = new FormData($("search"));
-  const pttypes = [...document.querySelectorAll("#pttype-list input:checked")].map((i) => i.value);
+  const pttypes = [...document.querySelectorAll("#pttype-list input.one:checked")].map((i) => i.value);
   const body = { start: form.get("start"), end: form.get("end"), an: form.get("an").trim(), pttypes };
-  $("empty").hidden = false; $("empty").textContent = "กำลังค้นหาและตรวจข้อมูล…";
+  $("empty").hidden = false; $("empty").replaceChildren(...emptyState("กำลังค้นหาและตรวจข้อมูล…", "…"));
   $("rows").replaceChildren();
   try {
     const data = await api("/api/aipn/search", body);
     state.rows = data.admissions;
     state.selected = new Set(data.admissions.filter((r) => r.default_selected).map((r) => r.an));
     if (!$("session").value && data.next_session) $("session").value = data.next_session;
-    $("empty").textContent = "ไม่พบรายการ";
+    $("empty").replaceChildren(...emptyState("ไม่พบรายการในช่วงนี้"));
     render();
-  } catch (err) { $("empty").textContent = err.message; }
+  } catch (err) { $("empty").replaceChildren(...emptyState(err.message, "!")); }
 }
 
 async function loadHistory() {
@@ -212,28 +237,22 @@ async function loadHistory() {
   } catch (err) { $("history").replaceChildren(el("p", {}, err.message)); }
 }
 
-function updatePttypeLabel() {
-  const total = document.querySelectorAll("#pttype-list input").length;
-  const chosen = document.querySelectorAll("#pttype-list input:checked").length;
-  $("pttype-label").textContent = `เลือกแล้ว ${chosen} จาก ${total} สิทธิ`;
-}
-
 async function start() {
   const today = new Date();
-  const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  $("search").elements.start.value = iso(new Date(today.getFullYear(), today.getMonth() - 1, 1));
-  $("search").elements.end.value = iso(today);
+  $("search").elements.start.value = isoDate(new Date(today.getFullYear(), today.getMonth() - 1, 1));
+  $("search").elements.end.value = isoDate(today);
+  setupPresets($("search"));
+  bindSort($("thead"), state.sort, renderRows);
   try {
     const status = await api("/api/status");
     for (const problem of status.settings_problems) notice(problem);
-    if (status.db_error) { $("connection").textContent = `เชื่อมต่อไม่ได้ (${status.db_host})`; notice(status.db_error); $("pttype-label").textContent = "โหลดสิทธิไม่ได้"; loadHistory(); return; }
-    if (!status.database) { $("connection").textContent = "ยังไม่ได้ตั้งค่าฐานข้อมูล"; return; }
-    $("connection").textContent = `เชื่อมต่อ HOSxP แล้ว (${status.db_host})`;
+    if (status.db_error) { setConnection(`เชื่อมต่อไม่ได้ (${status.db_host})`, false); notice(status.db_error); $("pttype-label").textContent = "โหลดสิทธิไม่ได้"; loadHistory(); return; }
+    if (!status.database) { setConnection("ยังไม่ได้ตั้งค่าฐานข้อมูล", false); return; }
+    setConnection(`HOSxP · ${status.db_host}`, true);
     if (status.database.user_can_write) notice("user ฐานข้อมูลนี้มีสิทธิ์เขียน ควรใช้ user ที่มีแค่ SELECT", "warn", true);
     const pttypes = await api("/api/aipn/pttypes");
-    $("pttype-list").replaceChildren(...pttypes.map((p) => el("label", {}, el("input", { type: "checkbox", value: p.pttype, checked: true, onchange: updatePttypeLabel }), `${p.pttype}: ${p.name}`)));
-    updatePttypeLabel();
-  } catch (err) { $("connection").textContent = "เชื่อมต่อไม่ได้"; notice(err.message); $("pttype-label").textContent = "โหลดสิทธิไม่ได้"; }
+    fillPttypes(pttypes);
+  } catch (err) { setConnection("เชื่อมต่อไม่ได้", false); notice(err.message); $("pttype-label").textContent = "โหลดสิทธิไม่ได้"; }
   loadHistory();
 }
 
@@ -243,5 +262,6 @@ $("select-ready").onclick = () => { state.selected = new Set(state.rows.filter((
 $("select-none").onclick = () => { state.selected.clear(); render(); };
 $("export").onclick = runExport;
 $("drawer-close").onclick = closeDrawer;
+$("drawer-backdrop").onclick = closeDrawer;
 document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("drawer").hidden && !$("confirm").open) closeDrawer(); });
 start();

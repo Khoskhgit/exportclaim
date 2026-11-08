@@ -71,7 +71,7 @@ def register(app: FastAPI, settings: Settings, db: AipnDb, local: Store, templat
 
     @app.get("/aipn", response_class=HTMLResponse)
     def page(request: Request):
-        return templates.TemplateResponse(request, "aipn.html", {})
+        return templates.TemplateResponse(request, "aipn.html", {"hname": settings.hname})
 
     @app.get("/api/aipn/pttypes")
     def pttypes():

@@ -148,7 +148,8 @@ def register(app: FastAPI, settings: Settings, db: Any, local: Store, templates:
         request.state.user = None
         if settings.login_required:
             user = current_user(request)
-            if user is None and request.url.path not in PUBLIC_PATHS:
+            public = request.url.path in PUBLIC_PATHS or request.url.path.startswith("/static/fonts/")
+            if user is None and not public:
                 if request.url.path.startswith("/api/"):
                     return JSONResponse({"detail": "กรุณาเข้าสู่ระบบ", "login": True}, status_code=401)
                 had_cookie = COOKIE in request.cookies

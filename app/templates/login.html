@@ -3,31 +3,33 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>เข้าสู่ระบบ</title>
+<title>เข้าสู่ระบบ · Export Claim</title>
 <link rel="stylesheet" href="/static/app.css">
 </head>
 <body class="login-page">
 <main class="login-box panel">
-  <h1>ส่งออก SSOP / AIPN</h1>
-  <p class="muted-note">{{ hname }}</p>
-  {% if error %}<div class="notice error login-notice" role="alert">{{ error }}</div>{% endif %}
-  <div id="login-error" class="notice error login-notice" role="alert" hidden></div>
+  <div class="login-brand">
+    <div class="logo" aria-hidden="true">EC</div>
+    <div><h1>Export Claim</h1><p>{{ hname or "ส่งออกข้อมูลเบิก SSOP / AIPN" }}</p></div>
+  </div>
+  {% if error %}<div class="notice error login-notice" role="alert"><span class="notice-icon" aria-hidden="true">!</span><div class="notice-text">{{ error }}</div></div>{% endif %}
+  <div id="login-error" class="notice error login-notice" role="alert" hidden><span class="notice-icon" aria-hidden="true">!</span><div class="notice-text"></div></div>
 
   <form id="login-form" class="login-form">
-    <h2>บัญชี HOSxP</h2>
+    <h2>เข้าสู่ระบบด้วยบัญชี HOSxP</h2>
     <label>ชื่อผู้ใช้<input name="username" autocomplete="username" required autofocus></label>
     <label>รหัสผ่าน<input name="password" type="password" autocomplete="current-password" required></label>
-    <button class="primary" type="submit">เข้าสู่ระบบ</button>
+    <button class="primary big" type="submit">เข้าสู่ระบบ</button>
   </form>
 
   <div class="login-divider"><span>หรือ</span></div>
 
   {% if moph_ready %}
   <a class="moph-button" href="/auth/moph/start">เข้าสู่ระบบด้วย MOPH ID</a>
-  <p class="muted-note">ใช้บัญชีผู้ให้บริการ (Provider ID) ที่สังกัดโรงพยาบาลนี้</p>
+  <p class="login-foot">สำหรับบุคลากรที่สังกัดโรงพยาบาลนี้ (Provider ID)</p>
   {% else %}
   <button class="moph-button" type="button" disabled>เข้าสู่ระบบด้วย MOPH ID</button>
-  <p class="muted-note">ยังไม่ได้ตั้งค่า MOPH ID ให้ผู้ดูแลใส่ client ID และ secret key ใน .env</p>
+  <p class="login-foot">ยังไม่ได้ตั้งค่า MOPH ID ให้ผู้ดูแลใส่ client ID และ secret key ใน .env</p>
   {% endif %}
 </main>
 <script src="/static/login.js"></script>
