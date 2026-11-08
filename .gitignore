@@ -1,0 +1,17 @@
+.env
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+data/
+exports/
+# Claim files contain patient data
+*_SSOPBIL_*
+*AIPN*.ZIP
+*-AIPN-*.XML
+.DS_Store
+# Pasted clipboard files may hold patient data or credentials
+Pasted *
+*.fileloc
+*.textClipping
+.claude/

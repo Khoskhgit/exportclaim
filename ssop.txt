@@ -1,0 +1,3303 @@
+close data
+if tonum(getsqldata([select count(*) cc from income where ifnull(group2,'')='']))>0
+	if mychoice('Â×¹ÂÑ¹','¤Ø³ÂÑ§ Map ¡ÅØèÁºÑ­ªÕ 2 äÁè¤Ãº¶éÇ¹'+chr(13)+'·èÒ¹µéÍ§¡ÒÃ·Ó§Ò¹µèÍä»ËÃ×ÍäÁè?',2,,300,,,60000,icase(myhospcode$'14135',1,2))#1
+		retu .F.
+	endif
+endif
+=maketablechi()
+=readquerysql('updatedrugitems','_handle')
+=readquerysql('createtable4claimcat')
+=readquerysql('rcmlabitem','_handle')
+*=readquerysql('createtempauthencode')
+
+LabCovid=adddoublequote('351123,351121,350998,350506,351015,351016,350507,351024,350508,351017,351139,350509,351122')
+Dentalist=adddoublequote('62101,67201,67202,67203,67204,67210,67211,67212,67213,71840,71841,72610,')
+text to _data noshow textmerge
+âÃ¤àºÒËÇÒ¹:E1[0-4]
+âÃ¤¤ÇÒÁ´Ñ¹:I1[0-5]
+âÃ¤µÑº:K73|K74|B18
+âÃ¤ËÑÇã¨ÅéÁàËÅÇ:I50
+âÃ¤àÊé¹àÅ×Í´ÊÁÍ§áµ¡/ÍØ´µÑ¹:I69
+âÃ¤ÁÐàÃç§:C
+âÃ¤ÀÙÁÔ¤ØéÁ¡Ñ¹º¡¾ÃèÍ§:B2[0-4]
+âÃ¤¶Ø§ÅÁâ»è§¾Í§:J43
+âÃ¤äµÇÒÂàÃ×éÍÃÑ§:N18
+âÃ¤¾ÒÃì¡Ô¹«Ñè¹:G2[0-2]
+âÃ¤ÁÒÂáÍÊ·Õà¹ÕÂ:G70
+âÃ¤àºÒ¨×´:E232|N251
+âÃ¤ÁÑÅµÔà¾ÔÅ:G35
+âÃ¤ä¢ÁÑ¹ã¹àÅ×Í´ÊÙ§:E78
+âÃ¤¢éÍÍÑ¡àÊÅÃÙËìÁÒµÍÂ´ì:M05|M06
+âÃ¤µéÍËÔ¹:H4[0-2]
+âÃ¤äµ à¹¿â¾ÃìµÔ¤:N04
+âÃ¤ÅÙ»Ñ¤:M32
+âÃ¤àÅ×Í´Í¾ÅÒÊµÔ¤:D60|D61
+âÃ¤·ÒÅÒÊ«ÕàÁÕÂ:D56
+âÃ¤ÎÕâÁ¿ÅÕàÅÕÂ:D66
+âÃ¤àÃ×éÍ¹¡ÇÒ§:L40
+âÃ¤¼ÔÇË¹Ñ§¾Ø¾Í§àÃ×éÍÃÑ§:L1[0-3]
+âÃ¤äÍ·Õ¾Õ:D693
+âÃ¤µèÍÁ¸ÑÂÅÍÂ´ìà»ç¹¾ÔÉ:E05
+âÃ¤¨Ôµ:F
+endtext
+cChronic=[]
+for ii=1 to memlines(_data)
+	_value=ntoc(mline(_data,ii),0)
+	if !empty(_value) and _value#'*'
+		_value=getwordnum(_value,2,[:])
+		cChronic=cChronic+[|]+_value
+	endif
+next
+cChronic=chrtran(cChronic,[ ],[])
+cChronic=checkasdata(cChronic,1,[|])
+
+text to _sql noshow textmerge
+update pttype set hipdata_code='BKK' where pttype_eclaim_id=19;
+update pttype set hipdata_code='PTY' where pttype_eclaim_id=20;
+
+create table if not exists hi_register (ID varchar(9),VN varchar(25),HN varchar(9),Dchdate date,DchTime Time,Pttype varchar(2),Flag varchar(1)
+,primary key (id)
+,key hn(hn)
+,key vn(vn))engine=MyISAM default charset=tis620;
+
+create table if not exists icd101 (code varchar(7) not null,name varchar(200) ,spclty char(2) ,tname varchar(150) ,code3 char(3) ,code4 char(1) ,code5 char(1) ,sex int(11) ,ipd_valid char(1) ,icd10compat char(1)
+,icd10tmcompat char(1) ,active_status char(1) ,shortname varchar(40) ,hos_guid char(38) ,hos_guid_ext varchar(64),codeset varchar(5)
+,primary key (code)
+,key code3 (code3)
+,key code4 (code4)
+,key code5 (code5)
+,key name (name)
+) engine=MyISAM default charset=tis620;
+call modifycolumn('icd101','codeset','varchar(5)',null);
+
+create table if not exists ovst_sss_billtran (vn varchar(12) not null,station varchar(50) ,authcode varchar(50) ,dttran datetime ,hcode char(5) ,invno varchar(25) ,billno varchar(50) ,hn varchar(9)
+,memberno varchar(50) ,amount double(15,3) ,paid double(15,3) ,vercode varchar(25) ,tflag varchar(25) ,pid varchar(13) ,name varchar(50) ,hmain varchar(5) ,payplan varchar(2) ,claimamt double(15,3)
+,otherpayplan varchar(2) ,otherpay double(15,3) ,update_datetime datetime ,process_ok char(1) ,error_code varchar(30) ,sss_accept_no varchar(10) ,sss_amount double(22,3) ,reply_datetime datetime
+,internal_error_msg varchar(150)
+,primary key (vn)
+,key ix_invno (invno)
+) engine=MyISAM default charset=tis620;
+
+create table if not exists opitemrece_noexport (Seq varchar(50) not null,ICode varchar(15) not null,Type varchar(1) not null,No_Export varchar(1)
+,primary key (Seq,ICode,Type)
+) engine=MyISAM default charset=tis620;
+
+create table if not exists SSOCAC_Registry (CaseNo varchar(15),CID varchar(13),HN varchar(15),PtName varchar(60),RegDate datetime,ReferDate datetime,HMain varchar(9),HCare varchar(9),Protocal varchar(15),Status varchar(1)
+,primary key (CaseNo)
+,key cid (cid)
+,key hn (hn)
+) engine=MyISAM default charset=tis620;
+
+create table if not exists SSOCAC_Cancer (ID varchar(2),Name varchar(100),ICD10 varchar(100)
+,primary key (ID)
+) engine=MyISAM default charset=tis620;
+replace into ssocac_cancer (id,name,icd10) values ('01','ÁÐàÃç§àµéÒ¹Á','C50|D05|D24|D486');
+replace into ssocac_cancer (id,name,icd10) values ('02','ÁÐàÃç§»Ò¡Á´ÅÙ¡','C53|D06|D260');
+replace into ssocac_cancer (id,name,icd10) values ('03','ÁÐàÃç§ÃÑ§ä¢è','C56|C796|D073|D27');
+replace into ssocac_cancer (id,name,icd10) values ('04','ÁÐàÃç§Á´ÅÙ¡','C54|C55|D25|D26');
+replace into ssocac_cancer (id,name,icd10) values ('05','ÁÐàÃç§ÈÃÕÉÐáÅÐÅÓ¤Í','C00|C1[0-4]|C970|D17');
+replace into ssocac_cancer (id,name,icd10) values ('06','ÁÐàÃç§»Í´','C34|C780|D022|D143');
+replace into ssocac_cancer (id,name,icd10) values ('07','ÁÐàÃç§ÅÓäÊéãË­èáÅÐÅÓäÊéµÃ§ ·ÇÒÃË¹Ñ¡áÅÐäÊéµÔè§','C18|C19|C20|C785|D01|D12');
+replace into ssocac_cancer (id,name,icd10) values ('08','ÁÐàÃç§ËÅÍ´ÍÒËÒÃ','C15|D001|D130');
+replace into ssocac_cancer (id,name,icd10) values ('09','ÁÐàÃç§¡ÃÐà¾ÒÐÍÒËÒÃ','C16|D001|D002|D131');
+replace into ssocac_cancer (id,name,icd10) values ('10','ÁÐàÃç§µÑº ·èÍ¹éÓ´Õ áÅÐÁÐàÃç§µÑºÍèÍ¹','C2[2-5]|D015|D017|D134|D135|D136');
+replace into ssocac_cancer (id,name,icd10) values ('11','ÁÐàÃç§¡ÃÐà¾ÒÐ»ÑÊÊÒÇÐ áÅÐÁÐàÃç§äµ','C64|C67|D090|D300|D303');
+replace into ssocac_cancer (id,name,icd10) values ('12','ÁÐàÃç§µèÍÁÅÙ¡ËÁÒ¡','C61|D075|D291');
+replace into ssocac_cancer (id,name,icd10) values ('13','ÁÐàÃç§àÁç´àÅ×Í´¢ÒÇª¹Ô´à©ÕÂº¾ÅÑ¹áººÅÔÁ¿ÍÂ´ìã¹¼ÙéãË­è(ALL)','C910');
+replace into ssocac_cancer (id,name,icd10) values ('14','ÁÐàÃç§àÁç´àÅ×Í´¢ÒÇª¹Ô´à©ÕÂº¾ÅÑ¹áººÁÑÅÍÔÅÍÂ´ìã¹¼ÙéãË­è(AML)','C920');
+replace into ssocac_cancer (id,name,icd10) values ('15','ÁÐàÃç§àÁç´àÅ×Í´¢ÒÇª¹Ô´à©ÕÂº¾ÅÑ¹','C940');
+replace into ssocac_cancer (id,name,icd10) values ('16','ÁÐàÃç§àÁç´àÅ×Í´¢ÒÇª¹Ô´àÃ×éÍÃÑ§áººÁÑÅÍÔÅÍÂ´ìã¹¼ÙéãË­è(CML)','C921');
+replace into ssocac_cancer (id,name,icd10) values ('17','ÁÐàÃç§µèÍÁ¹éÓàËÅ×Í§ã¹¼ÙéãË­è','C8[2-6]');
+replace into ssocac_cancer (id,name,icd10) values ('18','ÁÐàÃç§àÁç´àÅ×Í´¢ÒÇÁÑÂÍÔâÅÁÒ áÅÐÀÒÇÐ Myelodysplastic Syndrome','C900|D46');
+replace into ssocac_cancer (id,name,icd10) values ('19','ÁÐàÃç§¡ÃÐ´Ù¡','C40|C41|C795|D16');
+replace into ssocac_cancer (id,name,icd10) values ('20','ÁÐàÃç§à¹×éÍàÂ×èÍÍèÍ¹','C49');
+replace into ssocac_cancer (id,name,icd10) values ('21','ÁÐàÃç§à´ç¡',null);
+endtext
+=runsql(_sql,.T.)
+
+myPrg='RCM'
+myBenefit='SS'
+myFolderBack=icase(mybenefit='CS','CSOP',mybenefit='SS','SSOP','XXXX')
+myPayPlan=icase(mybenefit='CS','20',mybenefit='SS','80','')
+myVersion=icase(mybenefit='CS','0.93',mybenefit='SS','0.93','')
+*myFileSend=icase(mybenefit='CS','CSOPBIL',mybenefit='SS','SSOPBIL','')
+myFileSend=icase(mybenefit='CS','COCDBIL',mybenefit='SS','SSOPBIL','')
+myFileBack=icase(mybenefit='CS','COCDBIL',mybenefit='SS','SOCDBIL','')
+CHIMail=ntoc(myfolderback+getvariable(inifile,myfolderback,'Mail',''))
+MainMail=icase(mybenefit='CS','cscd@uc.chi.or.th',mybenefit='SS','ssop@ss1.chi.or.th','')
+myHospital='14135,11251'
+ndialy=1
+nrec=0
+store '' to _sql,oErr,mypttype,_obj,_col,mycolumn
+myHMain=ntoc(getsqldata([select group_concat(distinct note) from subinscl where maininscl regexp 'SS']))
+myHospMain=ntoc(getsqldata([select sys_value from sys_var where sys_name='CHI_HospMain']))
+myHospMain=icase(empty(myHospMain),myHMain,myHospMain)
+myHospMain=checkasdata(myHospMain,1,',','',.T.)
+isHMain=icase(myhospcode$myhospmain,.T.,.F.)
+myDoctorCheck=ntoc(getsqldata([select sys_value from sys_var where sys_name='CHI_Doctor']))
+myDoctorCheck=icase(empty(myDoctorCheck),myDoctor,myDoctorCheck)
+mySP=ntoc(getsqldata([select drugusage from drugusage where name1 regexp 'µÒÁá¾·ÂìÊÑè§']))
+myUse=ntoc(getsqldata([select sys_value from sys_var where sys_name='CHI_DrugUsage']))
+myUse=icase(empty(myUse),mySP,myUse)
+myUse=icase(empty(myUse),'0201',myUse)
+myUseName=ntoc(getsqldata([select name1 from drugusage where drugusage=?myuse]),0)
+mpttype=[select left(concat(pttype,':',name),60) name from pttype where  isuse='Y' and (hipdata_code regexp 'SS' or pcode='A7' or name regexp '»ÃÐ¡Ñ¹ÊÑ§¤Á') order by name]
+mystation='01'
+mysessno=''
+oldpttype=ntoc(getsqldata([select group_concat(distinct pttype) cc from pttype where  isuse='Y' and (hipdata_code regexp 'SS' or pcode='A7' or name regexp '»ÃÐ¡Ñ¹ÊÑ§¤Á') order by pttype]))
+mypttype=ntoc(getvariable(inifile,myfolderback,'Pttype',oldpttype))
+mypttype=checkasdata(icase(empty(mypttype),oldpttype,mypttype),1,',','',.T.)
+mypttype=adddoublequote(mypttype)
+nICD10=3
+store .T. to lvn,lpdx,lcheckhn
+store .F. to lappeal,lcancel,lop,lcovid,lhi,lci,lfieldhosp,lsi,latk,lvaccine
+lVN=icase(myhospcode$'14972',.F.,lvn)
+lPdx=icase(myhospcode$'11456',.T.,.F.)
+cTFlag='A'
+store 0 to nsend
+sele 0
+create cursor tmpIncome (NoExport c(1) null,Code c(1) null,Icode c(25) null,CsCode c(15) null,TMT c(7) null,TMLT c(25) null,Name c(60) null,UnitPay n(15,2) null,Amount n(5) null,UnitPrice n(15,2) null;
+,Income n(15,2) null,reimb_money n(15,2) null,nreimb_money n(15,2) null,NED c(2) null,DrugUsage c(100) null,Hos_Guid c(50) null,ICD9CM c(7) null,AuthenCode c(25) null)
+scatt memv blank
+store '' to _title1,_width1,_format1,_position1
+for ii=1 to fcount()
+	_field=field(ii)
+	_title1=_title1+icase(ii=1,'','|')+icase(_field='NOEXPORT','äÁèÊè§',_field='ICODE','ICode',_field='CSCODE','CsCode',_field='TMT','TMT',_field='TMLT','TMLT',_field='NAME','ÃÒÂ¡ÒÃ',_field='UNITPAY','ÃÒ¤Ò/Ë¹èÇÂ';
+	,_field='INCOME','ÃÇÁ',_field='REIMB_MONEY','µÑé§àºÔ¡',_field='NREIMB_MONEY','ªÓÃÐà§Ô¹',_field='NED','NED',_field='AUTHENCODE','àÅ¢·ÕèÍ¹ØÁÑµÔ','x')
+	_format1=_format1+icase(ii=1,'','|')+icase(_field$'UNITPAY,UNITPRICE,REIMB_MONEY,NREIMB_MONEY',formatmoney,_field='AMOUNT',formatnumber,'x')
+	_width1=_width1+icase(ii=1,'','|')+icase(_field='NOEXPORT','30',_field='CODE','30',_field='ICODE','60',_field='CSCODE','60',_field='TMT','50',_field='TMLT','50',_field='NAME','300',_field='UNITPAY','60';
+	,_field='AMOUNT','40',_field='UNITPRICE','70',_field='INCOME','70',_field='REIMB_MONEY','70',_field='NREIMB_MONEY','70',_field='NED','30',_field='DRUGUSAGE','300','x')
+	_position1=_position1+icase(ii=1,'','|')+icase(_field='NOEXPORT' or _field='CODE' or _field='NED' or fsize(_field)=1,'2','x')
+next
+sele 0
+create cursor tmpDx (Code c(10) null,Type c(2) null,Name c(60) null,DiagType c(1) null,CodeSet c(2) null)
+scatt memv blank
+store '' to _title2,_width2,_format2,_position2
+for ii=1 to fcount()
+	_field=field(ii)
+	_title2=_title2+icase(ii=1,'','|')+icase(_field='CODESET','CodeSet',_field='CODE','ÃËÑÊ',_field='TYPE','ËÁÇ´',_field='NAME','ª×èÍâÃ¤/ËÑµ¶¡ÒÃ',_field='DIAGTYPE','»ÃÐàÀ·','x')
+	_format2=_format2+icase(ii=1,'','|')+icase(_field='x','x','x')
+	_width2=_width2+icase(ii=1,'','|')+icase(_field='CODE','50',_field='TYPE','40',_field='NAME','100',_field='DIAGTYPE','40','x')
+	_position2=_position2+icase(ii=1,'','|')+icase(_field='CODE','2',_field='TYPE','2',_field='NAME','x',_field='DIAGTYPE' or fsize(_field)=1,'2','x')
+next
+sele 0
+create cursor tmpData (No n(7) null,Selected L,Status c(20) null,Error c(1) null,Warn c(1) null;
+,Covid c(1) null,Vaccine c(1) null,ATK c(1) null,SI c(1) null;
+,PF c(1) null,eGFR n(7,2) null;
+,Cancer c(1) null,isCancer c(2) null,CaseNo c(15) null,Protocal c(15) null;
+,SleepTest c(1) null,AuthenCode c(25) null;
+,TelMed c(1) null,HM c(1) null;
+,InvNo c(20) null,VN c(25) null,HN c(9) null,CID c(13) null,PtName c(60) null,Age c(15) null,Nation c(30) null,VstDate T null,EndTime T null,Ovstist c(60) null,Room c(60) null,Clinic c(2) null,ClinicName c(60) null;
+,Ovstost c(60) null,Symptom c(200) null,Chronic c(1) null,Pdx c(7) null,Oper c(100) null,Flag c(1) null,Round_Money c(1) null,Pcode c(2) null,MainInscl c(10) null,Pttype_EClaim_Name c(200) null,PttypeName c(200) null,HospType c(1) null,HospMain c(5) null,DateIn D null,DateExp D null;
+,UnitPrice n(15,2) null,Income n(15,2) null,Paid_Money n(15,2) null,Rcpt_Money n(15,2) null,Doctor c(60) null,BillNo c(20) null,ErrorName c(200) null,Rep_Invoice c(60) null)
+scatt memv blank
+store '' to _title,_width,_format,_position,oerr
+for ii=1 to fcount()
+	_field=field(ii)
+	_title=_title+icase(ii=1,'','|')+icase(_field='UNITPRICE','ÃÒ¤Ò¨Ò¡ÃÒÂÅÐàÍÕÂ´',_field='INCOME','¤èÒãªé¨èÒÂÃÇÁ',_field='COVID','»¡µÔ',_field='ATK','ATK',_field='VACCINE','ÇÑ¤«Õ¹',_field='CLINICNAME','ª×èÍ';
+	,_field='CLINIC','ÃËÑÊ',_field='FLAG','¡ÒÃàºÔ¡',_field='PF','PF',_field='EGFR','eGFR',_field='CANCER','Êè§',_field='ISCANCER','¡ÅØèÁ',_field='CASENO','CaseNo',_field='HOSPTYPE','»ÃÐàÀ·';
+	,_field='HOSPMAIN','ÃËÑÊ',_field='SLEEPTEST','Êè§',_field='AUTHENCODE','àÅ¢·ÕèÍ¹ØÁÑµÔ',_field='TELMED','OK',_field='HM','Êè§ÂÒ','x')
+	_format=_format+icase(ii=1,'','|')+icase(_field$'INCOME,HOSXP_MONEY,EGFR',formatmoney,'x')
+	_width=_width+icase(ii=1,'','|')+icase(_field='OVSTIST','100',_field='NO','40',_field='ERRORNAME','300',type(_field)='T','125','DATE'$_field,'70',_field$'PTNAME,ROOM,OVSTOST','180',_field='STATUS','60';
+	,_field='DOCTOR','110',_field='SELECTED','30',_field$'INVNO','110',_field='UNITPRICE','110',_field$'COVID,HI,CI,FIELDHOSP,SI,ATK,VACCINE,PF,CANCER,ISCANCER,HM','40',_field='EGFR','50';
+	,_field='CASENO','65',_field='PROTOCAL','65',_field='SLEEPTEST','40',_field='TELMED','40','x')
+	_position=_position+icase(ii=1,'','|')+icase(_field$'COVID,HI,CI,FIELDHOSP,SI,ATK,VACCINE,FLAG,PF,CANCER,ISCANCER,HOSPTYPE' or fsize(_field)=1,'2','x')
+next
+_caption='â»Ãá¡ÃÁÊè§ÍÍ¡ '+myfolderback+' on '+_server
+lockcolumns=fieldpos('vn')
+clear class myExport
+oExport=create('myExport')
+oExport.show
+=writevariable(inifile,myfolderback,'Pttype',mypttype)
+defi class myExport as myform
+	name='SSOP'
+	caption=_caption
+	width=900
+	height=680
+	onexit=.T.
+	windowstate=2
+	add object cntDialy as mydialy with top=5,left=5
+	add object lstError as mylistbox with left=5,height=100,tabstop=.F.
+
+	add object grdData as mygrid with setdata=.T.,left=5,recordsource='tmpdata'
+	add object lblError as mylabels with caption='¤ÇÒÁËÁÒÂ Error',width=120,left=5
+	add object txtError as mytextbox with controlsource='tmpdata.errorname',enabled=.F.,disabledbackcolor=rgb(128,255,0),left=5
+	add object grdIncome as mygrid with setdata=.T.,tabstop=.F.,left=5,recordsource='tmpincome'
+	add object grdDx as mygrid with setdata=.T.,tabstop=.F.,left=5,recordsource='tmpdx'
+
+	add object ManyHeader1 as manyHeader
+	add object ManyHeader2 as manyHeader
+	Proc Init
+		with this
+			oerr=.lsterror
+			.grddata.top=calpos(.cntdialy,5,.T.)
+			with .grddata
+				.visible=.T.
+				.height=260
+				.mybackcolor=rgb(255,255,255)
+				.columncaption=_title
+				.columnwidth=_width
+				.setresources
+				for each _col in .columns
+					_col.dynamicbackcolor=[icase(status='ª´àªÂ',rgb(128,255,0),status='Êè§áÅéÇ',rgb(220,220,0),status='µÔ´ C',color('lightpink'),error='Y',rgb(255,0,0),warn='C',rgb(255,255,0),warn='Y',rgb(255,128,0),rgb(255,255,255))]
+				next
+				.setdynamicbackcolor('pttype_eclaim_name',textmerge([icase(!left(pttype_eclaim_name,2)$'10,11,12,13,14,15',rgb(255,128,192),status='ª´àªÂ',rgb(128,255,0),status='Êè§áÅéÇ',rgb(220,220,0),status='µÔ´ C',color('lightpink'),error='Y',rgb(255,0,0),warn='C',rgb(255,255,0),warn='Y',rgb(255,128,0),rgb(255,255,255))]))
+				.setdynamicbackcolor('authencode',textmerge([icase(sleeptest='Y' and empty(nvl(authencode,'')),rgb(255,0,0),status='ª´àªÂ',rgb(128,255,0),status='Êè§áÅéÇ',rgb(220,220,0),status='µÔ´ C',color('lightpink'),error='Y',rgb(255,0,0),warn='C',rgb(255,255,0),warn='Y',rgb(255,128,0),rgb(255,255,255))]))
+				.setheaderbackcolor('covid',rgb(0,255,0))
+				.setheaderbackcolor('hi',rgb(0,255,0))
+				.setheaderbackcolor('ci',rgb(0,255,0))
+				.setheaderbackcolor('fieldhosp',rgb(0,255,0))
+				.setheaderbackcolor('si',rgb(0,255,0))
+				.setheaderbackcolor('atk',rgb(0,255,0))
+				.setheaderbackcolor('vaccine',rgb(0,255,0))
+				.setheaderbackcolor('flag',rgb(0,255,0))
+				.setheaderbackcolor('pf',rgb(0,255,0))
+				.setheaderbackcolor('egfr',rgb(0,255,0))
+				.setheaderbackcolor('cancer',rgb(0,255,0))
+				.setheaderbackcolor('iscancer',rgb(0,255,0))
+				.setheaderbackcolor('caseno',rgb(0,255,0))
+				.setheaderbackcolor('protocal',rgb(0,255,0))
+				*.setcolumncaption('sleeptest','Sleep'+CRLF+'Test')
+				.setheaderbackcolor('sleeptest',rgb(0,255,0))
+				.setheaderbackcolor('authencode',rgb(0,255,0))
+				.setheaderbackcolor('telmed',rgb(0,255,0))
+				.setheaderbackcolor('hm',rgb(0,255,0))
+				.setalignment('error|warn|round_money|clinic|covid|si|atk|vaccine|flag|pf|cancer|iscancer|hosptype|hospmain|sleeptest|telmed|hm|chronic',2)
+				.setalignment('dateexp',0)
+				.lockcolumns=fieldpos('vn','tmpdata')
+				.when
+			endwith
+			.calpos('error',calpos(.grddata,5,.T.),5)
+			.grdincome.top=calpos(.lblerror,5,.T.)
+			with .grdincome
+				.visible=.T.
+				.recordsource='tmpincome'
+				.mybackcolor=rgb(255,255,255)
+				.columncaption=_title1
+				.columnformat=_format1
+				.columnwidth=_width1
+				.columnalignment=_position1
+				.setresources
+				for each _col in .columns
+					_col.dynamicbackcolor=[icase(name='ÃÇÁ',rgb(128,255,0),rgb(255,255,255))]
+				next
+				.setdynamicbackcolor('income',[icase(unitprice#income,rgb(255,0,0),income=0,rgb(255,128,0),name='ÃÇÁ',rgb(128,255,0),rgb(255,255,255))])
+				.setdynamicbackcolor('code',[icase(empty(code),rgb(255,0,0),name='ÃÇÁ',rgb(128,255,0),rgb(255,255,255))])
+				.setdynamicbackcolor('name',[icase(empty(name),rgb(255,0,0),name='ÃÇÁ',rgb(128,255,0),rgb(255,255,255))])
+				.setdynamicbackcolor('drugusage',[icase(code='3' and empty(drugusage),rgb(255,0,0),name='ÃÇÁ',rgb(128,255,0),rgb(255,255,255))])
+				.setdynamicbackcolor('nreimb_money',[icase(nreimb_money>0,rgb(255,128,0),name='ÃÇÁ',rgb(128,255,0),rgb(255,255,255))])
+				.setdynamicbackcolor('tmlt',[icase((empty(tmlt) or 'X'$tmlt) and inlist(code,'6','7'),rgb(255,0,0),name='ÃÇÁ',rgb(128,255,0),rgb(255,255,255))])
+				.setdynamicbackcolor('cscode',textmerge([icase(inlist(upper(cscode),'9902','55080',<<labcovid>>) and (atk='Y'  or si='Y'),rgb(128,255,0),name='ÃÇÁ',rgb(128,255,0),rgb(255,255,255))]))
+				.lockcolumns=fieldpos('name','tmpincome')
+				.when
+			endwith
+			.grddx.top=calpos(.lblerror,5,.T.)
+			with .grddx
+				.visible=.T.
+				.recordsource='tmpdx'
+				.mybackcolor=rgb(255,255,255)
+				.columncaption=_title2
+				.columnformat=_format2
+				.columnwidth=_width2
+				.columnalignment=_position2
+				.setresources
+				for each _col in .columns
+					_col.dynamicbackcolor=[icase(empty(codeset),rgb(255,0,0),rgb(255,255,255))]
+				next
+				.lockcolumns=0
+				.when
+			endwith
+			with .manyheader1
+				._fontname='Tahoma'
+				._backcolor=rgb(0,192,128)
+				.InitHeader(this.grdData)
+				sele tmpData
+				.MergeHeader(fieldpos('covid'),fieldpos('si'),'Covid',,rgb(0,255,0))
+				.MergeHeader(fieldpos('clinic'),fieldpos('clinicname'),'á¼¹¡')
+				.MergeHeader(fieldpos('income'),fieldpos('rcpt_money'),'¤èÒãªé¨èÒÂ HOSxP')
+				.MergeHeader(fieldpos('round_money'),fieldpos('pttypename'),'ÊÔ·¸Ô¡ÒÃÃÑ¡ÉÒ')
+				.MergeHeader(fieldpos('pf'),fieldpos('egfr'),'¡ÒÃàµÃÕÂÁàÊé¹Ï',,rgb(0,255,0))
+				.MergeHeader(fieldpos('cancer'),fieldpos('protocal'),'Cancer',,rgb(0,255,0))
+				.MergeHeader(fieldpos('hosptype'),fieldpos('hospmain'),'HospMain')
+				.MergeHeader(fieldpos('sleeptest'),fieldpos('authencode'),'Sleep Test',,rgb(0,255,0))
+				.MergeHeader(fieldpos('telmed'),fieldpos('hm'),'TeleMed',,rgb(0,255,0))
+			endwith
+			with .manyheader2
+				._fontname='Tahoma'
+				._backcolor=rgb(0,192,128)
+				.InitHeader(this.grdIncome)
+				sele tmpIncome
+				.MergeHeader(fieldpos('income'),fieldpos('nreimb_money'),'¤èÒãªé¨èÒÂ')
+				.headercolor('noexport',color('red'))
+			endwith
+			.resize
+		endwith
+	Proc SetFormat
+		with this
+			if type('.grddata')='O'
+				with .grddata
+					for each _col in .columns
+						_mask=ntoc(_col.inputmask)
+						if _mask='9'
+							_col.inputmask=icase('.9999'$_mask,formatcmi,'.99'$_mask,formatmoney,formatnumber)
+						endif
+					next
+				endwith
+			endif
+			if type('.grdincome')='O'
+				with .grdincome
+					for each _col in .columns
+						_mask=ntoc(_col.inputmask)
+						if _mask='9'
+							_col.inputmask=icase('.9999'$_mask,formatcmi,'.99'$_mask,formatmoney,formatnumber)
+						endif
+					next
+				endwith
+			endif
+		endwith
+	Proc Refresh
+		with this
+			=addno(.F.,'tmpdata')
+			.txtError.disabledbackcolor=icase(tmpdata.error='Y',rgb(255,0,0),tmpdata.warn='Y',rgb(255,128,0),rgb(128,255,0))
+		endwith
+	Proc SetOther
+		with this
+			.cntdialy.width=.width-10
+
+			.grddata.width=.width-10
+			.grddata.setcolumn(7)
+			.txterror.width=.width-5-.txterror.left
+
+			_width=(.width/2)+100
+			.grdincome.left=5
+			.grdincome.width=_width
+			.grdincome.height=.lsterror.top-5-.grdincome.top
+			.grdincome.setcolumn(4)
+
+			.grddx.left=calpos(.grdincome,5)
+			.grddx.width=.width-.grddx.left
+			.grddx.height=.lsterror.top-5-.grddx.top
+			.grddx.setcolumn(3)
+		endwith
+	Proc SetFocus
+		with this
+			.grddata.setfocus
+			.grddata.afterrowcolchange
+			.grddata.refresh
+			.grddata.when
+			.zorder(0)
+			.refresh
+		endwith
+	Proc ShowData
+		lpara _is
+		with this
+			.grddata.recordsource=''
+			=adddata(_is)
+			.grddata.recordsource='tmpData'
+			.setfocus
+		endwith
+	Proc Keypress
+		lpara _key,_other
+		do case
+			case _key=28
+				with thisform
+					.cntdialy.txtFind.setfocus
+					m.vn=mybox('','VN','ÃÐºØ VN',300)
+					=addbyvn(.T.)
+					.setfocus
+					.refresh
+				endwith
+			case _key=-1
+				thisform.cntdialy.txtFind.setfocus
+				thisform.cntdialy.lblFind.RightClick
+			case _key=-3
+				thisform.cntdialy.cmdfind.click
+			case _key=134
+				thisform.rightclick
+			case _key=136 and _other=1	&&Shift+F12
+				this.setmoney
+		endcase
+	Proc RightClick
+		lmaster=!lmaster
+		this.refresh
+	Proc ResetData
+		lpara _is
+		_is=tologic(_is)
+		thisform.nowrec=0
+		if _is
+			store '' to mysessno
+		endif
+		_str='data|dx|income'
+		for ii=1 to getwordcount(_str,'|')
+			_temp='tmp'+getwordnum(_str,ii,'|')
+			if used(_temp)
+				sele (_temp)
+				set index to
+				zap
+			endif
+		next
+		thisform.refresh
+	Proc grdData.AfterRowColChange
+		lpara _col
+		sele tmpData
+		scatt memv memo
+		rec=recno()
+		if thisform.nowrec#rec
+			=addincome()
+			=adddx()
+		endif
+		thisform.refresh
+	Proc grdData.Keypress
+		lpara _key,_other
+		do case
+			case _key=32
+				this.dblclick
+			case _key=-2
+				sele tmpdata
+				nrec=recno()
+				scan
+					m.selected=icase(income>0 and (empty(status) or status='µÔ´ C'),.T.,.F.)
+					repl selected with m.selected
+				ends
+				if recco()>0
+					go (nrec)
+				endif
+				thisform.setfocus
+			case _key=-4
+				this.toclick
+			case _key=-5
+				this.torightclick
+			case _key=-6
+				this.quickexcel
+			case _key=-7
+				this.exporttextfile
+			case _key=-8
+				this.ExportExcel
+			case _key=-9
+				sele tmpdata
+				m.selected=!m.selected
+				repl selected with m.selected
+				thisform.setfocus
+			case _key=133
+				sele tmpdata
+				nrec=recno()
+				repl selected with .T. all
+				if recco()>0
+					go (nrec)
+				endif
+				thisform.setfocus
+		endcase
+	Proc grdData.Click
+		acti scree
+		sele tmpdata
+		scatt memv memo
+		if recco()>0 &&and nWhere=3
+			do case
+				case myname='FLAG'
+					=addflag()
+				case myname='SELECTED'
+					repl selected with !selected
+				case myname='COVID'
+					if !(m.si='Y' or m.atk='Y') and m.vstdate<be2ce('1/10/2565')
+						m.covid=icase(m.covid='Y','','Y')
+						repl covid with m.covid
+						if empty(m.covid)
+							store '' to m.hi,m.ci,m.fieldhosp,m.si
+						endif
+						gath memv
+					endif
+				case myname='HI'
+				case myname='CI'
+				case myname='SI'
+				case myname='FIELDHOSP'
+				case myname='ATK'
+				case myname='VACCINE'
+				case myname='PF'
+					repl pf with icase(pf='Y','','Y')
+				case myname='CANCER'
+					m.caseno=ntoc(m.caseno)
+					m.protocal=ntoc(m.protocal)
+					if !empty(m.caseno)
+						repl cancer with icase(cancer='Y','','Y')
+					endif
+				case myname='ISCANCER' or myname='CASENO'
+				case myname='PROTOCAL'
+					m.caseno=ntoc(m.caseno)
+					m.protocal=ntoc(m.protocal)
+					if !empty(m.caseno)
+						=addprotocal()
+					endif
+				case myname='SLEEPTEST'
+				case myname='AUTHENCODE'
+					m.sleeptest=checkyes(m.sleeptest)
+					m.authencode=ntoc(m.authencode)
+					if m.sleeptest='Y'
+						_value=mybox(m.authencode,'àÅ¢·ÕèÍ¹ØÁÑµÔ','ÃÐºØ',100)
+						repl authencode with _value
+					endif
+				case myname='TELMED'
+				case myname='HM'
+				other
+					this.dblclick
+			endcase
+		endif
+		this.refresh
+	Proc grdData.RightClick
+		sele tmpdata
+		scatt memv memo
+		if recco()>0
+			do case
+				case myname='FLAG'
+					=addflag()
+				case myname='SELECTED'
+					repl selected with !selected
+				case myname='COVID'
+					if !(m.si='Y' or m.atk='Y') and m.vstdate<be2ce('1/10/2565')
+						m.covid=icase(m.covid='Y','','Y')
+						repl covid with m.covid
+						if empty(m.covid)
+							store '' to m.hi,m.ci,m.fieldhosp,m.si
+						endif
+						gath memv
+					endif
+				case myname='HI'
+				case myname='CI'
+				case myname='SI'
+				case myname='FIELDHOSP'
+				case myname='ATK'
+				case myname='VACCINE'
+				case myname='PF'
+					repl pf with ''
+				case myname='EGFR'
+				case myname='CANCER'
+					repl cancer with ''
+				case myname='ISCANCER' or myname='CASENO'
+				case myname='PROTOCAL'
+					repl protocal with ''
+				case myname='SLEEPTEST'
+				case myname='AUTHENCODE'
+				case myname='TELMED'
+				case myname='HM'
+				other
+					this.ExportExcel
+			endcase
+		endif
+	Proc grdData.DblClick
+		sele tmpdata
+		if recco()>0 and empty(status) &&and nWhere=3
+			repl selected with !selected
+		endif
+		this.refresh
+	Proc ManyHeader1.OnClick
+		lpara _obj
+		_name=ntoc(_obj.name)
+		mycaption=ntoc(_obj.caption,0)
+		myname=''
+		if _name='COLUMN'
+			this.parent.grddata.columnname=_name
+			_col=eval('thisform.grddata.'+_name)
+			mysource=ntoc(_col.controlsource)
+			myname=justext(mysource)
+			myname=icase(empty(myname),mysource,myname)
+		endif
+		thisform.toclick
+	Proc ToClick
+		acti scree
+		do case
+			case myname$'STATUS,ERROR,WARN,VN,HN,CID,HOSPMAIN,COVID,SI,ATK,VACCINE,ERRORNAME'
+				_sort=myname
+				do case
+					case myname='CID'
+						index on cid+vn tag no
+					case myname='HN'
+						index on hn+vn tag no
+					case myname='ERRORNAME'
+						index on errorname tag no
+					case myname='ERROR'
+						index on error+warn tag no
+					case myname='WARN'
+						index on warn+error tag no
+					case myname='STATUS'
+						index on status+error+warn tag no
+					other
+						index on &_sort tag no
+				endcase
+			case myname='FLAG'
+				oerr.clear
+				sele tmpdata
+				nrec=recno()
+				repl flag with 'A' all
+				index on flag tag no
+				if recco()>0
+					go (nrec)
+				endif
+			case mycaption='Covid'
+				sele tmpdata
+				set order to
+				nrec=recno()
+				scan
+					scatt memv memo
+					_value=icase(ntoc(m.vaccine)+ntoc(m.atk)+ntoc(m.si)='Y','','Y')
+					_value=icase(m.vstdate>=be2ce('1/10/2565'),'',_value)
+					repl covid with _value
+				ends
+				if recco()>0
+					go (nrec)
+				endif
+			case mycaption='¡ÒÃàµÃÕÂÁàÊé¹'
+				sele tmpdata
+				nrec=recno()
+				repl pf with 'Y' all
+				if recco()>0
+					go (nrec)
+				endif
+			case myname='PF' or myname='EGFR'
+				sele tmpdata
+				nrec=recno()
+				repl selected with .F. all
+				repl selected with .T. for pf='Y'
+				if recco()>0
+					go (nrec)
+				endif
+			case myname='CANCER'
+				sele tmpdata
+				nrec=recno()
+				repl selected with .F. all
+				repl selected with .T. for cancer='Y'
+				if recco()>0
+					go (nrec)
+				endif
+			case myname='PROTOCAL'
+			case myname='SLEEPTEST'
+				sele tmpdata
+				nrec=recno()
+				repl selected with .F. all
+				repl selected with .T. for cancer='Y'
+				if recco()>0
+					go (nrec)
+				endif
+			case myname='TELMED'
+				sele tmpdata
+				nrec=recno()
+				repl selected with .F. all
+				repl selected with .T. for telmed='Y'
+				if recco()>0
+					go (nrec)
+				endif
+			other
+				thisform.selectdata(.T.)
+		endcase
+		thisform.setfocus
+	Proc ManyHeader1.OnRightClick
+		lpara _obj
+		_name=ntoc(_obj.name)
+		mycaption=ntoc(_obj.caption,0)
+		myname=''
+		if _name='COLUMN'
+			this.parent.grddata.columnname=_name
+			_col=eval('thisform.grddata.'+_name)
+			mysource=ntoc(_col.controlsource)
+			myname=justext(mysource)
+			myname=icase(empty(myname),mysource,myname)
+		endif
+		thisform.torightclick
+	Proc ToRightClick
+		do case
+			case myname='ENDTIME'
+				oerr.clear
+				if recco('tmpData')=0
+					retu .F.
+				endif
+				=updateendtime()
+				thisform.cntdialy.cmdfind.click
+			case myname='DATEEXP'
+				oerr.clear
+				if recco('tmpData')=0
+					retu .F.
+				endif
+				=updatepttype()
+				thisform.cntdialy.cmdfind.click
+			case myname='HOSPMAIN'
+				oerr.clear
+				if recco('tmpData')=0
+					retu .F.
+				endif
+				=updatepttype(.T.)
+				thisform.cntdialy.cmdfind.click
+			case myname='FLAG'
+				oerr.clear
+				sele tmpdata
+				nrec=recno()
+				menu=''
+				defi popup listmenu shortcut rela from mrow(),mcol()
+				defi bar 1 of listmenu prompt 'A:¢ÍàºÔ¡'
+				defi bar 2 of listmenu prompt 'E:á¡éä¢'
+				defi bar 3 of listmenu prompt 'D:Â¡àÅÔ¡'
+				on select popup listmenu menu=prompt()
+				acti popup listmenu
+				menu=getwordnum(menu,1,':')
+				menu=icase(empty(menu),'A',menu)
+				repl flag with menu all
+				if recco()>0
+					go (nrec)
+				endif
+			case myname='NOEXPORT'
+				if !empty(m.vn)
+					thisform.nowrec=0
+					=sqlexec(_handle,[delete from opitemrece_noexport where seq=?m.vn])
+				endif
+			case myname='COVID' or mycaption='Covid'
+				sele tmpdata
+				nrec=recno()
+				repl covid with '' all
+				if recco()>0
+					go (nrec)
+				endif
+*			case myname$'COVID,VACCINE,ATK,SI'
+			case myname='PF' or myname='EGFR' or mycaption='¡ÒÃàµÃÕÂÁàÊé¹'
+				sele tmpdata
+				nrec=recno()
+				repl pf with '' all
+				if recco()>0
+					go (nrec)
+				endif
+			case myname='CANCER' or myname='ISCANCER' or myname='CASENO' or mycaption='Cancer'
+				sele tmpdata
+				nrec=recno()
+				repl cancer with '' all
+				if recco()>0
+					go (nrec)
+				endif
+			case myname='PROTOCAL'
+				sele tmpdata
+				nrec=recno()
+				repl protocal with '' all
+				if recco()>0
+					go (nrec)
+				endif
+*			case myname='SLEEPTEST' or myname='AUTHENCODE' or mycaption='Sleep Test'
+*			case myname='TELMED' or myname='HM' or mycaption='TeleMed'
+			other
+				thisform.selectdata(.F.)
+		endcase
+		thisform.setfocus
+	Proc SelectData
+		para _is
+		sele tmpdata
+		m.selected=tologic(_is)
+		nrec=recno()
+		scan
+			if _is
+				if income>0 and (empty(status) or status='µÔ´ C') and error#'Y'
+					gath memv fields selected
+				endif
+			else
+				gath memv fields selected
+			endif
+		ends
+		if recco()>0
+			go (nrec)
+		endif
+		this.refresh
+	Proc grdIncome.Click
+		local nrec
+		acti scree
+		sele tmpIncome
+		nrec=recno()
+		if recco()>0
+			scatt memv memo
+			do case
+				case myname='NOEXPORT'
+					m.vn=ntoc(m.vn)
+					m.icode=ntoc(m.icode,0)
+					if !empty(m.vn) and !empty(m.icode)
+						m.noexport=checkyes(m.noexport)
+						m.noexport=icase(m.noexport='Y','','Y')
+						if m.noexport='Y'
+							=sqlexec(_handle,[replace into opitemrece_noexport (seq,icode) values (?m.vn,?m.icode)])
+						else
+							=sqlexec(_handle,[delete from opitemrece_noexport where seq=?m.vn and icode=?m.icode])
+						endif
+						sele tmpincome
+						gath memv fields noexport
+					endif
+			endcase
+		endif
+		this.refresh
+	Proc grdIncome.RightClick
+	Proc grdDx.RightClick
+enddefi
+defi class mydialy as xptitle
+	caption=''
+	add object lblStart as mylabels with caption='µÑé§áµèÇÑ¹·Õè',left=5,space=5
+	add object txtStart as mytextboxdate with controlsource='_start',width=120,tabstop=.T.
+	add object lblEnd as mylabels with caption='¶Ö§',tocheck=.T.,cap=5
+	add object txtEnd as mytextboxdate with controlsource='_end',width=120,tabstop=.T.
+	add object lblStation as mylabels with caption='Station',left=5,space=5
+	add object txtStation as mytextbox with controlsource='mystation',width=40,tabstop=.F.
+	add object lblSession as mylabels with caption='Session No',left=5,space=5
+	add object txtSession as mytextbox with controlsource='mysessno',width=40,tabstop=.T.,inputmask='9999'
+	add object lblPttype as mylabels with caption='ÊÔ·¸Ô',left=5,space=5
+	add object txtPttype as mytextbox with controlsource='mypttype',width=355,tabstop=.F.,enabled=.F.
+
+	add object lblDoctor as mylabels with caption='Ç.á¾·Âì',left=5,space=5
+	add object txtDoctor as mytextbox with controlsource='mydoctorcheck',width=200,tabstop=.F.
+	add object lblHMain as mylabels with caption='Main Contract',left=5,space=5
+	add object txtHMain as mytextbox with controlsource='myHospMain',width=200,tabstop=.F.
+	add object lblUse as mylabels with caption='ÇÔ¸Õ¡ÒÃãªéÂÒ',left=5,space=5
+	add object txtUse as mytextbox with controlsource='myuse',width=60,tabstop=.F.
+	add object lblName as mylabel with caption=myusename,left=5,space=5,nowcolor=rgb(0,0,0),fontbold=.T.
+
+	add object cmdStart as mybutton with caption='àÃÔèÁãËÁè',height=34,tabstop=.F.,cancel=.T.,width=50
+	add object cmdFind as mybutton with caption='¤é¹ËÒ',height=34,width=40
+	add object cmdExport as mybutton with caption='Êè§ÍÍ¡',height=34,width=40
+	add object cmdImport as mybutton with caption='¹Óà¢éÒµÍº¡ÅÑº',height=34,width=90
+	add object cmdICD10 as mybutton with caption='ICD10',height=34,width=50
+	add object cmdZCode as mybutton with caption='ÃËÑÊ Z',height=34,width=50
+	add object cmdIncome as mybutton with caption='Update ¤èÒãªé¨èÒÂ',height=34,width=100
+	add object cmdReport as mybutton with caption='ÃÒÂ§Ò¹',height=34,width=50
+	add object cmdExit as mybutton with caption='E\<xit',height=34,width=40
+
+	add object cmdError as mybutton with caption='µÔ´ C',height=34,width=50
+	add object cmdExcel as mybutton with caption='Excel',height=34,width=50
+	add object cmdRep as mybutton with caption='Rep',height=34,width=50
+
+	add object chkVN as mycheckbox with controlsource='lvn',caption='ãªé VN á·¹ãºá¨é§Ë¹Õé',fontbold=.T.,nowcolor=rgb(255,0,0),tabstop=.F.
+	add object chkPdx as mycheckbox with controlsource='lpdx',caption='Êè§à©¾ÒÐ Pdx',fontbold=.T.,nowcolor=rgb(255,0,0),tabstop=.F.,visible=.T.
+	add object chkHMain as mycheckbox with controlsource='isHMain',caption='áÁèªèÒÂ',tabstop=.F.
+
+	add object lblFind as mylabels with caption='¤é¹ËÒ VN',left=5,space=5
+	add object txtFind as mytextbox with controlsource='myvn',width=200,tabstop=.F.
+
+	add object lblICD10 as mylabels with caption='µÃÇ¨ÊÍº ICD10',left=5,space=5,visible=.T.
+	add object txtICD10 as myoptiongroup with controlsource='nICD10',optioncaption='äÁèµÃÇ¨ÊÍº|HOSxP|Ê»Êª.|Ê¡Ê.',optionenabled='1|1|1|1',ondown=.F.,auto=.T.,top=0,width=400,spaceoption=0,visible=.T.
+
+	Proc Init
+		with this
+			.setall('width',110,'mylabels')
+			.calpos('start',5,5)
+			.calpos('end',5,calpos(.txtstart,5))
+			.calpos('station',calpos(.txtend,2,.T.),5)
+			.calpos('session',.txtstation.top,.lblend.left)
+			.calpos('pttype',calpos(.txtsession,2,.T.),5)
+			.calpos('find',calpos(.txtpttype,2,.T.),5)
+			.calpos('doctor',5,calpos(.txtend,5))
+			.calpos('use',calpos(.txtdoctor,2,.T.),.lbldoctor.left)
+			.position('lblname',.txtuse.top+3,calpos(.txtuse,5))
+			.calpos('hmain',calpos(.txtuse,2,.T.),.lbldoctor.left)
+			.height=calpos(.txtfind,5,.T.)
+		endwith
+	Proc SetOther
+		with this
+			thisform.buttonsides('Exit|Report|Income|ZCode|ICD10|Import|Export|Find|Start',,5)
+			thisform.buttonsides('Error|Excel|Rep',,.height-5-.cmderror.height)
+			.position('chkvn',.txtfind.top+3,calpos(.txtend,5))
+			.position('chkpdx',.chkvn.top,calpos(.chkvn,10))
+			.position('chkhmain',.lblhmain.top+3,calpos(.txthmain,5))
+			.calpos('icd10',calpos(.txthmain,2,.T.),calpos(.txthmain,5))
+			.lblhmain.visible=icase(myBenefit='SS',.T.,.F.)
+			.txthmain.visible=icase(myBenefit='SS',.T.,.F.)
+		endwith
+	Proc Refresh
+		with this
+			.cmdincome.enabled=lmaster
+*			.cmderror.visible=lmaster
+*			.cmdexcel.visible=lmaster
+*			.cmdrep.visible=lmaster
+			.chkvn.enabled=.T.
+		endwith
+	Proc ShowData
+		lpara _is
+		with this
+			.grddata.recordsource=''
+			=adddata(_is)
+			.grddata.recordsource='tmpData'
+			.setfocus
+		endwith
+	Proc cmdRep.Click
+		with thisform
+			oerr.clear
+			.resetdata
+			=addbyrep()
+			.setfocus
+		endwith
+	Proc cmdExcel.Click
+		with thisform
+			oerr.clear
+			.resetdata
+			=addbyexcel()
+			.setfocus
+		endwith
+	Proc cmdError.Click
+		with thisform
+			oerr.clear
+			.resetdata
+			.showdata(2)
+			=writeerror('OK',oerr)
+			.setfocus
+		endwith
+	Proc cmdError.RightClick
+		with thisform
+			oerr.clear
+			.resetdata
+			.showdata(3)
+			=writeerror('OK',oerr)
+			.setfocus
+		endwith
+	Proc cmdReport.Click
+		=showsenddata()
+		thisform.refresh
+	Proc cmdReport.RightClick
+		=showsenddata(.T.)
+		thisform.refresh
+	Proc cmdStart.Click
+		thisform.cntdialy.txtstart.setfocus
+	Proc txtDoctor.GotFocus
+		thisform.resetdata
+	Proc txtDoctor.Lostfocus
+		_value=ntoc(this.value)
+		=sqlexec(_handle,[replace into sys_var (sys_name,sys_value) values ('CHI_Doctor',?_value)])
+	Proc chkHMain.SetOther
+		thisform.resetdata
+	Proc txtHMain.GotFocus
+		thisform.resetdata
+	Proc txtHmain.Lostfocus
+		_value=checkasdata(this.value,1,',','',.T.)
+		=sqlexec(_handle,[replace into sys_var (sys_name,sys_value) values ('CHI_HospMain',?_value)])
+		this.value=_value
+	Proc txtUse.GotFocus
+		thisform.resetdata
+	Proc txtUse.Lostfocus
+		_value=ntoc(this.value)
+		myUseName=ntoc(getsqldata([select name1 from drugusage where drugusage=?_value]),0)
+		=sqlexec(_handle,[replace into sys_var (sys_name,sys_value) values ('CHI_DrugUsage',?_value)])
+		this.parent.lblname.caption=myusename
+	Proc chkPdx.SetOther
+		=adddx()
+		thisform.refresh
+	Proc txtFind.Lostfocus
+		with thisform
+			_value=alltrim(this.value)
+			sele tmpData
+			if recco()>0
+				_no=recno()
+				locate for _value$vn
+				if !found()
+					go (_no)
+				endif
+			endif
+			.grdData.AfterRowColChange
+			this.value=''
+		endwith
+	Proc cmdExit.Click
+		thisform.destroy
+	Proc lblStart.Click
+		_start=startyear(_start)
+		this.parent.txtstart.setfocus
+	Proc lblStart.RightClick
+		_start=date()
+		this.parent.txtstart.setfocus
+	Proc txtStart.Gotfocus
+		oerr.clear
+		thisform.resetdata
+	Proc txtStart.Lostfocus
+		this.value=ce2cbe(caldate(this.value,this.tag))
+	Proc lblEnd.Click
+		_end=endyear(_end)
+		this.parent.txtend.setfocus
+	Proc lblEnd.RightClick
+		_end=date()
+		this.parent.txtend.setfocus
+	Proc txtEnd.Gotfocus
+		oerr.clear
+		thisform.resetdata
+	Proc txtEnd.Lostfocus
+		this.value=ce2cbe(caldate(this.value,this.tag))
+	Proc txtStation.Lostfocus
+		this.value=zero(this.value,2)
+		this.value=icase(this.value='00','01',this.value)
+	Proc txtSession.Lostfocus
+		if empty(this.value)
+			this.value='1'
+		endif
+		this.value=zero(this.value,4)
+		this.value=icase(this.value='0000','',this.value)
+	Proc lblPttype.Click
+		oerr.clear
+		thisform.resetdata
+		mypttype=checkasdata(getdatamultiple(mpttype,[getwordnum(m.name,1,':')],'àÅ×Í¡ÊÔ·¸Ô',400,600,.T.,mypttype,.F.),1,',','',.T.)
+		mypttype=adddoublequote(mypttype)
+		thisform.refresh
+	Proc lblPttype.RightClick
+		oerr.clear
+		thisform.resetdata
+		mypttype=checkasdata(getsqldata([select group_concat(distinct pttype) cc from pttype where  isuse='Y' and (hipdata_code regexp 'SS' or pcode='A7' or name regexp '»ÃÐ¡Ñ¹ÊÑ§¤Á') order by pttype]),1,',','',.T.)
+		mypttype=adddoublequote(mypttype)
+		thisform.refresh
+	Proc cmdFind.Click
+		with thisform
+			oerr.clear
+			.resetdata()
+			if empty(mypttype)
+				=writeerror('ÂÑ§äÁèä´é¡ÓË¹´ÊÔ·¸Ô',oerr)
+				retu .F.
+			endif
+			.showdata()
+			=writeerror('OK',oerr)
+		endwith
+	Proc lblFind.RightClick
+		with thisform
+			this.parent.txtfind.setfocus
+			=addbyvn()
+			.setfocus
+		endwith
+	Proc cmdIncome.Click
+		oerr.clear
+		oerr.columncount=2
+		oerr.columnwidths='300,100'
+		if recco('tmpData')=0
+			retu .F.
+		endif
+		=updateincome(m.vn)
+		this.parent.cmdfind.click
+	Proc cmdIncome.RightClick
+		oerr.clear
+		oerr.columncount=2
+		oerr.columnwidths='300,100'
+		if recco('tmpData')=0
+			retu .F.
+		endif
+		sele tmpData
+		scan
+			scatt memv memo
+			if '¤èÒãªé¨èÒÂäÁèà·èÒ¡Ñ¹'$m.errorname
+				=updateincome(m.vn)
+			endif
+		ends
+		this.parent.cmdfind.click
+	Proc cmdExport.Click
+		oerr.clear
+		oerr.setfocus
+		if empty(mysessno)
+			=writeerror('¡ÃØ³ÒÃÐºØ Session No',oerr)
+			retu .F.
+		endif
+		if empty(mystation)
+			=writeerror('¡ÃØ³ÒÃÐºØ Station',oerr)
+			retu .F.
+		endif
+		if empty(mydoctorcheck)
+			=writeerror('¡ÃØ³ÒÃÐºØ Default Ç.á¾·Âì',oerr)
+			retu .F.
+		endif
+		if empty(myuse)
+			=writeerror('¡ÃØ³ÒÃÐºØ Default ÇÔ¸ÕãªéÂÒ',oerr)
+			retu .F.
+		endif
+		if empty(myHospMain)
+			=writeerror('¡ÃØ³ÒÃÐºØ Main Contract',oerr)
+			retu .F.
+		endif
+		cTFlag='A'
+		=exportdata()
+	Proc cmdExport.RightClick
+		oerr.clear
+		oerr.setfocus
+		if empty(mysessno)
+			=writeerror('¡ÃØ³ÒÃÐºØ Seesion ID',oerr)
+			retu .F.
+		endif
+		if empty(mystation)
+			=writeerror('¡ÃØ³ÒÃÐºØ Station',oerr)
+			retu .F.
+		endif
+		if empty(mydoctorcheck)
+			=writeerror('¡ÃØ³ÒÃÐºØ Default Ç.á¾·Âì',oerr)
+			retu .F.
+		endif
+		if empty(myuse)
+			=writeerror('¡ÃØ³ÒÃÐºØ Default ÇÔ¸ÕãªéÂÒ',oerr)
+			retu .F.
+		endif
+		if empty(myHospMain)
+			=writeerror('¡ÃØ³ÒÃÐºØ Main Contract',oerr)
+			retu .F.
+		endif
+		=calrowcols(this)
+		menu=''
+		defi popup ListMenu shortcut from nrow,ncol font 'Tahoma',10
+		defi bar 1 of listmenu prompt 'A:¢ÍàºÔ¡'
+		defi bar 2 of listmenu prompt 'E:á¡éä¢'
+		defi bar 3 of listmenu prompt 'D:Â¡àÅÔ¡'
+		on select popup listmenu menu=prompt()
+		acti popup listmenu
+		cTFlag=getwordnum(menu,1,':')
+		cTFlag=icase(empty(cTFlag),'A',cTFlag)
+		=exportdata()
+	Proc cmdImport.Click
+		oerr.clear
+		thisform.resetdata()
+		=addreturn()
+	Proc cmdICD10.Click
+		oerr.clear
+		this.parent.restore()
+		thisform.refresh
+	Proc cmdICD10.RightClick
+		oerr.clear
+		this.parent.backup()
+		thisform.refresh
+	Proc cmdZCode.Click
+		oerr.clear
+		this.parent.restore('icd10_ssop_z')
+		thisform.refresh
+	Proc cmdZCode.RightClick
+		oerr.clear
+		store 0 to nrow,ncol
+		=calrowcols(this)
+		menu=0
+		defi popup ListMenu shortcut from nrow,ncol font 'Tahoma',10
+		defi bar 1 of listmenu prompt 'BackUp to SQL'
+		defi bar 2 of listmenu prompt 'Import by Excel'
+		on select bar 1 of listmenu menu=1
+		on select bar 2 of listmenu menu=2
+		acti popup listmenu
+		do case
+			case menu=1
+				this.parent.backup('icd10_ssop_z')
+			case menu=2
+				=addZcode()
+		endcase
+		thisform.refresh
+	Proc BackUp
+		lpara _table
+		if type('oErr')='O'
+			oerr.clear
+		endif
+		_table=ntoc(_table)
+		_table=icase(_table='ICD10_SSOP_Z',_table,'ICD10_NHSO')
+		_db=_database
+		exefile=findmysql('MySQLDump.EXE')
+		if file(exefile)
+			myfile=_table
+			cFolder='C:\Temp\'
+			=makepath(cfolder)
+			if checktable(icase(empty(_db),'',_db+'.')+myfile)
+				sqlfile=cfolder+myfile+'.SQL'
+				=erasefile(sqlfile)
+				=writeerror('¡ÓÅÑ§ Backup to '+sqlfile,oerr)
+				=writeas('Backup to '+sqlfile+icase(mysqlcommand(.F.,_server,_user,_psw,_db,_port),' àÃÕÂºÃéÍÂáÅéÇ',' äÁèÊÓàÃç¨'),oerror)
+				local _str,ii,_volume
+				_str=listdrv()
+				for ii=1 to getwordcount(_str,',')
+					_drive=getwordnum(_str,ii,',')
+					_volume=mydrivevolume(_drive)
+					if _volume$'KINGSTON,BK' or 'VET'$_volume or 'BACKUP'$_volume
+						sqlfile=_drive+'\'+myfile+'.SQL'
+						=erasefile(sqlfile)
+						=writeerror('¡ÓÅÑ§ Backup to '+sqlfile,oerr)
+						=writeas('Backup to '+sqlfile+icase(mysqlcommand(.F.,_server,_user,_psw,_db,_port),' àÃÕÂºÃéÍÂáÅéÇ',' äÁèÊÓàÃç¨'),oerr)
+					endif
+				next
+				=writeerror('àÃÕÂºÃéÍÂáÅéÇ¨éÒ......',oerr,.T.)
+			else
+				=writeerror('äÁè¾ºµÒÃÒ§ '+myfile,oerr,.T.)
+			endif
+		endif
+	Proc Restore
+		lpara _table
+		if type('oErr')='O'
+			oerr.clear
+		endif
+		_table=ntoc(_table)
+		_table=icase(_table='ICD10_SSOP_Z',_table,'ICD10_NHSO')
+		_db=_database
+		exefile=findmysql('MySQL.EXE')
+		if file(exefile)
+			cfolder=''
+			_drive=mydrivecheck()
+			sqlfile=forceext(_table,'SQL')
+			if !empty(_drive)
+				sqlfile=icase(file(_drive+'\'+sqlfile),_drive+'\'+sqlfile,file(sqlfile),sqlfile,file('C:\Temp\'+sqlfile),'C:\Temp\'+sqlfile,file(cfolder+sqlfile),cfolder+sqlfile,sqlfile)
+			else
+				sqlfile=icase(file(sqlfile),sqlfile,file('C:\Temp\'+sqlfile),'C:\Temp\'+sqlfile,sqlfile)
+			endif
+			if file(sqlfile)
+				=writeerror('¡ÓÅÑ§ Restore from '+sqlfile,oerr)
+				=writeas('Restore from '+sqlfile+icase(mysqlcommand(.T.,_server,_user,_psw,_db,_port),' àÃÕÂºÃéÍÂáÅéÇ',' äÁèÊÓàÃç¨'),oerr)
+			else
+				=writeerror('äÁè¾ºä¿Åì '+sqlfile,oerr,.T.)
+			endif
+		endif
+
+enddefi
+
+Proc SearchFile
+lpara _seek,_str
+_seek=ntoc(_seek)
+if file(_seek) or empty(_seek)
+	retu _seek
+endif
+_seek=justfname(_seek)
+_str=ntoc(_str)
+_str=addpipe(icase(empty(_str),'X',_str))
+for ii=1 to getwordcount(_str,'|')
+	_folder=ntoc(getwordnum(_str,ii,'|'))
+	_folder=calfolder(icase(_folder='X','',_folder))
+	_file=ntoc(_folder)+_seek
+	_file=sys(2000,_file)
+	if !empty(_file)
+		_file=_folder+_file
+		exit
+	endif
+next
+retu _file
+
+Proc AddZCode
+lpara _is
+_is=tologic(_is)
+_table='ICD10_SSOP_Z'
+if _is
+	=sqlexec(_handle,[drop table if exists ]+_table)
+endif
+text to _sql noshow textmerge
+create table if not exists <<_table>> (Code varchar(9) not null,Description varchar(250) ,Active_Status varchar(1) ,primary key (code)) engine=MyISAM default charset=tis620;
+endtext
+=runsql(_sql,.T.)
+if !checktable(_table)
+	=writeerror('äÁèÁÕµÒÃÒ§ '+_table,oerr,.T.)
+	retu .F.
+endif
+_drive=mydrivecheck()
+_folder=_drive+icase(!empty(_drive),'|','')+'x|C:\Temp|x'
+xlsfile=searchfile(_table+'.xls*',_folder)
+xlsfile=icase(empty(xlsfile),_table+'.XLS',xlsfile)
+=writeerror('¡ÓÅÑ§à»Ô´ä¿Åì....',oerr)
+if !openexcel(xlsfile)
+	=writeas(alltrim(xlsfile+' '+_msg),oerr)
+else
+	=writeerror('Add ÃËÑÊ Z ÊÓËÃÑº SSOP',oerr,.T.)
+	with oExcel
+		nsheet=1
+		with .Sheets(nsheet)
+			SheetName=ntoc(.name)
+			nRow=.Cells.SpecialCells(11).Row
+			nColumn=.Cells.SpecialCells(11).Column
+			nColumn=icase(ncolumn>100,100,nColumn)
+			store 1 to nStart,nData
+			for ii=1 to nrow
+				m.code=ntoc(.range('B'+trans(ii)).value)
+				m.description=ntoc(.range('C'+trans(ii)).value,0)
+				m.active_status='Y'
+				if m.code='Z'
+					=savemysql(_table)
+				endif
+			next
+		endwith
+	endwith
+	=CloseExcel()
+	=writeerror('OK',oerr)
+endif
+
+Proc MaxTime
+para _vn
+local _ret,_default,_date
+_ret=.null.
+_vn=ntoc(_vn)
+if !empty(_vn)
+	_default=toengdatetime(getsqldata([select caldatetime(o.vstdate,o.vsttime) cc from ovst o  where vn=?_vn]))
+	_ret=toengdatetime(getsqldata([select caldatetime(o.vstdate,o.cur_dep_time) cc from ovst o  where vn=?_vn]))
+	_ret=icase(_default>_ret,_default,_ret)
+	if sqlexec(_handle,[select caldatetime(pd.outdate,pd.outtime) time from ovst o left join ptdepart pd on pd.vn=o.vn where o.vn=?_vn and pd.outdate<=adddate(o.vstdate,1)],[tmptime])>0
+		scan
+			_date=toengdatetime(time)
+			_ret=icase(_date>_ret,_date,_ret)
+		ends
+	endif
+endif
+retu _ret
+
+Proc UpdateEndTime
+_sql=''
+text to _sql noshow textmerge
+update ptdepart pd
+join ovst o on o.vn=pd.vn
+set pd.outdate=o.vstdate
+where o.vstdate between @ds1 and @ds2
+and (pd.outdate is null or pd.outdate<o.vstdate)
+endtext
+=runsql(_sql,.T.)
+
+Proc AddByRep
+local i,j,ii
+sele tmpdata
+index on vn tag vn
+zap
+if type('oErr')='O'
+	oerr.clear
+	oerr.columncount=5
+	oerr.columnwidths='450,200,100,100,100'
+endif
+repfile=selectfile('C:\Temp\SSOP\*SOCDBIL*.BIL')
+if !file(repfile)
+	retu .F.
+endif
+=writeerror(repfile,oerr,.T.)
+=writeas('¡ÓÅÑ§à»Ô´ä¿Åì',oerr,2)
+_data=filetostr(repfile)
+=writeas('',oerr,2)
+for ii=1 to memlines(_data)
+	_line=mline(_data,ii)
+	if _line='*| C'
+		m.vn=parsestring(_line,7,', ')
+		m.vn=ntoc(chrtran(m.vn,[_ ],[]))
+		if myHIS$'IMED'
+			m.vn=ntoc(getsqldata(textmerge([select vn from vn_stat where rcpno_list like '<<m.vn>>%'])))
+		endif
+		m.pid=parsestring(_line,8,', ')
+		m.pid=ntoc(chrtran(m.pid,[_ ],[]))
+		m.pid=icase(checkpid(@m.pid),m.pid,'')
+		if !empty(m.vn)
+			=writeerror(m.vn,oerr,.T.)
+			=adddata(1,.T.)
+		endif
+		if inkey()#0
+			exit
+		endif
+	endif
+next
+=writeerror('OK',oerr)
+
+Proc AddByExcel
+local imj,ii
+sele tmpdata
+index on vn tag vn
+zap
+if type('oErr')='O'
+	oerr.clear
+	oerr.columncount=5
+	oerr.columnwidths='450,200,100,100,100'
+endif
+xlsfile=selectfile('C:\Temp\*.XLS*')
+if empty(xlsfile)
+	retu .F.
+endif
+=writeerror(xlsfile,oerr,.T.)
+=writeas('¡ÓÅÑ§à»Ô´ä¿Åì',oerr,2)
+if !openexcel(xlsfile)
+	=writeas(_msg,oerr,2)
+	retu .F.
+endif
+=writeas('OK',oerr,2)
+with oExcel
+	for nSheet=1 to .Sheets.Count
+		with .Sheets(nsheet)
+			SheetName=ntoc(.name)
+			=writeerror('=>'+sheetname,oerr)
+			nRow=.Cells.SpecialCells(11).Row
+			nColumn=.Cells.SpecialCells(11).Column
+			nColumn=icase(ncolumn>100,100,nColumn)
+			store 1 to nStart,nData
+			lhas=.F.
+			for i=1 to 30
+				for ii=1 to ncolumn
+					_value=ntoc(.cells(i,ii).value)
+					if _value='VN'
+						nstart=ii
+						lhas=.T.
+						exit
+					endif
+				next
+				if lhas
+					exit
+				endif
+			next
+			if lhas
+				ndata=i+1
+				=writeas(trans(ndata)+'/'+trans(nrow),oerr,2)
+				for ii=i+1 to nrow
+					=writeas(trans(ii)+'/'+trans(nrow),oerr,2)
+					m.vn=ntoc(.cells(ii,nstart).value)
+					=adddata(1,.T.)
+					if inkey()#0
+						exit
+					endif
+				next
+			endif
+		endwith
+	next
+endwith
+=CloseExcel()
+=writeerror('OK',oerr)
+
+Proc FindVN
+priv _ret,i,ii,_sql,_opd,_ipd,_caption,_title,_format,_width,_position,_color,_risk,reportname,reportfield,setcolumn,lockcolumns,maxform,formwidth,formheight,formtop,formleft,gridtop,gridleft,lsubheader,setcaption
+m.hn=mybox('','HN','ÃÐºØ HN',300)
+m.hn=checkhn(m.hn)
+if empty(m.hn)
+	=writeerror('äÁèÃÐºØ HN ¼Ô´¾ÅÒ´....',oerror)
+	retu .F.
+endif
+store '' to _ret,_sql
+text to _sql noshow textmerge
+select o.vn,ce2be(o.vstdate) vstdate,date_format(o.vsttime,'%T') vsttime,o.pttype
+from ovst o
+where o.hn='<<m.hn>>'
+order by o.vn desc
+limit 500
+endtext
+if !runsql(_sql,.T.)
+	retu .F.
+endif
+if recco()#0
+	_title='VN|ÇÑ¹·ÕèµÃÇ¨|àÇÅÒ|ÊÔ·¸Ô'
+	_width='120|80|80|50'
+	_position='2|2|2|2'
+	setcolumn=1
+	formwidth = 340
+	formheight = 300
+	_ret=listdata()
+endif
+retu _ret
+
+Proc AddByVN
+lpara _is
+_is=tologic(_is)
+sele tmpdata
+index on vn tag vn
+if !_is
+	m.vn=findvn()
+endif
+m.vn=ntoc(m.vn)
+if empty(m.vn)
+	retu .F.
+endif
+=adddata(1)
+
+Proc AddData
+para _is,_excel
+=settype()
+_is=tonum(_is)
+_excel=tologic(_excel)
+if type('oErr')='O' and !_excel
+	oerr.clear
+	oerr.columncount=5
+	oerr.columnwidths='250,200,100,100,100'
+endif
+sele tmpdata
+index on vn tag vn
+if _is=1
+	m.vn=ntoc(m.vn)
+	if empty(m.vn)
+		retu
+	endif
+endif
+store '' to _sql,_remark
+=maketablechi()
+_master=textmerge(icase(_is=0 or _is=1,[from ovst o ],[from (select vn from <<myrcm>>.chi where status='C' and type='<<myfolderback>>') xx join ovst o on o.vn=xx.vn ]))
+_remark=textmerge(icase(_is=0,[where o.vstdate between @ds1 and @ds2 and ifnull(o.an,'')='' ],_is=1,[where o.vn='<<m.vn>>'],_is=3,[where o.vstdate between @ds1 and @ds2],[]))
+if _is=0
+	_remark=_remark+textmerge([and o.pttype in (<<mypttype>>)])
+endif
+
+text to _sql noshow textmerge
+call addcolumn('doctor','regist_no','varchar(50)',null);
+call addcolumn('pttype','round_money','char(1)',null);
+call addcolumn('ovstist','export_code','varchar(5)',null);
+call addcolumn('ovstost','export_code','varchar(5)',null);
+
+create table if not exists icd10_ssop_z (Code varchar(9) not null,Description varchar(250) ,Active_Status varchar(1) ,primary key (code)) engine=MyISAM default charset=tis620;
+
+select o.vn,o.hn,if(pt.nationality=99,pt.cid,pc.cardno) cid,concat(pt.pname,pt.fname,' ',pt.lname) PtName
+,thaiage(pt.birthday,o.vstdate) age
+,calage(pt.birthday,o.vstdate,1) age_y
+,seekname(pt.nationality,'nation') nation
+,o.vstdate,o.vsttime
+,o.vstdate outdate,o.vsttime outtime
+#,ifnull(max(pd.outdate),o.vstdate) outdate,ifnull(max(pd.outtime),o.vsttime) outtime
+,concat_ws(':',cc.export_code,cc.name) ovstist
+,ifnull(sp.nhso_code,'') clinic,concat_ws(':',o.spclty,sp.name) clinicname
+,case when v.pdx is null or v.pdx='' then '' else concat(v.pdx,if(nhso.code is null,'-','')) end pdx
+,concat_ws(',',op0,op1,op2,op3,op4,op5) oper
+,if(v.pdx regexp '[V-Y]','Y','') ErrorPdx
+,ptt.pcode
+,seekhipdata(ptt.hipdata_code,0) maininscl
+,ptt.pttype_eclaim_id
+,seeknames(ptt.pttype_eclaim_id,'pttype_eclaim') pttype_eclaim_name
+,concat_ws(':',o.pttype,ptt.name) pttypename
+,v.hospmain hospmain
+,v.pttype_begin datein
+,v.pttype_expire dateexp
+,seekname(ifnull(o.main_dep,o.cur_dep),'kskdepartment') room
+,concat_ws(':',ost.export_code,ost.name) ovstost
+,o.doctor code
+,doctorlicense(o.doctor) doctor
+,doctorname(o.doctor) doctorname
+,v.income,v.rcpt_money
+,(select sum(sum_price) from opitemrece where vn=o.vn and paidst in ('00','01','03')) paid_money
+,(select ifnull(sum(qty*unitprice),0) from opitemrece where vn=o.vn) unitprice
+,(select group_concat(distinct if(qty*unitprice<>sum_price,'Y',null)) from opitemrece where vn=o.vn) errorunitprice
+,(select group_concat(distinct if(d.name='' or d.name is null,'Y',null)) Error
+from opitemrece oo
+left join s_drugitems d on d.icode=oo.icode
+where oo.vn=o.vn) errordrug
+,(select group_concat(distinct if((oo.drugusage is not null and oo.drugusage<>'') or (oo.sp_use is not null and oo.sp_use<>''),null,'Y')) Error
+from opitemrece oo
+where oo.vn=o.vn
+and oo.icode like '1%') errorusage
+,case
+when @myHIS regexp 'IMED' then v.rcpno_list
+else v.debt_id_list end invno
+,case
+when @myHIS regexp 'IMED' then v.debt_id_list
+else v.rcpno_list end billno
+,if(round_money is null or round_money='','Y',round_money) round_money
+,case
+#when sss.vn is not null then 'HOSxP Rep'
+when chi.vn is not null then if(chi.status='A','Êè§áÅéÇ','µÔ´ C')
+when hi.vn is not null then 'HI'
+else '' end status
+,(select group_concat(distinct if(g.cscd_group='3','Y',null)) cc
+from opitemrece oo
+join income inc on inc.income=oo.income
+join income_report2 g on g.group_id=inc.group2
+where oo.vn=o.vn and oo.icode not like '1%' ) errorgroup
+,(select group_concat(distinct if(g.cscd_group='' or g.cscd_group is null,'Y',null)) cc
+from opitemrece oo
+left join income inc on inc.income=oo.income
+left join income_report2 g on g.group_id=inc.group2
+where oo.vn=o.vn ) billmuad
+,if(v.pdx regexp 'Z' and v.pdx not in (select code from icd10_ssop_z),'C','') warngroup
+,asstring(s.symptom) symptom
+,(select group_concat(distinct concat(rep,'#',money(compensated))) rep from <<myrcm>>.repeclaim  where vn=o.vn and ifnull(errorcode,'')='') rep_invoice
+,(select group_concat(distinct if(ifnull(l.chi,'')<>'1' or ifnull(l.tmlt_code,'')='' or l.tmlt_code regexp 'X','Y',null)) from opitemrece oo join income inc on inc.income=oo.income left join <<myrcm>>.labitem l on l.icode=oo.icode where oo.vn=o.vn and inc.drg_chrgitem_id in (6,7)) errortmlt
+,(select group_concat(distinct if(d.nhso_adp_code in (select code from covid_items_detail),'Y',null)) cc
+from opitemrece oo
+join s_drugitems d on d.icode=oo.icode
+where oo.vn=o.vn) itemscovid
+,group_concat(distinct if(concat_ws('',pdx,dx0,dx1,dx2,dx3,dx4,dx5) regexp 'Z115|U071','Y',null)) dxcovid
+,(select group_concat(distinct if(d.nhso_adp_code in ('9902','55080'),'Y',null)) cc from opitemrece oo join s_drugitems d on d.icode=oo.icode where oo.vn=o.vn) si
+,(select group_concat(distinct if(d.nhso_adp_code in (<<labcovid>>),'Y',null)) cc from opitemrece oo join s_drugitems d on d.icode=oo.icode where oo.vn=o.vn) covidscreen
+,group_concat(distinct if(concat_ws('',pdx,dx0,dx1,dx2,dx3,dx4,dx5) regexp 'U11','Y',null)) vaccine
+,(select group_concat(distinct if(oo.icode is not null,'Y',null)) cc
+from opitemrece oo
+where oo.vn=o.vn
+and oo.icode in (select icode from person_vaccine where export_vaccine_code='C19' and ifnull(icode,'')<>'') ) drugvaccine
+,(select group_concat(distinct if(d.nhso_adp_code is not null,'Y',null)) cc
+from opitemrece oo
+join nondrugitems d on d.icode=oo.icode
+where oo.vn=o.vn
+and d.nhso_adp_code in ('55823','55824')) injectvaccine
+,(select group_concat(distinct if(d.nhso_adp_code is not null,'Y',null)) cc
+from opitemrece oo
+join s_drugitems d on d.icode=oo.icode
+where oo.vn=o.vn
+and d.nhso_adp_code regexp '^4018|^4828|^4837|^4904|^4905|^7142|^8491|^8492'
+and d.nhso_adp_type_id in (2,19)) pf
+,s.egfr
+,ca.caseno,ca.protocal
+,(select group_concat(distinct if(d.nhso_adp_code is not null,'Y',null)) cc
+from opitemrece oo
+join s_drugitems d on d.icode=oo.icode
+where oo.vn=o.vn
+and d.nhso_adp_code in ('51120','51121','3012','3013')) sleeptest
+,if(st.authencode is null,ifnull(st.status,'ÂÑ§äÁèÊè§'),group_concat(distinct st.authencode order by st.checkno)) authencode
+,if(cc.export_code='5','Y',null) telmed
+<<_master>>
+left join patient pt on pt.hn=o.hn
+left join ptcardno pc on pc.hn=pt.hn and pc.cardtype='02'
+left join vn_stat v on v.vn=o.vn
+left join visit_pttype vp on vp.vn=o.vn
+left join pttype ptt on ptt.pttype=o.pttype
+left join spclty sp on sp.spclty=o.spclty
+#left join ptdepart pd on pd.vn=o.vn and pd.outdepcode<>'' and pd.outdepcode is not null
+left join <<myrcm>>.chi on chi.vn=o.vn and chi.type=?myfolderback #and chi.status='A'
+left join ovst_sss_billtran sss on sss.vn=o.vn
+left join hi_register hi on hi.vn=o.vn
+left join icd10_nhso nhso on nhso.code=v.pdx
+left join ovstist cc on  cc.ovstist=o.ovstist
+left join ovstost ost on  ost.ovstost=o.ovstost
+left join opdscreen s on s.vn=o.vn
+left join ssocac_registry ca on ca.hn=o.hn and ifnull(ca.status,'') not in ('9','Y')
+left join <<myrcm>>.sleeptest st on st.vn=o.vn
+<<_remark>>
+group by o.vn
+endtext
+=runsql(_sql,.T.,'tmpvisit')
+rec=recco()
+n=0
+if _is#1
+	=writeerror('»ÃÐÁÇÅ¼Å....',oerr)
+	=writeas(trans(n)+'/'+trans(rec),oerr,2)
+endif
+do while !eof() and inkey()=0
+	n=n+1
+	if _is#1
+		=writeas(trans(n)+'/'+trans(rec),oerr,2)
+	endif
+	store 0 to m.unitprice,m.income,m.rcpt_money,m.paid_money,m.ktb_money,m.egfr,m.age_y
+	store '' to m.error,m.errorname,m.errorgroup,m.warn,m.warngroup
+	store '' to m.pdx,m.diag,m.oper,m.invno,m.doctor,m.status,m.billmuad,m.symptom,m.maininscl,m.projectcode,m.billno,m.rep_invoice,m.itemscovid,m.dxcovid,m.flag
+	store '' to m.covid,m.hi,m.ci,m.fieldhosp,m.si,m.atk,m.vaccine,m.drugvaccine,m.injectvaccine,m.pf,m.egfr,m.cancer,m.caseno,m.protocal,m.sleeptest,m.authencode,m.telmed
+	store '' to m.errorpdx,m.errordx,m.errordrug,m.errorusage,m.errorunitprice,m.errortmlt
+	scatt memv memo
+	m.no=recno()
+	m.vn=ntoc(m.vn)
+	m.age_y=tonum(m.age_y)
+	m.invno=ntoc(m.invno)
+	m.invno=getwordnum(m.invno,1,'#')
+	m.invno=chrtran(m.invno,["'],[])
+	m.cid=checkcid(m.cid)
+	m.maininscl=ntoc(m.maininscl)
+	m.vstdate=caldatetime(m.vstdate,m.vsttime)
+*	m.endtime=caldatetime(m.outdate,m.outtime)
+	m.endtime=maxtime(m.vn)
+	m.endtime=icase(empty(m.endtime),.null.,m.endtime)
+	m.datein=be2ce(m.datein)
+	m.datein=icase(empty(m.datein),.null.,m.datein)
+	m.dateexp=be2ce(m.dateexp)
+	m.dateexp=icase(empty(m.dateexp),.null.,m.dateexp)
+	m.clinic=zero(m.clinic,2)
+	m.clinic=icase(myhis$'IMED' and m.clinic='00','01',m.clinic)
+	m.pdx=ntoc(m.pdx)
+	m.oper=checkasdata(m.oper)
+	m.symptom=ntoc(m.symptom,0)
+	m.symptom=chrtran(m.symptom,chr(13)+chr(10)+chr(9),'')
+	m.round_money=ntoc(m.round_money)
+	m.unitprice=tonum(m.unitprice,2)
+	m.income=tonum(m.income,2)
+	m.rcpt_money=tonum(m.rcpt_money,2)
+	m.paid_money=tonum(m.paid_money,2)
+	m.ktb_money=tonum(m.ktb_money,2)
+	m.hospmain=ntoc(m.hospmain)
+	m.hosptype=icase(empty(m.hospmain),'B',myhospcode$myhospmain and !m.hospmain$myhospcode,'A',myhospcode$myhospmain or myhospcode=m.hospmain,'M',!m.hospmain$myhospmain,'A','B')
+	m.errordrug=checkyes(m.errordrug)
+	m.errorusage=checkyes(m.errorusage)
+	m.errorusage=icase(myhis$'HOSXP',m.errorusage,'')
+	m.errorgroup=checkyes(m.errorgroup)
+	m.errorgroup=icase(myhis$'HOSXP',m.errorgroup,'')
+	m.status=ntoc(m.status,0)
+	m.doctor=ntoc(m.doctor)
+	m.doctorerror=icase(left(m.doctor,1)$'Ç·¾À-' and isdigit(subs(m.doctor,2)),'','Y')
+	m.doctor=m.doctor+icase(m.doctorerror='Y','(X)','')
+	m.errorunitprice=checkyes(m.errorunitprice)
+	m.errortmlt=checkyes(m.errortmlt)
+	m.billmuad=ntoc(m.billmuad)
+	m.billno=ntoc(m.billno)
+	m.billno=chrtran(m.billno,["'],'')
+	m.billno=icase(myhis$'IMED',cut(m.billno,[/-],.T.),m.billno)
+	m.errorpdx=ntoc(m.errorpdx)
+	m.itemscovid=checkyes(m.itemscovid)
+	m.dxcovid=checkyes(m.dxcovid)
+	m.covid=checkyes(icase(m.itemscovid='Y' or m.dxcovid='Y','Y',''))
+	m.covid=icase(m.vstdate>=be2ce('1/10/2566'),'',m.covid)
+	m.covid=icase(m.vstdate>=be2ce('1/10/2565'),'',m.covid)
+	m.hi=checkyes(m.hi)
+	m.ci=checkyes(m.ci)
+	m.fieldhosp=checkyes(m.fieldhosp)
+	m.si=checkyes(m.si)
+	m.si=icase(m.vstdate>=be2ce('1/10/2565'),'',m.si)
+	m.vaccine=checkyes(m.vaccine)
+	m.vaccine=icase(be2ce(m.vstdate)>=be2ce('4/7/2565'),m.vaccine,'')
+	m.vaccine=icase(m.vstdate>=be2ce('1/10/2565'),'',m.vaccine)
+	m.drugvaccine=checkyes(m.drugvaccine)
+	m.injectvaccine=checkyes(m.injectvaccine)
+	m.errorvaccine=''
+	if m.vaccine='Y'
+		m.errorvaccine=icase(m.drugvaccine='Y' and m.injectvaccine='Y','','Y')
+	endif
+	m.rep_invoice=ntoc(m.rep_invoice)
+	m.status=icase(!empty(m.rep_invoice),'ª´àªÂáÅéÇ',m.status)
+	m.atk=checkyes(m.atk)
+	if be2ce(m.vstdate)>=be2ce('4/7/2565')
+		m.atk=checkyes(getsqldata([select group_concat(distinct if(d.icode is not null,'Y',null)) cc from opitemrece oo join s_drugitems d on d.icode=oo.icode where oo.vn='<<m.vn>>' and d.nhso_adp_code in (<<labcovid>>)]))
+	endif
+	m.atk=icase(m.vstdate>=be2ce('1/10/2565'),'',m.atk)
+	m.pf=checkyes(m.pf)
+	m.egfr=tonum(m.egfr,2)
+	m.egfr=icase(m.egfr=0,calegfr(m.vn),m.egfr)
+	m.egfr=icase(m.egfr=0,.null.,m.egfr)
+
+	store '' to m.iscancer,_protocal
+	m.caseno=ntoc(m.caseno)
+	_cancer=checkyes(getsqldata("select group_concat(distinct 'Y') cc from vn_stat v where v.vn=?m.vn and v.pdx regexp '^C|^D[0-4]' "))
+	if _cancer='Y'
+		m.iscancer=ntoc(getsqldata(textmerge([select id from ssocac_cancer where '<<m.pdx>>' regexp icd10])))
+		m.iscancer=icase(m.age_y<15,'20',empty(m.iscancer),'99',m.iscancer)
+		_sql=textmerge([select 'Y' as cc from opitemrece oo join s_drugitems d on d.icode=oo.icode left join <<myrcm>>.claimcat ccc on ccc.icode=oo.icode and ccc.maininscl='SSS' and oo.rxdate between ccc.start_date and ccc.finish_date ]+;
+		[where vn='<<m.vn>>' and  (d.nhso_adp_code regexp 'CANCER|SSOCAC' or d.nhso_adp_code regexp '^C<<m.iscancer>>' or d.nhso_adp_code in (<<dentalist>>) or ccc.remark regexp 'SSOCAC')])
+		m.cancer=icase(m.projectcode='CANCER' or m.projectcode='SSOCAC','Y',getsqldata(_sql))
+		m.cancer=checkyes(m.cancer)
+		_sql=textmerge([select d.nhso_adp_code as cc from opitemrece oo join s_drugitems d on d.icode=oo.icode where vn=?m.vn and d.nhso_adp_code regexp '^C<<m.iscancer>>'])
+		_protocal=ntoc(getsqldata(_sql))
+	endif
+	m.iscancer=ntoc(m.iscancer)
+	m.protocal=ntoc(m.protocal)
+	m.protocal=icase(empty(m.protocal),_protocal,m.protocal)
+	m.cancer=icase(empty(m.caseno) or empty(m.protocal),'',m.cancer)
+
+	m.sleeptest=checkyes(m.sleeptest)
+	m.authencode=icase(m.sleeptest='Y',ntoc(m.authencode,0),'')
+
+	if lpdx
+		m.chronic=checkyes(getsqldata("select group_concat(distinct if(pdx regexp '<<cChronic>>','Y',null)) cc from vn_stat where vn='<<m.vn>>'"))
+	else
+		m.chronic=checkyes(getsqldata("select group_concat(distinct if(icd10 regexp '<<cChronic>>','Y',null)) cc from ovstdiag where vn='<<m.vn>>' and icd10 not regexp '^[0-9]' "))
+	endif
+	_telmed=checkyes(getsqldata([select 'Y' as cc from opitemrece oo join s_drugitems d on d.icode=oo.icode where vn=?m.vn and d.nhso_adp_code in ('TELMED') ]))
+	m.telmed=checkyes(m.telmed)
+	if myhospcode$myhospmain or ishmain
+		m.telmed=icase(m.telmed='Y' or _telmed='Y','Y','')
+	else
+		m.telmed=''
+	endif
+	m.telmed=icase(m.chronic='Y',m.telmed,'')
+	m.telmed=icase(ttod(m.vstdate)>=be2ce('1/5/2569') and ttod(m.vstdate)<=be2ce('31/7/2569'),m.telmed,'')
+	m.hm=checkyes(getsqldata([select 'Y' as cc from opitemrece oo join s_drugitems d on d.icode=oo.icode where vn=?m.vn and d.nhso_adp_code in ('DRUGP','991001') ]))
+	if m.telmed='Y' and m.hm='Y'
+		m.seq=m.vn
+		m.icode=ntoc(getsqldata([select icode from s_drugitems where nhso_adp_code='TELMED']),0)
+		m.type=''
+		m.no_export='Y'
+		=savedata2mysql('opitemrece_noexport')
+	endif
+
+	m.flag=ntoc(m.flag)
+	m.flag=icase(m.flag$'AED',m.flag,'A')
+	m.errorhn=checkyes(getsqldata([select group_concat(distinct if(hn=?m.hn,null,'Y')) cc from opitemrece where vn=?m.vn ]))
+
+	m.error=ntoc(m.error)
+	m.error=icase(m.income=0 or m.unitprice#m.income or m.errorunitprice='Y','Y',m.error)
+	m.error=icase(!between(m.clinic,'01','12') and m.clinic#'99','Y',m.error)
+	m.error=icase(m.errorgroup='Y','Y',m.error)
+	m.error=icase(empty(m.pdx),'Y',m.error)
+	m.error=icase(m.errorpdx='Y','Y',m.error)
+	m.error=icase('ADMIT'$upper(m.ovstost),'Y',m.error)
+	m.error=icase(empty(m.hospmain),'Y',m.error)
+	if m.maininscl='SS'
+		m.error=icase(!(m.si='Y' or m.atk='Y' or m.vaccine='Y') and !m.hospmain$myHospMain,'Y',m.error)
+	endif
+	m.error=icase(m.billmuad='Y','Y',m.error)
+	m.error=icase(m.rcpt_money#m.paid_money,'Y',m.error)
+	m.error=icase(empty(m.cid),'Y',m.error)
+	m.error=icase(m.errordrug='Y','Y',m.error)
+	m.error=icase(m.errorvaccine='Y','Y',m.error)
+	m.error=icase(m.errorhn='Y','Y',m.error)
+	m.error=icase(isnull(m.endtime),'Y',m.error)
+
+	m.warn=ntoc(m.warn)
+	m.warn=icase(m.errorusage='Y' or isnull(m.endtime) or m.endtime<m.vstdate or '-'$m.pdx or m.doctorerror='Y' or isnull(m.datein) or m.datein>m.vstdate or isnull(m.dateexp) or m.dateexp<m.vstdate ,'Y',m.warn)
+	m.warn=icase(m.errortmlt='Y','Y',m.warn)
+	m.warn=icase(m.warngroup='C','C',m.warn)
+
+	m.errorname=m.errorname+icase(m.income=0,',¤èÒãªé¨èÒÂà»ç¹ 0','')
+	m.errorname=m.errorname+icase(m.unitprice#m.income or m.errorunitprice='Y',',¤èÒãªé¨èÒÂäÁèà·èÒ¡Ñ¹','')
+	m.errorname=m.errorname+icase(!between(m.clinic,'01','12') and m.clinic#'99',',ÃËÑÊ¤ÅÔ¹Ô¤äÁèµÃ§ÁÒµÃ°Ò¹','')
+
+	if m.maininscl='SS'
+		m.errorname=m.errorname+icase(empty(m.hospmain),',äÁèÁÕ HospMain',!(m.si='Y' or m.atk='Y' or m.vaccine='Y') and !m.hospmain$myHospMain,',ÃËÑÊ HospMain ¼Ô´','')
+	endif
+	m.errorname=m.errorname+icase(isnull(m.endtime),',äÁèÁÕàÇÅÒÊÔé¹ÊØ´','')
+	m.errorname=m.errorname+icase(!isnull(m.endtime) and m.endtime<m.vstdate,',àÇÅÒÊÔé¹ÊØ´¹éÍÂ¡ÇèÒÇÑ¹·ÕèÁÒµÃÇ¨','')
+	m.errorname=m.errorname+icase(isnull(m.datein),',äÁèÁÕÇÑ¹·ÕèàÃÔèÁãªé','')
+	m.errorname=m.errorname+icase(m.datein>m.vstdate,',ÇÑ¹·ÕèàÃÔèÁãªéÁÒ¡¡ÇèÒÇÑ¹·ÕèÁÒµÃÇ¨','')
+	m.errorname=m.errorname+icase(isnull(m.dateexp) or m.dateexp<m.vstdate,',ÇÑ¹ËÁ´ÍÒÂØ¹éÍÂ¡ÇèÒÇÑ¹·ÕèÁÒµÃÇ¨','')
+
+	m.errorname=m.errorname+icase(m.errorgroup='Y',',Map ËÁÇ´¼Ô´','')
+	m.errorname=m.errorname+icase(empty(m.pdx),',äÁèÁÕ Pdx','')
+	m.errorname=m.errorname+icase('ADMIT'$upper(m.ovstost),',¼Å¡ÒÃÃÑ¡ÉÒ Admit','')
+	m.errorname=m.errorname+icase(m.warn='C',',äÁèÊÒÁÒÃ¶àºÔ¡ Pdx ¹Õéä´é','')
+	m.errorname=m.errorname+icase(m.billmuad='Y',',äÁèÁÕ BILLMUAD','')
+	m.errorname=m.errorname+icase(m.errorpdx='Y',',PDx ¼Ô´','')
+	m.errorname=m.errorname+icase(m.rcpt_money#m.paid_money,',¡ÒÃªÓÃÐà§Ô¹¼Ô´¾ÅÒ´','')
+	m.errorname=m.errorname+icase(empty(m.cid),',äÁèÁÕàÅ¢·ÕèºÑµÃ»ÃÐªÒª¹','')
+	m.errorname=m.errorname+icase(m.errordrug='Y',',äÁèÁÕª×èÍÂÒ','')
+	m.errorname=m.errorname+icase(m.errorusage='Y',',äÁèÁÕÇÔ¸ÕãªéÂÒ','')
+	m.errorname=m.errorname+icase('-'$m.pdx,',äÁè¾ºÃËÑÊ Dx ¢Í§ SSS','')
+	m.errorname=m.errorname+icase(m.doctorerror='Y',',ÃËÑÊ Ç.á¾·ÂìäÁè¶Ù¡µéÍ§','')
+	m.errorname=m.errorname+icase(m.errortmlt='Y',',Map TMLT ÂÑ§äÁè¤Ãº','')
+	m.errorname=m.errorname+icase(m.errorvaccine='Y',',¡ÒÃ©Õ´ÇÑ¤«Õ¹¼Ô´¾ÅÒ´','')
+	m.errorname=m.errorname+icase(m.errorhn='Y',',¾º HN Í×è¹ã¹ÃÒÂ¡ÒÃ','')
+
+	m.errorname=checkasdata(m.errorname,0,',',,.T.)
+	m.selected=icase(m.error='Y' or !empty(m.status) or m.warn='C',.F.,.T.)
+	sele tmpdata
+	set order to vn
+	if !seek(m.vn)
+		if !seek(' ')
+			append blank
+		endif
+	endif
+	gath memv memo
+	sele tmpvisit
+	skip
+enddo
+sele tmpdata
+if _is#1 or _excel
+	go top
+endif
+
+Proc AddIncome
+sele tmpincome
+zap
+m.vn=ntoc(m.vn)
+if empty(m.vn)
+	retu .F.
+endif
+oForm=oExport	&&ActiveForm()
+oForm.grdIncome.RecordSource=''
+store '' to _sql
+text to _sql noshow textmerge
+select g.cscd_group code
+,d.nhso_adp_code cscode
+,oo.icode
+,if(d.tpu_code_list='' or d.tpu_code_list is null,l.tmtid,d.tpu_code_list) tmt
+,if(inc.group2 in (6,7),lab.tmlt_code,'') tmlt
+,concat_ws(' ',d.name,d.strength) name,qty amount,oo.unitprice unitpay,qty*oo.unitprice unitprice,sum_price income
+,asstring(if(ifnull(oo.sp_use,'')='',concat_ws(' ',u.name1,u.name2,u.name3),concat_ws(' ',sp.name1,sp.name2,sp.name3))) drugusage
+,if(oo.paidst not in ('00','01','03'),sum_price,0) reimb_money
+,if(oo.paidst in ('00','01','03'),sum_price,0) nreimb_money
+,case
+when g.cscd_group not in ('3','4') then null
+when d.drugaccount<>'-' and d.drugaccount is not null then null
+else ifnull((select group_concat(distinct presc_reason) cc from ovst_presc_ned where vn=oo.vn and icode=oo.icode),'XX') end NED
+,onestring(if(nn.seq is not null,'Y','')) noexport
+,oo.hos_guid
+,d.icd9cm
+,st.authencode
+from opitemrece oo
+left join s_drugitems d on d.icode=oo.icode
+left join income inc on inc.income=oo.income
+left join income_report2 g on g.group_id=inc.group2
+left join <<myrcm>>.eclaim_drugcatalog l on l.hospdrugcode=<<icase(myhis$HISData,'d.oldcode','d.icode')>>
+left join <<myrcm>>.labitem lab on lab.icode=oo.icode and lab.chi='1'
+left join drugusage u on u.drugusage=oo.drugusage
+left join sp_use sp on sp.sp_use=oo.sp_use
+left join opitemrece_noexport nn on nn.seq=oo.vn and nn.icode=oo.icode
+left join <<myrcm>>.sleeptest st on st.vn=oo.vn and st.code=d.nhso_adp_code
+where oo.vn=?m.vn
+order by code,name,tmt
+endtext
+=runsql(_sql,.T.)
+scan
+	store .null. to m.noexport,m.code,m.name,m.cscode,m.tmt,m.tmlt,m.xray
+	scatt memv memo
+	m.noexport=checkyes(m.noexport)
+	m.cscode=ntoc(m.cscode,0)
+	m.code=ntoc(m.code)
+	m.name=ntoc(m.name,0)
+	m.drugusage=ntoc(m.drugusage,0)
+	m.tmt=ntoc(m.tmt)
+	m.tmlt=ntoc(m.tmlt)
+	m.xray=ntoc(m.xray)
+	insert into tmpincome from memv
+ends
+sele tmpIncome
+if recco()>0
+	for ii=1 to fcount()
+		_field=field(ii)
+		if type(_field)$'NIB'
+			sum &_field to m.&_field
+		endif
+	next
+	store .null. to m.code,m.icode,m.cscode,m.tmt,m.tmlt,m.xray,m.drugusage,m.unitpay,m.ned,m.amount,m.unitprice,m.noexport,m.hos_guid,m.authencode,m.icd9cm
+	m.name='ÃÇÁ'
+	insert into tmpincome from memv
+endif
+go top
+oForm.grdIncome.RecordSource=alias()
+
+Proc AddDx
+sele tmpdx
+zap
+m.vn=ntoc(m.vn)
+if empty(m.vn)
+	retu .F.
+endif
+oForm=oExport	&&ActiveForm()
+oForm.grdDx.RecordSource=''
+store '' to _sql,_all,_pdx
+text to _all noshow textmerge
+select if(dx.icd10 regexp '^[0-9]','OP','EC') Type,dx.diagtype,dx.icd10 Code,icdname(dx.icd10) Name,ifnull(aa.codeset,'') CodeSet
+from ovst o
+join ovstdiag dx on dx.vn=o.vn
+left join icd101 aa on aa.code=dx.icd10
+where o.vn=?m.vn
+and dx.icd10 not regexp '^[0-9]'
+order by dx.diagtype,dx.ovst_diag_id
+endtext
+
+text to _pdx noshow textmerge
+select 'EC' type,pdx code,icdname(pdx) name,'1' diagtype,ifnull(aa.codeset,'') CodeSet
+from vn_stat v
+left join icd101 aa on aa.code=v.pdx
+where vn=?m.vn
+and pdx<>'' and pdx is not null
+endtext
+_sql=icase(lpdx,_pdx,_all)
+=runsql(_sql,.T.)
+scan
+	store .null. to m.codeset
+	scatt memv memo
+	m.codeset=ntoc(m.codeset)
+	m.codeset=icase(m.codeset$'IT,TT',m.codeset,'IT')
+	insert into tmpdx from memv
+ends
+sele tmpdx
+go top
+oForm.grdDx.RecordSource=alias()
+
+Proc UpdateIncome
+para _code
+_code=ntoc(_code)
+_code=icase(len(_code)#12,'',_code)
+if !empty(_code)
+	=writeerror(_code,oerr)
+	_table='vn_stat'
+	_head='vn'
+	m.round_money=getsqldata([select if(round_money is null or round_money='','Y',round_money) from ]+_table+[ x join pttype ptt on ptt.pttype=x.pttype  where ]+_head+[=']+_code+['])
+	m.round_money=ntoc(m.round_money)
+	m.round_money=icase(m.round_money='N','N','Y')
+	=sqlexec(_handle,[update opitemrece set sum_price=if(?m.round_money='Y',round(cast(qty*unitprice as decimal(15,2))),qty*unitprice) where ]+_head+[=']+_code+['])
+	_sql=setsqlincome(_code)
+	if !empty(_sql)
+		if runsql(_sql,.T.,'tmpVN_Stat')
+			for ii=1 to fcount()
+				_field=field(ii)
+				_value=tonum(eval(_field),2)
+				if checkfield(_table,_field)
+					_sql=[update ]+_table+[ set ]+_field+[=?_value where ]+_head+[=?_code]
+					if sqlexec(_handle,_sql)>0
+					else
+						lwork=.F.
+						=aerror(test)
+						=writeerror(test(1,2),oerr)
+						exit
+					endif
+				endif
+			next
+		endif
+	endif
+endif
+
+Proc SetSQLIncome
+para _code
+priv _ret
+_code=ntoc(_code)
+text to _ret noshow textmerge
+select sum(sum_price) income
+,sum(if(oo.paidst in ('02'),sum_price,0)) uc_money
+,sum(if(oo.paidst in ('04'),sum_price,0)) discount_money
+,sum(if(oo.paidst in ('01','03'),sum_price,0))  paid_money
+,sum(if(oo.paidst in ('00'),sum_price,0)) remain_money
+,(select sum(d.total_amount) amount from rcpt_print r join rcpt_print_detail d on r.finance_number=d.finance_number where r.vn=?_code and d.paidst in (01,03)) rcpt_money
+,sum(if(a.income_group=01,sum_price,0)) inc01
+,sum(if(a.income_group=02,sum_price,0)) inc02
+,sum(if(a.income_group=03,sum_price,0)) inc03
+,sum(if(a.income_group=04,sum_price,0)) inc04
+,sum(if(a.income_group=05,sum_price,0)) inc05
+,sum(if(a.income_group=06,sum_price,0)) inc06
+,sum(if(a.income_group=07,sum_price,0)) inc07
+,sum(if(a.income_group=08,sum_price,0)) inc08
+,sum(if(a.income_group=09,sum_price,0)) inc09
+,sum(if(a.income_group=10,sum_price,0)) inc10
+,sum(if(a.income_group=11,sum_price,0)) inc11
+,sum(if(a.income_group=12,sum_price,0)) inc12
+,sum(if(a.income_group=13,sum_price,0)) inc13
+,sum(if(a.income_group=14,sum_price,0)) inc14
+,sum(if(a.income_group=15,sum_price,0)) inc15
+,sum(if(a.income_group=16,sum_price,0)) inc16
+,sum(if(a.income_group=17,sum_price,0)) inc17
+from opitemrece oo
+left join income a on oo.income=a.income
+where <<_head>>=?_code
+endtext
+_ret=icase(empty(_code),'',_ret)
+retu _ret
+
+Proc ExportData
+oerr.clear
+oerr.columncount=5
+oerr.columnwidths='450,150,200,100,200'
+oerr.setfocus
+store 0 to n,nn,nnn
+store '' to headBillTran,dataBillTran,dataBillItem,headDisp,dataDisp,dataDispItem,headOPService,dataOPService,dataOPDx
+mydate=date()
+mytime=time()
+cFolder=calfolder('C:\Temp\'+icase(mybenefit='CS','CSOP',mybenefit='SS','SSOP',''))
+=makepath(cfolder)
+=erasefile(cfolder+'*.TXT')
+crlf=chr(13)+chr(10)
+sele tmpData
+nrec=recno()
+rec=recco()
+store 0 to n,nn,nbilltran,ndisp,nopservice
+=writeas(trans(nbilltran)+'/'+trans(n)+'/'+trans(rec),oerr,2)
+go top
+do while !eof()
+	n=n+1
+	store '' to cTable,ErrorTable
+	store '' to m.covid,m.hi,m.ci,m.fieldhosp,m.si,m.atk,m.vaccine,m.pttype,m.pttypename,m.pttype_eclaim_id,m.pttype_eclaim_name,m.flag,m.projectcode,m.pf,m.egfr,m.cancer,m.caseno,m.caseno,m.protocal,m.sleeptest,m.authencode,m.telmed,m.hm
+	scatt memv memo
+	m.vn=ntoc(m.vn)
+	m.hn=ntoc(m.hn)
+	m.vsttime=fulltime(m.vstdate)
+	m.invno=ntoc(m.invno)
+	m.flag=ntoc(m.flag)
+	m.flag=icase(m.flag$'AED',m.flag,'A')
+	m.pttype_eclaim_name=ntoc(m.pttype_eclaim_name,0)
+	m.pttype_eclaim_id=getwordnum(m.pttype_eclaim_name,1,':')
+	m.pttypename=ntoc(m.pttypename,0)
+	m.pttype=getwordnum(m.pttypename,1,':')
+	m.pf=checkyes(m.pf)
+	m.egfr=icase(isnull(m.egfr),'N/A',ntoc(m.egfr,,2))
+	m.caseno=ntoc(m.caseno)
+	lcancer=tologic(m.cancer)
+*	lcancer=icase(empty(m.caseno),.F.,lcancer)
+	m.projectcode=ntoc(m.projectcode)
+	m.projectcode=icase(lcancer,'SSOCAC',m.projectcode)
+	m.protocal=ntoc(m.protocal)
+*	m.protocal=icase(lcancer,m.protocal,'')
+	m.protocal=icase(empty(m.protocal),'â¤Ã§¡ÒÃÁÐàÃç§',m.protocal)
+	_upp=ntoc(getsqldata([select t.pttype_upp_type_code from pttype ptt join pttype_upp_type t on t.pttype_upp_type_id=ptt.pttype_upp_type_id where ptt.pttype=?m.pttype limit 1]))
+	mypayplan=icase(!empty(_upp),_upp,m.pttype_eclaim_id='13','81',inlist(m.pttype_eclaim_id,'18','19','20'),'20',m.maininscl='OFC','10',m.maininscl='SSI','86',m.maininscl='SS','80','XX')	&&¡Ê·ª=30,¡¡µ=31
+	lcovid=tologic(m.covid)
+	lhi=tologic(m.hi)
+	lci=tologic(m.ci)
+	lfieldhosp=tologic(m.fieldhosp)
+	lsi=tologic(m.si)
+	latk=tologic(m.atk)
+	lvaccine=tologic(m.vaccine)
+	lpf=tologic(m.pf)
+	lsleeptest=tologic(m.sleeptest)
+	ltelmed=tologic(m.telmed)
+	lhm=tologic(m.hm)
+	m.authencode=ntoc(m.authencode,0)
+	m.authencode=icase(empty(m.authencode),'ÂÑ§äÁèÊè§',m.authencode)
+	=sqlexec(_handle,[set @VN=?lVN,@Covid=?lCovid,@HI=?lHI,@CI=?lCI,@FieldHosp=?lFieldHosp,@SI=?lSI,@ATK=?lATK,@Vaccine=?lVaccine,@PF=?lPF,@eGFR=?m.egfr,@Cancer=?lCancer,@CaseNo=?m.CaseNo,@Protocal=?m.protocal,@SleepTest=?lSleepTest,@TelMed=?lTelMed,@HM=?lHM])
+	=writeerror(m.vn,oerr)
+	=writeas(trans(nbilltran)+'/'+trans(n)+'/'+trans(rec),oerr,2)
+	lerror=.F.
+	if m.selected
+		nbilltran=nbilltran+1
+		if empty(m.invno)
+			=writeas(m.hn+'=>ÂÑ§äÁèÃÐºØ¡ÒÃá¨é§Ë¹Õé',oerr,3)
+		else
+			=writeas('OK',oerr,3)
+		endif
+		=readdata()
+	else
+		=writeas('Skip',oerr,3)
+	endif
+	=writeas(trans(nbilltran)+'/'+trans(n)+'/'+trans(rec),oerr,2)
+	if lerror or inkey()#0
+		exit
+	endif
+	sele tmpData
+	skip
+enddo
+if recco()>0
+	go (nrec)
+endif
+if nbilltran=0
+	=writeerror('äÁèÁÕ¢éÍÁÙÅÊÓËÃÑºÊè§ '+myfolderback,oerr,.T.)
+	retu .F.
+endif
+if lerror
+	=writeerror('¾º Error ËÃ×Í¤ÓÊÑè§¼Ô´¾ÅÒ´...äÁèÊÒÁÒÃ¶Êè§ÍÍ¡ä´é '+ErrorTable,oerr,.T.)
+	retu .F.
+endif
+text to headBilltran noshow textmerge
+<?xml version="1.0" encoding="windows-874"?>
+<ClaimRec System="OP" PayPlan="<<myBenefit>>" Version="<<myVersion>>" Prgs="<<myPrg>>" TFlag="<<cTFlag>>">
+<Header>
+<HCODE><<myhospcode>></HCODE>
+<HNAME><<myhospname>></HNAME>
+<DATETIME><<ce2dmy('eeee-mm-ddThh:ii:ss',mydate,mytime)>></DATETIME>
+<SESSNO><<mySessNo>></SESSNO>
+<RECCOUNT><<nBilltran>></RECCOUNT>
+</Header>
+<BILLTRAN>
+<<dataBilltran>></BILLTRAN>
+<BillItems>
+<<dataBillitem>></BillItems>
+</ClaimRec><<crlf>>
+endtext
+CheckSum=getsqldata([select md5(?headBilltran) cc])
+headBilltran=headBilltran+[<?EndNote Checksum="]+ntoc(checksum,0)+["?>]
+txtfile=cfolder+'BillTran'+ce2dmy('eeeemmdd',_end)+'.TXT'
+=strtofile(headBilltran,txtfile)
+=writeerror('Export '+txtfile+' OK',oerr)
+
+text to headDisp noshow textmerge
+<?xml version="1.0" encoding="windows-874"?>
+<ClaimRec System="OP" PayPlan="<<myBenefit>>" Version="<<myVersion>>" Prgs="<<myPrg>>" TFlag="<<cTFlag>>">
+<Header>
+<HCODE><<myhospcode>></HCODE>
+<HNAME><<myhospname>></HNAME>
+<DATETIME><<ce2dmy('eeee-mm-ddThh:ii:ss',mydate,mytime)>></DATETIME>
+<SESSNO><<mySessNo>></SESSNO>
+<RECCOUNT><<nDisp>></RECCOUNT>
+</Header>
+<Dispensing>
+<<dataDisp>></Dispensing>
+<DispensedItems>
+<<dataDispItem>></DispensedItems>
+</ClaimRec><<crlf>>
+endtext
+CheckSum=getsqldata([select md5(?headDisp) cc])
+headDisp=headDisp+[<?EndNote Checksum="]+ntoc(checksum,0)+["?>]
+txtfile=cfolder+'BillDisp'+ce2dmy('eeeemmdd',_end)+'.TXT'
+=strtofile(headDisp,txtfile)
+=writeerror('Export '+txtfile+' OK',oerr)
+
+text to headOPService noshow textmerge
+<?xml version="1.0" encoding="windows-874"?>
+<ClaimRec System="OP" PayPlan="<<myBenefit>>" Version="<<myVersion>>" Prgs="<<myPrg>>" TFlag="<<cTFlag>>">
+<Header>
+<HCODE><<myhospcode>></HCODE>
+<HNAME><<myhospname>></HNAME>
+<DATETIME><<ce2dmy('eeee-mm-ddThh:ii:ss',mydate,mytime)>></DATETIME>
+<SESSNO><<mySessNo>></SESSNO>
+<RECCOUNT><<nOPService>></RECCOUNT>
+</Header>
+<OPServices>
+<<dataOPService>></OPServices>
+<OPDx>
+<<dataOPDx>></OPDx>
+</ClaimRec><<crlf>>
+endtext
+CheckSum=getsqldata([select md5(?headOPService) cc])
+headOPService=headOPService+[<?EndNote Checksum="]+ntoc(checksum,0)+["?>]
+txtfile=cfolder+'OPServices'+ce2dmy('eeeemmdd',_end)+'.TXT'
+=strtofile(headOPService,txtfile)
+=writeerror('Export '+txtfile+' OK',oerr)
+
+=erasefile(cfolder+''+myhospcode+'_'+myfilesend+'_'+mySessNo+'_'+myStation+'*.*')
+zipfile=cfolder+''+myhospcode+'_'+myfilesend+'_'+mySessNo+'_'+myStation+'_'+ce2dmy('eeeemmdd-hhiiss',mydate,mytime)+'.ZIP'
+_class="XStandard.Zip"
+if isregister(_class)
+	oZip = create( "XStandard.Zip" )
+	oZip.Pack( cfolder+'*'+ce2dmy('eeeemmdd',_end)+'.TXT', zipfile)
+	=writeerror('Export '+zipfile,oerr)
+	=writeas(icase(file(zipfile),'OK','Fail'),oerr,2)
+endif
+
+Proc ReadData
+=clearcache()
+cTable='BillTran'
+_money=tonum(getsqldata([select sum(sum_price) cc from opitemrece  oo join s_drugitems d on d.icode=oo.icode left join opitemrece_noexport nn on nn.seq=oo.vn and nn.icode=oo.icode where oo.vn='<<m.vn>>' and d.nhso_adp_code in ('9902','55080') and nn.seq is null]),2)
+_income=tonum(getsqldata([select sum(sum_price) cc from opitemrece oo left join opitemrece_noexport nn on nn.seq=oo.vn and nn.icode=oo.icode where oo.vn='<<m.vn>>' and nn.seq is null]),2)
+_over=tonum(getsqldata([select sum(over_debt) cc from opitemrece oo left join opitemrece_noexport nn on nn.seq=oo.vn and nn.icode=oo.icode where oo.vn='<<m.vn>>' and nn.seq is null]),2)
+_paid=tonum(getsqldata([select sum(sum_price) cc from opitemrece oo left join opitemrece_noexport nn on nn.seq=oo.vn and nn.icode=oo.icode where oo.vn='<<m.vn>>' and oo.paidst in ('00','01','03') and nn.seq is null]),2)
+lsi=icase(_money=0,.F.,lsi)
+=sqlexec(_handle,[set @SI=?lSI,@money=?_money,@income=?_income,@over=?_over,@paid=?_paid])
+m.flag=ntoc(m.flag)
+myflag=cTFlag
+do case
+	case  cTFlag='A'
+		myflag=m.flag
+	case cTFlag='E'
+		myflag=icase(m.flag='D','D','E')
+	case cTFlag='D'
+		myflag='D'
+endcase
+text to _sql noshow textmerge
+select '<<mystation>>' station
+,case
+when @atk then 'COVSCR'
+when @covid then 'COV-19'
+when @vaccine then 'COV-VC'
+when @cancer then 'SSOCAC'
+when @sleeptest then 'STCPAP'
+else '' end AuthCode
+,date_format(concat(o.vstdate,' ',o.vsttime),'%Y-%m-%dT%T') DTTran
+,'<<myhospcode>>' HCode
+,case
+when @vn then o.vn
+when @myHIS regexp 'IMED' then v.rcpno_list
+else v.debt_id_list end InvNo
+,if(@myHIS regexp 'IMED',v.debt_id_list,v.rcpno_list) BillNo
+,o.HN
+,case
+when @cancer then @CaseNo
+else '' end MemberNo
+,moneys(@income) Amount
+,moneys(@paid+@over) Paid
+,case
+when @pf then concat('EGFR',@egfr)
+when @si and ?myhospitaltype in (18) then if(ifnull(?mymaincup,'')='','Error',concat('M',?mymaincup))
+when @cancer then @protocal
+else '' end VerCode
+,'<<myflag>>' TFlag,if(pt.nationality=99,pt.cid,pc.cardno) PID,concat(pt.pname,pt.fname,' ',pt.lname) Name
+,hospmain(o.vn) Hmain,'<<myPayPlan>>' PayPlan
+,moneys(if(@si,@money,@income-@paid-@over)) ClaimAmt
+,if(@si,'SH','') OtherPayPlan
+,moneys(if(@si,@income-@paid-@over-@money,0.00)) OtherPay
+from ovst o
+left join patient pt on pt.hn=o.hn
+left join ptcardno pc on pc.hn=pt.hn and pc.cardtype='02'
+left join vn_stat v on v.vn=o.vn
+where o.vn='<<m.vn>>'
+group by o.vn
+endtext
+_value=caldata()
+dataBilltran=dataBilltran+_value
+
+cTable='BillItems'
+text to _sql noshow textmerge
+select case
+when @vn then o.vn
+when @myHIS regexp 'IMED' then v.rcpno_list
+else v.debt_id_list end InvNo
+,date_format(o.vstdate,'%Y-%m-%d') SvDate
+,g.cscd_group BillMuad
+,if(g.cscd_group in ('3','4','6','7'),<<icase(myhis$HISData,'d.oldcode','d.icode')>>,d.icode) LCCode
+,case
+when d.nhso_adp_code in ('DRUGP','991001') then '991001'
+when g.cscd_group in ('6','7') then d.nhso_adp_code
+when g.cscd_group in ('3','4') then
+	case
+	when ifnull(d.sks_drug_code,'')<>'' then d.sks_drug_code
+	when ifnull(d.tpu_code_list,'')<>'' then d.tpu_code_list
+	when d.nhso_adp_code regexp 'HERB' then '0000000'
+	end
+when ifnull(d.nhso_adp_code,'')<>'' then d.nhso_adp_code
+when ifnull(d.tpu_code_list,'')<>'' then d.tpu_code_list
+end STDCode
+,concat_ws(' ',d.name,d.strength) as 'Desc'
+,oo.qty Qty
+,moneys(oo.unitprice) UP
+,moneys(oo.qty*oo.unitprice) ChargeAmt
+,moneys(case
+when oo.paidst in ('00','01','03') then 0
+when @si and ifnull(d.nhso_adp_code,'X') not in ('9902','55080') then 0
+else oo.unitprice end) ClaimUP
+,moneys(case
+when oo.paidst in ('00','01','03') then 0
+when @si and ifnull(d.nhso_adp_code,'X') not in ('9902','55080') then 0
+else oo.qty*oo.unitprice end) ClaimAmount
+,concat(if(d.nhso_adp_code in ('DRUGP','991001'),'HS:',''),o.vn) SvRefID
+,case
+when @cancer and ccc.remark regexp 'SSOCAC' then 'OPR'
+when @cancer and d.nhso_adp_code in (<<dentalist>>) then 'OPR'
+when @pf and d.nhso_adp_code regexp '^4018|^4828|^4837|^4904|^4905|^7142|^8491|^8492' and d.nhso_adp_type_id in (2,19) then 'OPR'
+when @si and d.nhso_adp_code in ('9902','55080') then 'OPF'
+when @sleeptest and d.nhso_adp_code in ('51120','51121','3012','3013') then 'OPF'
+when g.cscd_group not in ('3','4') then 'OP1'
+when d.drugaccount<>'-' and d.drugaccount is not null then 'OP1'
+else 'OP1' end ClaimCat
+from ovst o
+left join vn_stat v on v.vn=o.vn
+join opitemrece  oo on oo.vn=o.vn
+left join s_drugitems d on d.icode=oo.icode
+left join income inc on inc.income=oo.income
+left join income_report2 g on g.group_id=inc.group2
+left join <<myrcm>>.labitem l on l.icode=oo.icode and l.chi='1'
+left join <<myrcm>>.claimcat ccc on ccc.icode=oo.icode and ccc.maininscl='SSS' and oo.rxdate between ccc.start_date and ccc.finish_date
+left join opitemrece_noexport nn on nn.seq=oo.vn and nn.icode=oo.icode
+where o.vn='<<m.vn>>'
+and nn.seq is null
+and if(@vaccine,1=1,oo.sum_price>0)
+order by 1,3,4
+endtext
+_value=caldata()
+dataBillitem=dataBillitem+_value
+
+cTable='BillDisp'
+text to _sql noshow textmerge
+select '<<myhospcode>>' ProviderID
+,o.vn DispID
+,case
+when @vn then o.vn
+when @myHIS regexp 'IMED' then v.rcpno_list
+else v.debt_id_list end InvNo
+,o.HN,if(pt.nationality=99,pt.cid,pc.cardno) CID
+,date_format(concat(oo.rxdate,' ',ifnull(oo.rxtime,o.vsttime)),'%Y-%m-%d %T') PrescDT
+,date_format(concat(oo.rxdate,' ',ifnull(oo.rxtime,o.vsttime)),'%Y-%m-%d %T') DispDT
+,doctorlicense(o.doctor) Prescb
+,count(d.icode) ItemCnt
+,moneys(sum(sum_price)) ChargeAmt
+,moneys(sum(if(@si,0,if(oo.paidst not in ('00','01','03'),sum_price,0)))) ClaimAmt
+,moneys(sum(if(@si,0,if(oo.paidst in ('00','01','03'),sum_price,0)))) Paid
+,moneys(sum(if(@si,sum_price,0))) OtherPay
+,'HP' Reimburser,'<<mybenefit>>' BenefitPlan
+,1 DispeStat,o.vn SvID,null DayCover
+from ovst o
+join vn_stat v on v.vn=o.vn
+join opitemrece oo on oo.vn=o.vn
+join patient pt on pt.hn=o.hn
+left join ptcardno pc on pc.hn=pt.hn and pc.cardtype='02'
+left join s_drugitems d on d.icode=oo.icode
+left join income inc on inc.income=oo.income
+left join income_report2 g on g.group_id=inc.group2
+left join opitemrece_noexport nn on nn.seq=oo.vn and nn.icode=oo.icode
+where o.vn='<<m.vn>>'
+and nn.seq is null
+and if(@vaccine,1=1,oo.sum_price>0)
+and g.cscd_group in ('3','5')
+group by o.vn
+endtext
+_value=caldata()
+if !empty(_value)
+	nDisp=nDisp+1
+	dataDisp=dataDisp+_value
+endif
+
+cTable='BillDispItems'
+text to _sql noshow textmerge
+select o.vn DispID
+,case
+when d.sks_product_category_id is not null and d.sks_product_category_id <>'' then d.sks_product_category_id
+when d.drugcategory regexp 'Thai|ÊÁØ¹ä¾Ã|á¼¹âºÃÒ³' then '3'
+else if(g.cscd_group='5','6','1') end PrdCat
+,if(g.cscd_group in ('3','4','6','7'),<<icase(myhis$HISData,'d.oldcode','d.icode')>>,oo.icode) HospDrgID
+,ifnull(d.sks_drug_code,d.tpu_code_list) DrgID
+,d.sks_dfs_code dfsCode,concat_ws(' ',d.name,d.strength) dfsText,if(d.units is null or d.units='',nd.unit,d.units) Packsize
+,if(oo.sp_use='' or oo.sp_use is null,oo.drugusage,oo.sp_use) sigCode
+,asstring(if(oo.sp_use='' or oo.sp_use is null,concat_ws(' ',u.name1,u.name2,u.name3),concat_ws(' ',sp.name1,sp.name2,sp.name3))) sigText
+,oo.Qty
+,moneys(oo.UnitPrice) UnitPrice
+,moneys(oo.sum_price) ChargeAmt
+,moneys(if(@si,0,if(oo.paidst in ('00','01','03'),0,oo.unitprice))) ReimbPrice
+,moneys(if(@si,0,if(oo.paidst in ('00','01','03'),0,oo.sum_price))) ReimbAmt
+,'' PrdSeCode
+,@cc:=case
+when g.cscd_group not in ('3','4') then 'OD'
+when d.drugaccount<>'-' and d.drugaccount is not null then 'OD'
+else ifnull((select left(group_concat(distinct presc_reason),2) cc from ovst_presc_ned where vn=oo.vn and icode=oo.icode),'EC')
+end ClaimCont
+,case
+when @cancer and ccc.remark regexp 'SSOCAC' then 'OPR'
+else 'OP1' end ClaimCat
+,'' MultiDisp,'' SupplyFor
+from ovst o
+join opitemrece oo on oo.vn=o.vn
+left join s_drugitems d on d.icode=oo.icode
+left join nondrugitems nd on nd.icode=oo.icode
+left join drugusage u on u.drugusage=oo.drugusage
+left join sp_use sp on sp.sp_use=oo.sp_use
+left join income inc on inc.income=oo.income
+left join income_report2 g on g.group_id=inc.group2
+left join opitemrece_noexport nn on nn.seq=oo.vn and nn.icode=oo.icode
+left join <<myrcm>>.claimcat ccc on ccc.icode=oo.icode and ccc.maininscl='SSS' and oo.rxdate between ccc.start_date and ccc.finish_date
+where o.vn='<<m.vn>>'
+and nn.seq is null
+and if(@vaccine,1=1,oo.sum_price>0)
+and g.cscd_group in ('3','4','5')
+order by 1,3
+endtext
+_value=caldata()
+if !empty(_value)
+	dataDispItem=dataDispItem+_value
+endif
+
+cTable='OPServices'
+text to _old noshow textmerge
+set @bdate=?m.vstdate;	#(select concat(vstdate,' ',vsttime) from ovst where vn=?m.vn);
+set @edate=?m.endtime;	#(select concat(ifnull(max(outdate),o.vstdate),' ',ifnull(max(outtime),o.vsttime)) from ptdepart pd left join ovst o on o.vn=pd.vn where pd.vn=?m.vn and outdepcode<>'' and outdepcode is not null);
+set @edate=if(@bdate>@edate,@bdate,@edate);
+
+select case
+when @vn then o.vn
+when @myHIS regexp 'IMED' then v.rcpno_list
+else v.debt_id_list end InvNo
+,concat(o.vn,'0001') SvID
+,'EC' Class ,'<<myhospcode>>' Hcode,o.HN,if(pt.nationality=99,pt.cid,pc.cardno) PID
+,case
+when @cancer then '9'
+else '1' end CareAccount
+,'01' TypeServ
+,case
+when ovstist.export_code between 1 and 4 then ovstist.export_code
+else '9' end TypeIn
+,case
+when ovstost.export_code in (7,9) then '9'
+when ovstost.export_code in (5,6) then '4'
+when ovstost.export_code in (8) then '5'
+when ovstost.export_code in (1,2,3,4) then ovstost.export_code
+else '9' end TypeOut
+,date_format(a.nextdate,'%Y-%m-%d') DTAppoint,doctorlicense(o.doctor) SvPID,if(sp.nhso_code between '01' and '12' or sp.nhso_code='99',sp.nhso_code,'01') Clinic
+,date_format(@bdate,'%Y-%m-%dT%T') BegDate,date_format(@edate,'%Y-%m-%dT%T') EndDate
+,'' LcCode,'' CodeSet,'' STDCode,'0.00' SvCharge,'Y' Completion
+,case
+when @sleeptest then ?m.authencode
+when @telmed then o.vn
+else '' end SvTxCode
+,'OP1' ClaimCat
+from ovst o
+join vn_stat v on v.vn=o.vn
+join patient pt on pt.hn=o.hn
+left join ptcardno pc on pc.hn=pt.hn and pc.cardtype='02'
+left join ovstist on ovstist.ovstist=o.ovstist
+left join ovstost on ovstost.ovstost=o.ovstost
+left join spclty sp on sp.spclty=o.spclty
+left join oapp a on a.vn=o.vn and ifnull(a.oapp_status_id,0) not in (4)
+left join ptdepart t on t.vn=o.vn
+where o.vn='<<m.vn>>'
+group by o.vn
+endtext
+
+text to _new noshow textmerge
+set @bdate=?m.vstdate;	#(select concat(vstdate,' ',vsttime) from ovst where vn='<<m.vn>>' limit 1);
+set @edate=?m.endtime;	#(select concat(ifnull(max(outdate),o.vstdate),' ',ifnull(max(outtime),o.vsttime)) from ptdepart pd left join ovst o on o.vn=pd.vn where pd.vn='<<m.vn>>' and outdepcode<>'' and outdepcode is not null limit 1);
+set @edate=if(@bdate>@edate,@bdate,@edate);
+
+drop temporary table if exists tmpService;
+create temporary table tmpService
+select o.vn
+,case
+when @vn then o.vn
+when @myHIS regexp 'IMED' then v.rcpno_list
+else v.debt_id_list end InvNo
+,concat(o.vn,'0001') SvID
+,case
+when @TelMed then 'CX'
+when @SleepTest then 'ED'
+else'EC' end Class
+,'<<myhospcode>>' Hcode,o.HN,if(pt.nationality=99,pt.cid,pc.cardno) PID
+,case
+when @cancer then '9'
+else '1' end CareAccount
+,'01' TypeServ
+,case
+when ovstist.export_code between 1 and 4 then ovstist.export_code
+else '9' end TypeIn
+,case
+when ovstost.export_code in (7,9) then '9'
+when ovstost.export_code in (5,6) then '4'
+when ovstost.export_code in (8) then '5'
+when ovstost.export_code in (1,2,3,4) then ovstost.export_code
+else '9' end TypeOut
+,date_format(a.nextdate,'%Y-%m-%d') DTAppoint,doctorlicense(o.doctor) SvPID,if(sp.nhso_code between '01' and '12' or sp.nhso_code='99',sp.nhso_code,'01') Clinic
+,date_format(@bdate,'%Y-%m-%dT%T') BegDate,date_format(@edate,'%Y-%m-%dT%T') EndDate
+,space(15) LcCode,space(7) CodeSet,space(15) STDCode,moneys(0) SvCharge,'Y' Completion
+,case
+when @sleeptest then ?m.authencode
+when @telmed then o.vn
+else '' end SvTxCode
+,'OP1' ClaimCat
+from ovst o
+join vn_stat v on v.vn=o.vn
+join patient pt on pt.hn=o.hn
+left join ptcardno pc on pc.hn=pt.hn and pc.cardtype='02'
+left join ovstist on ovstist.ovstist=o.ovstist
+left join ovstost on ovstost.ovstost=o.ovstost
+left join spclty sp on sp.spclty=o.spclty
+left join oapp a on a.vn=o.vn and ifnull(a.oapp_status_id,0) not in (4)
+left join ptdepart t on t.vn=o.vn
+where o.vn='<<m.vn>>'
+group by o.vn;
+
+set @no=1;
+drop temporary table if exists tmpData;
+create temporary table tmpData
+select o.InvNo,o.SvID,o.Class,o.Hcode,o.HN,o.PID,o.CareAccount,o.TypeServ,o.TypeIn,o.TypeOut,o.DTAppoint,o.SvPID,o.Clinic,o.BegDate,o.EndDate,o.LcCode,o.CodeSet,o.STDCode,o.SvCharge,o.Completion,o.SvTxCode,o.ClaimCat
+from tmpService o;
+
+insert into tmpData
+select o.InvNo,concat(o.vn,lpad(@no:=@no+1,4,'0')) SvID
+,case
+#when d.nhso_adp_code in ('51120','51121','3012','3013') then 'ED'
+when g.cscd_group in ('B') then 'OP'
+when g.cscd_group in ('7') then 'LB'
+when g.cscd_group in ('8') then 'XR'
+when g.cscd_group in ('9') then 'IV'
+when ifnull(d.icd9cm,'') regexp '^[0-9]' then 'OP'
+when d.nhso_adp_code in ('55825') then 'OP'
+else 'ZZ' end Class
+,o.Hcode,o.HN,o.PID,o.CareAccount,o.TypeServ,o.TypeIn,o.TypeOut,o.DTAppoint,o.SvPID,o.Clinic,o.BegDate,o.EndDate
+,if(g.cscd_group in ('3','4','6','7'),<<icase(myhis$HISData,'d.oldcode','d.icode')>>,oo.icode) LcCode
+,case
+when g.cscd_group in ('B') then 'IN'
+when ifnull(d.icd9cm,'') regexp '^[0-9]' then if(length(d.icd9cm)>5,'TT','IN')
+when d.nhso_adp_code in ('55825') then 'IN'
+end CodeSet
+,case
+when ifnull(d.icd9cm,'') regexp '^[0-9]' then d.icd9cm
+when d.nhso_adp_code in ('55825') then '9925'
+else '-' end STDCode
+,moneys(0) SvCharge,o.Completion
+,case
+when st.authencode is not null then st.authencode
+else o.SvTxCode end SvTxCode
+,o.ClaimCat
+from tmpService o
+join opitemrece oo on oo.vn=o.vn
+join nondrugitems d on d.icode=oo.icode
+left join <<myrcm>>.claimcat ccc on ccc.icode=oo.icode and ccc.maininscl='SSS' and oo.rxdate between ccc.start_date and ccc.finish_date
+left join income inc on inc.income=oo.income
+left join income_report2 g on g.group_id=inc.group2
+left join <<myrcm>>.sleeptest st on st.vn=oo.vn and  st.code=d.nhso_adp_code
+where (
+ccc.icode is not null
+#or d.nhso_adp_code in ('51120','51121','3012','3013')
+)
+and (@Covid or @HI or @CI or @FieldHosp or @SI or @PF or @Cancer or @SleepTest);
+
+
+insert into tmpdata
+select o.InvNo,concat(o.vn,lpad(@no:=@no+1,4,'0')) SvID
+,'OP' class
+,o.Hcode,o.HN,o.PID,o.CareAccount,o.TypeServ,o.TypeIn,o.TypeOut,o.DTAppoint,o.SvPID,o.Clinic,o.BegDate,o.EndDate
+,d.icode LcCode
+,if(length(d.icd9cm)>5,'TT','IN') CodeSet
+,d.icd9cm StdCode
+,moneys(0) SvCharge,o.Completion
+,o.SvTxCode
+,o.ClaimCat
+from tmpService o
+join opitemrece oo on oo.vn=o.vn
+join s_drugitems d on d.icode=oo.icode
+where d.icd9cm regexp '^[0-9]'
+;
+
+drop temporary table if exists tmpClass;
+create temporary table tmpClass (Class varchar(2) primary key) ignore as select class from tmpdata where class not in ('EC','OP','CX','ED');
+
+select * from tmpData
+endtext
+*_sql=icase(lcancer or lsleeptest,_new,_old)
+_sql=_new
+_value=caldata()
+if !empty(_value)
+	nOPService=nOPService+recco()
+	dataOPService=dataOPService+_value
+endif
+
+cTable='DxOp'
+text to _sleeptest noshow textmerge
+union all
+select cc.class,doctorlicense(o.doctor)
+,'1' SL,if(ifnull(aa.codeset,'')='','IT',aa.codeset) CodeSet,v.pdx DiagCode,icdname(v.pdx) NameCode
+from tmpclass cc
+join ovst o
+join vn_stat v on v.vn=o.vn
+left join icd101 aa on aa.code=v.pdx
+where o.vn='<<m.vn>>'
+endtext
+
+text to _all noshow textmerge
+select case
+when @TelMed then 'CX'
+when @SleepTest then 'ED'
+when dx.icd10 regexp '^[0-9]' then 'OP'
+else 'EC' end Class
+,concat(o.vn,'0001') SvID
+,dx.diagtype SL,if(ifnull(aa.codeset,'')='','IT',aa.codeset) CodeSet,dx.icd10 DiagCode,icdname(dx.icd10) NameCode
+from ovst o
+join ovstdiag dx on dx.vn=o.vn
+left join icd101 aa on aa.code=dx.icd10
+where o.vn='<<m.vn>>'
+and dx.icd10 not regexp '^[0-9]'
+<<_sleeptest>>
+order by case when class='EC' then 1 when class='CX' then 1 when class='ED' then 1 else 9 end,SL
+endtext
+
+text to _pdx noshow textmerge
+select case
+when @TelMed then 'CX'
+when @SleepTest then 'ED'
+else 'EC' end Class
+,concat(v.vn,'0001') SvID
+,'1' SL,if(ifnull(aa.codeset,'')='','IT',aa.codeset) CodeSet,pdx DiagCode,icdname(pdx) NameCode
+from vn_stat v
+left join icd101 aa on aa.code=v.pdx
+where v.vn='<<m.vn>>'
+<<_sleeptest>>
+order by case when class='EC' then 1 when class='CX' then 1 when class='ED' then 1 else 9 end,SL
+endtext
+_sql=icase(lcancer,_all,lpdx,_pdx,_all)
+_value=caldata()
+if !empty(_value)
+	dataOPDx=dataOPDx+_value
+endif
+
+Proc CalData
+priv _ret,_value
+acti scree
+_ret=''
+if runsql(_sql,.T.)
+	scan
+		store '' to m.doctor,m.Prescb,m.SvPID,m.PrdCat,m.HospDrgID,m.SigCode,m.sigText,m.Class,m.Code,m.PackSize,m.CID,m.PID,m.Bill,m.DiagCode,m.ClaimCont,m.STDCOde
+		scatt memv memo
+		if fieldpos('diagcode')>0
+			if m.class='EC'
+				m.diagcode=icase(inlist(nicd10,0,1),m.diagcode,moreicd(m.diagcode,icase(nicd10=3,'NHSO',nicd10=4,'SSS','')))
+				m.codeset=ntoc(getsqldata([select if(b.code is not null,'TT',if(ifnull(a.codeset,'')<>'',a.codeset,'IT')) cc from icd101 a left join ovst_sks_icd10tm b on b.code=a.code where a.code=?m.diagcode]))
+				m.codeset=icase(empty(m.codeset),'IT',m.codeset)
+			endif
+		endif
+		_value=''
+		for ii=1 to fcount()
+			_field=field(ii)
+			_data=ntoc(trans(m.&_field),0)
+			_data=strtran(_data,'<','¹éÍÂ¡ÇèÒ')
+			_data=strtran(_data,'>','ÁÒ¡¡ÇèÒ')
+			_data=strtran(_data,'&',' and ')
+*			_data=strtran(_data,'/',' ')
+			_data=strtran(_data,'|',' ')
+			_data=chrtran(_data,["'],'')
+			_data=chrtran(_data,chr(13)+chr(10),'')
+			if _field='PRESCB' or _field='SVPID' or _field='DOCTOR'
+				_data=ntoc(_data)
+				_data=icase(left(_data,1)$'Ç·¾À-' and isdigit(subs(_data,2)),_data,between(left(_data,1),'¡','Î'),'-99999',mydoctorcheck)
+				_data=icase(empty(_data),mydoctorcheck,_data)
+			endif
+			if _field='PID' or _field='CID'
+				_data=checkcid(_data)
+			endif
+			if _field='INVNO'
+				_data=ntoc(getwordnum(_data,1,'#'))
+			endif
+			if _field='BILLNO'
+				_data=ntoc(getwordnum(_data,1,'#'))
+				_data=chrtran(_data,['"],'')
+				_data=strtran(_data,':','/')
+				_data=icase(myhis$'IMED',cut(_data,[/-],.T.),_data)
+			endif
+			if _field='CLAIMCONT'
+				_data=ntoc(getwordnum(_data,1,':'))
+			endif
+			if _field='STDCODE'
+				_data=chrtran(_data,'.','')
+			endif
+			_data=icase(empty(_data) and _field='SIGCODE' and !empty(m.prdcat),myuse,_data)
+			_data=icase(empty(_data) and _field='SIGTEXT' and !empty(m.prdcat),myusename,_data)
+			_data=icase(empty(_data) and _field='PACKSIZE','-',_data)
+			_data=chrtran(_data,chr(13)+chr(10)+chr(9),'')
+			do while occurs('..',_data)>0 and inkey()=0
+				_data=strtran(_data,'..','.')
+			enddo
+			do while occurs('  ',_data)>0 and inkey()=0
+				_data=strtran(_data,'  ',' ')
+			enddo
+			_value=_value+icase(ii=1,'','|')+alltrim(_data)
+		next
+		_ret=_ret+_value+crlf
+	ends
+else
+	ErrorTable=cTable
+	=writeerror(m.vn,oerror)
+	_ret='Error:'+m.vn+crlf
+	lerror=.T.
+endif
+retu _ret
+
+Proc AddReturn
+priv oErr,cFolder
+oErr=''
+store .T. to lCheckHN,lAlert,lSkip
+store .F. to lAlert,lAll
+CaptionFolder='Folder CHI'
+Section=myfolderback
+SectionFolder='Folder'
+cFolder='C:\Temp\'+myfolderback
+cFolder=calfolder(getvariable(inifile,Section,SectionFolder,cFolder))
+_caption='¹Óà¢éÒ¢éÍÁØÅµÍºÃÑº '+myfolderback
+_table=textmerge([<<myrcm>>.CHI])
+clear class myImport
+oImport=create('myImport')
+oImport.show
+defi class myImport as myselectfile
+	Proc CalImport
+		=calimport()
+	Proc AddFile
+		=addfile()
+	Proc CalDrop
+		=sqlexec(_handle,textmerge([drop table <<_table>>]))
+		=maketablechi()
+	Proc CalDelete
+		=sqlexec(_handle,textmerge([delete from <<_table>>]))
+	Proc cmdDel.Click
+		_old=sele()
+		with thisform
+			.lsterror.clear
+			sele tmpselectfile
+			_file=ntoc(filename)
+			if ok('Delete','Â×¹ÂÑ¹¡ÒÃÅº¢éÍÁÙÅ?'+chr(13)+'¨Ò¡ä¿Åì '+_file,2,,460)
+				=sqlexec(_handle,textmerge([delete from <<_table>> where filename=?_file]))
+				=writeerror('Delete OK',oErr,.T.)
+			endif
+		endwith
+		sele (_old)
+	Proc cmdDel.RightClick
+		with thisform
+			.lsterror.clear
+			sele tmpselectfile
+			nrec=recno()
+			if ok('Delete','Â×¹ÂÑ¹¡ÒÃÅº¢éÍÁÙÅ?',2,,460)
+				scan
+					_file=ntoc(filename)
+					=sqlexec(_handle,textmerge([delete from <<_table>> where filename=?_file]))
+					=writeerror('Delete OK',oErr,.T.)
+				ends
+			endif
+			if recco()>0
+				go (nrec)
+			endif
+			=writeerror('OK',oerr)
+		endwith
+enddefi
+
+Proc MakeTableCHI
+text to _sql noshow
+drop table if exists <<myrcm>>.ssop;
+drop table if exists <<myrcm>>.csop;
+
+call addindex('vn_stat','debt_id_list',null,null,null);
+
+create table if not exists <<myrcm>>.chi (Type varchar(20),SessionID varchar(4),VN varchar(12),HN varchar(9),Vstdate Date,Status varchar(1),Station varchar(2),LineNo int(7),Hcode varchar(5),Hmain varchar(5),AuthCode varchar(10),DTTran datetime,InvNo varchar(20)
+,Pid varchar(13),Amount double(15,2),Claimamt double(15,2),CheckCode varchar(100),SendDate date,FileName varchar(100)
+,primary key (vn)
+,key pid (pid)
+,key hn (hn)
+,key vstdate (vstdate)
+) engine=MyISAM default charset=tis620;
+
+create table if not exists <<myrcm>>.eclaim_drug (didstd varchar(24),tradename varchar(200),genericname varchar(200),regno varchar(20),strength varchar(200),dosageform varchar(200),companyname varchar(200),unit varchar(50),cost decimal(15,2)
+,description varchar(200),grpcode varchar(5),startdate date,expdate date,enabled tinyint(3) unsigned
+,primary key (didstd)
+) engine=MyISAM default charset=tis620;
+
+create table if not exists <<myrcm>>.eclaim_drugcatalog (hospdrugcode varchar(30) not null,productcat varchar(2) not null,tmtid varchar(30) ,specprep varchar(3) ,genericname varchar(200) not null,tradename varchar(200) not null
+,dsfcode varchar(100) ,dosageform varchar(200) not null,strength varchar(200) ,content varchar(200) not null,unitprice decimal(15,2) ,distributor varchar(200) ,manufacturer varchar(200) not null,ised varchar(2)
+,ndc24 varchar(24) ,packsize varchar(100) ,packprice decimal(15,2) ,updateflag varchar(1) ,datechange datetime ,dateupdate datetime ,dateeffective datetime ,filename varchar(50)
+,primary key (hospdrugcode)
+) engine=MyISAM default charset=tis620;
+endtext
+=runsql(_sql,.T.)
+
+local _is
+_is=.F.
+_target=textmerge([<<myrcm>>.sleeptest])
+=checkpk(_target)
+_is=icase(_is,.T.,_pk#'SERIALNO',.T.,!seekfields(_target,[VN,Code,AuthenCode]),.T.,_is)
+_drop=textmerge(icase(_is,[drop table if exists <<_target>>],[]))
+text to _sql noshow textmerge
+<<_drop>>;
+create table if not exists <<_target>> (HCode varchar(5),VN varchar(25),Code varchar(10),AuthenCode varchar(25),SerialNo varchar(25),PtName varchar(60),HN varchar(15),MainInscl varchar(30),VstDate datetime,Result varchar(20),CheckNo varchar(10),Status varchar(25)
+,primary key (serialno)
+,key vn(vn)
+,key hn(hn)
+,key vstdate(vstdate)
+) engine=MyISAM default charset=tis620;
+endtext
+=runsql(_sql,.T.)
+
+Proc AddFile
+priv nfile,i
+sele tmpSelectFile
+zap
+cFolder=calfolder(cFolder)
+*nfile=adir(test,cFolder+'*'+myfileback+'*.BIL')
+nfile=adir(test,cFolder+'*.BIL')
+for i=1 to nfile
+	m.filename=test(i,1)
+	m.selected=icase(myhospcode$m.filename,.T.,.F.)
+	if upper(myfileback)$m.filename or 'CORT'$m.filename
+		insert into tmpselectfile from memv
+	endif
+next
+go top
+
+Proc CalImport
+priv i,j
+myhospcode=ntoc(myhospcode)
+cFolder=calfolder(cFolder)
+=maketablechi()
+if !checktable(_table)
+	=writeerror('äÁè¾ºµÒÃÒ§¢éÍÁÙÅ...',oerr)
+	retu .F.
+endif
+sele tmpSelectFile
+go top
+lwork=.T.
+oerr.columncount=3
+oerr.columnwidths='300,100,200'
+=writeerror('¡ÓÅÑ§¹Óà¢éÒ¢éÍÁÙÅ.....',oerr)
+do while !eof() and inkey()=0 and lwork
+	scatt memv memo
+	if m.selected
+		m.filename=ntoc(m.filename)
+		repfile=cfolder+m.filename
+		lfound=tologic(getsqldata([select count(*)>0 from <<myrcm>>.chi where filename regexp ?m.filename]))
+		lcan=.T.
+		if lfound and lalert
+			lcan=ok('Â×¹ÂÑ¹','à¤Â¹Óà¢éÒä¿Åì '+m.filename+' ¹ÕéáÅéÇ'+chr(13)+'Â×¹ÂÑ¹..¡ÒÃ¹Óà¢éÒ¢éÍÁÙÅ?',2,,420)
+		endif
+		if file(repfile) and lcan
+			=writeerror(m.filename)
+			lcan=icase(myfileback$m.filename or 'CORT'$m.filename,.T.,.F.)
+			if lcan
+				=add2opd()
+			endif
+		endif
+	endif
+	sele tmpSelectFile
+	skip
+enddo
+=writeerror('àÃÕÂºÃéÍÂáÅéÇ......',oErr,.T.)
+
+Proc Add2OPD
+priv _data,i,rec,n,_at,test,myform,mydata
+acti scree
+clear
+m.filename=justfname(repfile)
+_data=icase(file(repfile),filetostr(repfile),'')
+if !lAll and '¢éÍÁÙÅ·´ÊÍº'$_data
+	=writeas('¢éÍÁÙÅ·´ÊÍº',oerr,2)
+	=writeas('Skip',oerr,3)
+	retu .F.
+endif
+=writeas('¤Ó¹Ç³ËÒ Record',oerr,2)
+*if 'CORT'$m.filename
+*	_data=icase(file(repfile),filetostr(repfile),'')
+*	_data=strextract(_data,'ÊÔ·¸Ô»ÃÐ¡Ñ¹ÊÑ§¤Á','ÃÙ»áººÃÒÂ¡ÒÃ *|')
+*endif
+dime test(1)
+=aline(test,_data)
+rec=tonum(seekname('ÃÒÂ¡ÒÃ·ÕèÊè§ä»'))
+store seekname('§Ç´Êè§¢Í§') to m.sessionid,m.senddate
+m.sessionid=ntoc(getwordnum(m.sessionid,1,'_'))
+m.senddate=getwordnum(m.senddate,3,'_')
+m.senddate=getwordnum(m.senddate,1,'-')
+m.senddate=string2date(m.senddate)
+m.rep=seekname('àÅ¢·ÕèµÍºÃÑº')
+m.department='OP'
+m.maininscl=icase(mybenefit='CS','OFC',mybenefit='SS','SSS','')
+m.type=myfolderback
+ntotal=alen(test,1)
+store 0 to n,nn
+=writeas(trans(n)+'/'+trans(rec),oerr,2)
+for i=1 to alen(test,1)
+	_data=test(i)
+	if _data='*|'
+		n=n+1
+		_data=subs(_data,4)
+		_data=strtran(_data,'A ','A, ')
+		_data=strtran(_data,'C ','C, ')
+		_field='Status,Station,LineNo,Hcode,Hmain,AuthCode,DTTran,InvNo,Pid,Amount,Claimamt'
+		_field='Status,Station,LineNo,Hcode,Hmain,AuthCode,DTTran, InvNo,Pid,BP, Amount, ClaimAmt'	&&New
+		_field=icase(myBenefit='CS',[Status,Station,LineNo,AuthCode,DTTran,InvNo,BillNo,HN,MemberNo,ClaimAmt],_field)
+		_field=icase('CORT'$m.filename,'Status,Station, LineNo, HCode, HN, SessNo, DTTran, HdMode, ClaimAcc, Payers, DlzNew, EpoTn, Epounit, Hct, Paychk, Amount, HDCharge, ClaimAmt, BF',_field)
+		store '' to m.vn,m.invno
+		store 0 to m.amount,m.claimamt
+		m.checkcode=ntoc(getwordnum(_data,2,'|'))
+		_len=len(m.checkcode)
+		m.checkcode=icase(_len=0,'',left(m.checkcode,_len-1))
+		m.checkcode=chrtran(m.checkcode,chr(0)+chr(13)+chr(10)+chr(9),'')
+		m.checkcode=icase(empty(m.checkcode),.null.,m.checkcode)
+		_data=getwordnum(_data,1,'|')
+		for ii=1 to getwordcount(_field,',')
+			_seek=ntoc(getwordnum(_field,ii,','))
+			_value=ntoc(getwordnum(_data,ii,','))
+			_value=strtran(_value,'_','')
+			_value=icase(_seek='DTTRAN',caldatetime(getwordnum(_value,1,' '),getwordnum(_value,2,' ')),_value)
+			m.&_seek=_value
+		next
+		do case
+			case myBenefit='SS'
+				m.hn=ntoc(getsqldata([select group_concat(hn separator '|') cc from patient where cid=?m.pid]))
+				if empty(m.hn) and len(m.invno)>=12
+					m.hn=ntoc(getsqldata([select hn from ovst where vn=?m.invno]))
+				endif
+				if !empty(m.hn)
+					m.vn=icase(len(m.invno)<12 or ','$m.invno or len(m.invno)=14,'',m.invno)
+					if empty(m.vn) and !empty(m.invno)
+						m.vn=ntoc(getsqldata([select vn from vn_stat where hn=?m.hn and debt_id_list=?m.invno limit 1]))
+					endif
+					m.vn=ntoc(getsqldata([select vn from ovst where vn=?m.vn]))
+					if empty(m.vn)
+						m.vn=processvn(m.hn,m.dttran)
+					endif
+					m.hn=getsqldata([select hn from ovst where vn=?m.vn])
+					m.vstdate=getsqldata([select vstdate from ovst where vn=?m.vn])
+				endif
+			case myBenefit='CS'
+				m.hn=ntoc(m.hn)
+				m.hn=icase(lcheckhn,checkhn(m.hn),m.hn)
+				if !empty(m.hn)
+					m.pid=ntoc(getsqldata([select cid from patient where hn=?m.hn]))
+					m.vn=icase(len(m.invno)<12 or ','$m.invno or len(m.invno)=14,'',m.invno)
+					if empty(m.vn) and !empty(m.invno)
+						m.vn=ntoc(getsqldata([select vn from vn_stat where hn=?m.hn and debt_id_list=?m.invno limit 1]))
+					endif
+					m.vn=ntoc(getsqldata([select vn from ovst where vn=?m.vn]))
+					if empty(m.vn)
+						m.vn=processvn(m.hn,m.dttran)
+					endif
+					m.vstdate=getsqldata([select vstdate from ovst where vn=?m.vn])
+					if !'CORT'$m.filename
+						m.amount=m.claimamt
+					endif
+				endif
+		endcase
+		if 'CORT'$m.filename
+			m.invno='CKD'
+		endif
+*		m.status=icase('R01'$m.checkcode or 'S01'$m.checkcode or 'T02'$m.checkcode,'A',m.status)
+		_status=ntoc(getsqldata([select if(status='A','A','') cc from <<myrcm>>.chi where vn=?m.vn]))
+		if empty(_status) and !empty(m.vn)
+			nn=nn+1
+			=savemysqldata(_table)
+		endif
+		=writeas(trans(nn)+'/'+trans(n)+'/'+trans(rec),oerr,2)
+	endif
+	if inkey()#0
+		exit
+	endif
+next
+=writeas(icase(n>=rec,'OK','Cancel'),oerr,3)
+
+Proc SeekName
+para _seek,_is
+priv _ret
+_seek=ntoc(_seek,0)
+_ret=''
+_is=ntoc(_is,0)
+_is=icase(empty(_is),'=',_is)
+if !empty(_seek) and type('test')='C'
+	npos=ascan(test,_seek)
+	if npos>0
+		_ret=test(npos)
+		if _seek#'ÃÙ»áººÃÒÂ¡ÒÃ'
+			_ret=ntoc(subs(_ret,at(_is,_ret)+1),0)
+		endif
+	endif
+endif
+retu _ret
+
+Proc CalRecord
+para _str
+priv _seek,_ret,ii
+_str=icase(type('_str')='C',_str,'')
+_ret=0
+for ii=1 to alen(test,1)
+	if test(ii)='ÃÒÂ¡ÒÃ·ÕèÊè§ä»·Ñé§ÊÔé¹'
+		_ret=_ret+tonum(getwordnum(test(ii),2,'='))
+	else
+		if test(ii)='ÃÒÂ¡ÒÃ·ÕèÊè§ä»' and 'SOCD'$m.filename
+			_ret=_ret+tonum(getwordnum(test(ii),2,'='))
+		endif
+	endif
+next
+retu _ret
+
+Proc UpdatePttype
+lpara _is
+_is=tologic(_is)
+text to _person noshow textmerge
+update vn_stat v
+join person p on p.patient_hn=v.hn and p.pttype=v.pttype
+set v.hospmain=p.pttype_hospmain
+,v.hospsub=p.pttype_hospsub
+,v.pttype_begin=p.pttype_begin_date
+,v.pttype_expire=p.pttype_expire_date
+where v.vstdate between @ds1 and @ds2
+and v.pttype in (<<mypttype>>)
+<<icase(_is,'',[and (v.pttype_expire<v.vstdate or v.pttype_expire is null or v.pttype_expire='0000-00-00')])>>
+endtext
+=writeerror('Update From Person',oerr)
+=runsql(_person,.T.)
+
+text to _patient noshow textmerge
+update vn_stat v
+join pttypeno p on p.hn=v.hn and p.pttype=v.pttype
+set v.hospmain=p.hospmain
+,v.hospsub=p.hospsub
+,v.pttype_begin=p.begindate
+,v.pttype_expire=p.expiredate
+where v.vstdate between @ds1 and @ds2
+and v.pttype in (<<mypttype>>)
+<<icase(_is,'',[and (v.pttype_expire<v.vstdate or v.pttype_expire is null or v.pttype_expire='0000-00-00')])>>
+endtext
+=runsql(_patient,.T.)
+
+Proc ShowSendData
+lpara _is
+priv _ret,i,ii,_sql,_opd,_ipd,_caption,_title,_format,_width,_position,_color,_risk,reportname,reportfield,setcolumn,lockcolumns,maxform,formwidth,formheight,formtop,formleft,gridtop,gridleft,lsubheader,setcaption,mypath
+oerr.clear
+if empty(mypttype)
+	=writeerror('ÂÑ§äÁèä´é¡ÓË¹´ÊÔ·¸ÔÊÓËÃÑºÊè§ '+myfolderback,oerror)
+	retu .F.
+endif
+=showloading()
+starttime=datetime()
+=writeerror('àÃÔèÁ '+trans(starttime),oerr)
+_is=tologic(_is)
+store '' to _sql
+text to _sql noshow textmerge
+create table if not exists <<myrcm>>.chi (Type varchar(20),SessionID varchar(4),VN varchar(12),HN varchar(9),Vstdate Date,Status varchar(1),Station varchar(2),LineNo int(7),Hcode varchar(5),Hmain varchar(5),AuthCode varchar(10),DTTran datetime,InvNo varchar(20)
+,Pid varchar(13),Amount double(15,2),Claimamt double(15,2),CheckCode varchar(100),SendDate date,FileName varchar(100)
+,primary key (vn)
+,key pid (pid)
+,key hn (hn)
+,key vstdate (vstdate)) engine=MyISAM default charset=tis620;
+
+drop temporary table if exists tmpNHSO;
+create temporary table tmpNHSO (index (vn))
+select vn,hn
+,sum(compensated) compensated
+,group_concat(distinct rep) rep
+,group_concat(distinct errorcode) errorcode
+,group_concat(distinct bill) bill
+,group_concat(distinct bill_date) billdate
+,cast(group_concat(distinct if(paidtype not regexp 'ãºàÊÃç¨','Y',null)) as char(1)) paidtype
+from <<myrcm>>.repeclaim
+where department='OP'
+and date(admdate) between @ds1 and @ds2
+and (errorcode='' or errorcode is null)
+group by vn;
+
+drop temporary table if exists tmpCHI;
+create temporary table tmpCHI
+select yyyymm(o.vstdate) yymm,o.vn,o.hn,o.vstdate,v.income
+,chi.status,chi.amount
+,nhso.compensated
+from ovst o
+left join vn_stat v on v.vn=o.vn
+left join <<myrcm>>.chi on chi.vn=o.vn and chi.type=?myfolderback
+left join tmpNHSO nhso on nhso.vn=o.vn
+where o.vstdate between @ds1 and @ds2
+and ifnull(o.an,'')=''
+and o.pttype in (<<mypttype>>);
+
+select thaimonth(month(vstdate)) month,cast(year(vstdate)+543 as  char(10)) year
+,asnumber(count(vn)) amount_hosxp
+,sum(income) income_hosxp
+,sum(status is not null) Send
+,sum(status is null) amount_yet
+,sum(if(status is null,income,0)) income_yet
+,asnumber(sum(status='A')) amount_ok
+,sum(if(status='A',income,0)) income_ok
+,asnumber(sum(status<>'A')) amount_error
+,sum(if(status<>'A',income,0)) income_error
+,asnumber(sum(compensated>0)) amount_nhso
+,sum(if(compensated>0,compensated,0)) income_nhso
+from tmpCHI
+group by yymm
+order by yymm
+endtext
+ndialy=1
+if !_is
+	_start=be2ce('1/1/2561')
+	_end=date()
+endif
+=settype()
+_caption='ÃÒÂ§Ò¹ÊÃØ»¡ÒÃÊè§¢éÍÁÙÅ '+myfolderback+' '+_message
+=runsql(_sql,.T.)
+rele oload
+endtime=datetime()
+=writeerror('ÊÔé¹ÊØ´ '+trans(endtime),oerr)
+=writeerror('ãªéàÇÅÒ·Ñé§ËÁ´ '+sec2string(endtime-starttime),oerr)
+store '' to _title,_format,_width,_position
+for ii=1 to fcount()
+	_field=field(ii)
+	_title=_title+icase(ii=1,'','|')+icase('AMOUNT'$_field,'¨Ó¹Ç¹','INCOME'$_field,'¤èÒãªé¨èÒÂ',_field='SEND','Êè§áÅéÇ','x')
+	_format=_format+icase(ii=1,'','|')+icase('INCOME'$_field,formatmoney,ii>2,formatnumber,'x')
+	_width=_width+icase(ii=1,'','|')+icase('INCOME'$_field,'100',ii>1,'50','x')
+	_position=_position+icase(ii=1,'','|')+icase(_field='YEAR','0','x')
+	if type(_field)$'NIB'
+		sum (&_field) to m.&_field
+	endif
+next
+m.month=''
+m.year='ÃÇÁ'
+insert into temp from memv
+go top
+setcolumn=1
+formwidth=1024
+_risk='All|Amount_OK:color1|Amount_Error:color2|Send:color3|Amount_Yet:color4'
+_color=[icase(year='ÃÇÁ',rgb(128,255,0),rgb(255,255,255))]
+color1=[icase(year='ÃÇÁ',rgb(128,255,0),amount_ok=0,rgb(255,0,0),rgb(255,255,255))]
+color2=[icase(year='ÃÇÁ',rgb(128,255,0),amount_error>0,rgb(255,0,0),rgb(255,255,255))]
+color3=[icase(year='ÃÇÁ',rgb(128,255,0),amount_hosxp>0 and send=0,rgb(255,0,0),rgb(255,255,255))]
+color4=[icase(year='ÃÇÁ',rgb(128,255,0),amount_hosxp=amount_yet,rgb(255,0,0),rgb(255,255,255))]
+reportname='ShowError with .T.'
+clear class mySendReport
+oSendReport=create('mysendreport')
+oSendReport.Show
+defi class mySendReport as myshows
+	Proc SetMergeHeader
+		.MergeHeader(fieldpos('amount_hosxp'),fieldpos('income_hosxp'),'HOSxP')
+		.MergeHeader(fieldpos('amount_yet'),fieldpos('income_yet'),'ÂÑ§/äÁèµéÍ§Êè§')
+		.MergeHeader(fieldpos('amount_ok'),fieldpos('income_ok'),'¼èÒ¹')
+		.MergeHeader(fieldpos('amount_error'),fieldpos('income_error'),'µÔ´ C')
+		.MergeHeader(fieldpos('amount_nhso'),fieldpos('income_nhso'),'ä´éÃÑº¡ÒÃª´àªÂ')
+	Proc grdData.Keypress
+		lpara _key,_other
+		do case
+			case _key=13
+				this.dblclick
+			case _key=-1
+				do showperson with 1
+			case _key=-2
+				do showperson with 2
+			case _key=-3
+				do showperson with 3
+			case _key=-4
+				do showperson with 4
+			case _key=-5
+				do showperson with 5
+			case _key=-6
+				do showperson with 6
+		endcase
+	Proc grdData.Click
+		_no=icase(ncol=3 or ncol=4,1,ncol=5,2,ncol=6 or ncol=7,3,ncol=8 or ncol=9,4,ncol=10 or ncol=11,5,ncol=12 or ncol=13,6,0)
+		if _no#0
+			do showperson with _no
+		endif
+	Proc grdData.DblClick
+		do showperson with 5
+enddefi
+
+Proc ShowPerson
+lpara _no
+priv _ret,i,ii,_sql,_opd,_ipd,_caption,_title,_format,_width,_position,_color,_risk,reportname,reportfield,setcolumn,lockcolumns,maxform,formwidth,formheight,formtop,formleft,gridtop,gridleft,lsubheader,setcaption,mypath
+_no=tonum(_no)
+if type('oError')='O'
+	oerror.clear
+endif
+if fieldpos('month')=0
+	retu .F.
+endif
+if empty(ntoc(month))
+	retu .F.
+endif
+store '' to _sql
+_start=be2ce('1 '+ntoc(month)+' '+ntoc(year))
+_end=endmonth(_start)
+_monthly='à´×Í¹'+ntoc(month)+' '+ntoc(year)
+_where=[and o.vstdate between ?_start and ?_end ]
+text to _sql noshow textmerge
+set @no=0;
+select @no:=asnumber(@no)+1 no,o.vn,if(pt.nationality=99,pt.cid,pc.cardno) cid,o.hn,concat(pt.pname,pt.fname,' ',pt.lname) ptname,ce2be(o.vstdate) vstdate,totime(o.vsttime) vsttime,o.pttype,seekname(o.pttype,'pttype') pttypename
+,v.income,asnumbers(compensated) compensated,v.pdx
+,chi.status,chi.checkcode error
+from ovst o
+left join patient pt on pt.hn=o.hn
+left join ptcardno pc on pc.hn=pt.hn and pc.cardtype='02'
+left join vn_stat v on v.vn=o.vn
+left join <<myrcm>>.chi on chi.vn=o.vn and chi.type=?myfolderback
+left join tmpNHSO nhso on nhso.vn=o.vn
+where o.vstdate between ?_start and ?_end
+and ifnull(o.an,'')=''
+and o.pttype in (<<mypttype>>)
+<<icase(_no=6,[and nhso.vn is not null],_no=5,[and chi.status='C'],_no=4,[and chi.status='A'],_no=3,[and chi.vn is null],_no=2,[and chi.vn is not null],'')>>
+endtext
+_caption='ÃÒÂª×èÍ'+icase(_no=6,'¼Ùé·Õèä´éÃÑº¡ÒÃª´àªÂ',_no=5,'¼ÙéµÔ´ C',_no=4,'·ÕèÊè§¼èÒ¹áÅéÇ',_no=3,'¼ÙéÂÑ§/äÁèµéÍ§Êè§',_no=2,'·ÕèÊè§áÅéÇ','·Ñé§ËÁ´')+' ¢Í§ '+myfolderback+' '+_monthly
+=runsql(_sql,.T.,'tmpPerson')
+scatt memv memo blank
+store '' to _title,_format,_width,_position
+for ii=1 to fcount()
+	_field=field(ii)
+	_title=_title+icase(ii=1,'','|')+icase(_field='ERROR','µÔ´ C','x')
+	_format=_format+icase(ii=1,'','|')+icase(_field='ERROR','x','x')
+	_width=_width+icase(ii=1,'','|')+icase(_field='ERROR','300',_field='STATUS','40','x')
+	_position=_position+icase(ii=1,'','|')+icase(_field='YEAR','0',_field='STATUS','2','x')
+	if type(_field)$'NIB'
+		sum (&_field) to m.&_field
+	endif
+next
+if recco()>0
+	append blank
+	m.ptname='ÃÇÁ'
+	store .null. to m.no,m.vstdate
+	store '' to m.vn,m.hn,m.cid,m.error
+	gath memv memo
+endif
+go top
+_risk='All'
+_color=[icase(ptname='ÃÇÁ',rgb(128,255,0),compensated=0,rgb(255,0,0),rgb(255,255,255))]
+=toshow('oPerson')
+
+Proc AddFlag
+oerr.clear
+sele tmpdata
+m.vn=ntoc(vn)
+if empty(m.vn)
+	retu .F.
+endif
+_name=wontop()
+menu=''
+defi popup listmenu shortcut rela from mrow(),mcol() in wind (_name)
+defi bar 1 of listmenu prompt 'A:¢ÍàºÔ¡'
+defi bar 2 of listmenu prompt 'E:á¡éä¢'
+defi bar 3 of listmenu prompt 'D:Â¡àÅÔ¡'
+on select popup listmenu menu=prompt()
+acti popup listmenu
+menu=getwordnum(menu,1,':')
+menu=icase(empty(menu),'A',menu)
+repl flag with menu
+
+Proc AddProtocal
+priv _value,_caption,formwidth,setcolumn,_width,_position
+oerr.clear
+text to _sql noshow textmerge
+drop temporary table if exists tmpprotocal;
+create temporary table tmpprotocal (Code varchar(15) primary key,Name varchar(200)) engine=MyISAM default charset=tis620;
+replace into tmpprotocal values ('C992S','âÃ¤ÁÐàÃç§ª¹Ô´Í×è¹-¡ÒÃµÔ´µÒÁÍÒ¡ÒÃ');
+replace into tmpprotocal select nhso_adp_code,nhso_adp_code_name
+from nhso_adp_code
+where nhso_adp_code regexp '^C[0|1|2|8|9][0-9]'
+and nhso_adp_type_id=6;
+select * from tmpprotocal order by 1
+endtext
+if !runsql(_sql,.T.,'tmpprotocal')
+	retu .F.
+endif
+_caption='Protocal'
+formwidth=800
+setcolumn=2
+_width='50'
+_position='0|0'
+_value=listdata('code','tmpprotocal',.T.)
+_value=ntoc(_value)
+_value=getwordnum(_value,1,':')
+=sqlexec(_handle,[update SSOCAC_Registry set protocal=?_value where caseno=?m.caseno])
+sele tmpdata
+m.protocal=_value
+gath memv field protocal
+
+Proc AddHospType
+oerr.clear
+sele tmpdata
+m.vn=ntoc(vn)
+oldhosptype=ntoc(hosptype)
+if recco()=0
+	retu
+endif
+if empty(m.vn)
+	retu
+endif
+_name=wontop()
+defi popup listmenu shortcut rela from mrow,mcol title 'HospType' in wind (_name)
+defi bar 1 of listmenu prompt '\<Main'
+defi bar 2 of listmenu prompt 'su\<B'
+defi bar 3 of listmenu prompt 'supr\<A'
+defi bar 4 of listmenu prompt 'e\<Xt'
+on select popup listmenu menu=prompt()
+acti popup listmenu
+menu=icase(menu='Main','M',menu='suB','B',menu='suprA','A',menu='eXt','X',oldhosptype)
+repl hosptype with menu
+
+Proc AddAuthenCode
+sele tmpdata
+m.vn=ntoc(vn)
+olddata=ntoc(authencode,0)
+if recco()=0
+	retu
+endif
+if empty(m.vn)
+	retu
+endif
+_value=mybox(olddata,[àÅ¢·ÕèÍ¹ØÁÑµÔ],[ÃÐºØ],300)
+_value=icase(empty(_value),olddata,_value)
+if empty(_value)
+	=sqlexec(_handle,textmerge([delete from <<myrcm>>.sleeptest where vn=?m.vn]))
+else
+	=sqlexec(_handle,textmerge([replace into <<myrcm>>.sleeptest (vn,authencode) values (?m.vn,?_value)]))
+endif
+sele tmpdata
+m.authencode=_value
+gath memv field authencode

@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>เข้าสู่ระบบ</title>
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body class="login-page">
+<main class="login-box panel">
+  <h1>ส่งออก SSOP / AIPN</h1>
+  <p class="muted-note">{{ hname }}</p>
+  {% if error %}<div class="notice error login-notice" role="alert">{{ error }}</div>{% endif %}
+  <div id="login-error" class="notice error login-notice" role="alert" hidden></div>
+
+  <form id="login-form" class="login-form">
+    <h2>บัญชี HOSxP</h2>
+    <label>ชื่อผู้ใช้<input name="username" autocomplete="username" required autofocus></label>
+    <label>รหัสผ่าน<input name="password" type="password" autocomplete="current-password" required></label>
+    <button class="primary" type="submit">เข้าสู่ระบบ</button>
+  </form>
+
+  <div class="login-divider"><span>หรือ</span></div>
+
+  {% if moph_ready %}
+  <a class="moph-button" href="/auth/moph/start">เข้าสู่ระบบด้วย MOPH ID</a>
+  <p class="muted-note">ใช้บัญชีผู้ให้บริการ (Provider ID) ที่สังกัดโรงพยาบาลนี้</p>
+  {% else %}
+  <button class="moph-button" type="button" disabled>เข้าสู่ระบบด้วย MOPH ID</button>
+  <p class="muted-note">ยังไม่ได้ตั้งค่า MOPH ID ให้ผู้ดูแลใส่ client ID และ secret key ใน .env</p>
+  {% endif %}
+</main>
+<script src="/static/login.js"></script>
+</body>
+</html>
