@@ -249,3 +249,6 @@ dl.sum dt{color:var(--muted)}dl.sum dd{margin:0;font-weight:600;font-variant-num
   .connection span:last-child{display:none}
 }
 .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.presets{flex-wrap:wrap;align-items:center}
+.presets label.inline{display:inline-flex;gap:5px;align-items:center;font-size:13px;font-weight:600;color:var(--ink)}
+#groups{display:inline-flex;gap:6px;flex-wrap:wrap}

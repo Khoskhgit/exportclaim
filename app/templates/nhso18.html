@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>18 แฟ้ม · Export Claim</title>
+<link rel="stylesheet" href="/static/app.css?v={{ v }}">
+</head>
+<body>
+{% set active = "nhso18" %}{% include "_top.html" %}
+<main>
+  <div class="page-head"><h2>ส่งออก 18 แฟ้ม สปสช.</h2><p>สำหรับอัปโหลดเข้า New e-Claim · ค้นหา ตรวจ เลือก แล้วสร้าง ZIP ของแฟ้ม TXT</p></div>
+
+  <form id="search" class="panel search">
+    <label>ตั้งแต่วันที่<input type="date" name="start"></label>
+    <label>ถึงวันที่<input type="date" name="end"></label>
+    <label class="wide">สิทธิ
+      <details id="pttypes" class="multi"><summary id="pttype-label">กำลังโหลด…</summary><div id="pttype-list"></div></details>
+    </label>
+    <label>VN / AN<input name="key" autocomplete="off" placeholder="ค้นรายเดียว"></label>
+    <label>HN<input name="hn" autocomplete="off" placeholder="ทุกครั้งของ HN"></label>
+    <div class="actions-cell"><button class="primary" type="submit">ค้นหาและตรวจ</button></div>
+    <div class="presets">
+      <span>ช่วงด่วน:</span><button type="button" data-preset="this">เดือนนี้</button><button type="button" data-preset="last">เดือนก่อน</button>
+      <span>สิทธิ:</span><span id="groups"></span>
+      <span>ประเภท:</span>
+      <label class="inline"><input type="checkbox" name="opd" checked> OPD</label>
+      <label class="inline"><input type="checkbox" name="ipd"> IPD</label>
+    </div>
+  </form>
+
+  <section id="summary" class="cards" aria-label="สรุปและกรองตามสถานะ"></section>
+
+  <section class="panel table-panel">
+    <div class="table-tools">
+      <div class="search-box"><input id="filter" type="search" placeholder="กรองจากชื่อ, VN, AN, HN หรือ PDx" aria-label="กรองรายการ"></div>
+      <button type="button" id="select-ready">เลือกรายการที่ผ่าน</button>
+      <button type="button" id="select-none" class="ghost">ยกเลิกทั้งหมด</button>
+      <span id="result-count" class="result-count"></span>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead id="thead"><tr>
+          <th class="check"><span class="sr-only">เลือก</span></th>
+          <th data-sort="rank">ผลตรวจ</th><th data-sort="status">สถานะ</th><th data-sort="kind">ประเภท</th><th data-sort="key">VN / AN</th>
+          <th data-sort="hn">HN</th><th data-sort="ptname">ชื่อ</th><th data-sort="date">วันที่</th><th data-sort="maininscl">สิทธิ</th>
+          <th data-sort="pdx">PDx</th><th class="num" data-sort="money">ค่าใช้จ่าย</th><th>ปัญหาที่พบ</th>
+        </tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+      <div id="empty" class="empty"><div class="empty-icon" aria-hidden="true">⌕</div><div>เลือกช่วงวันที่และสิทธิแล้วกด "ค้นหาและตรวจ"</div></div>
+    </div>
+  </section>
+
+  <details class="panel history">
+    <summary>ประวัติการส่งออก 18 แฟ้ม</summary>
+    <div class="history-body"><div id="history"></div></div>
+  </details>
+</main>
+
+<footer class="actions">
+  <div class="actions-inner">
+    <div class="totals"><span class="step" aria-hidden="true">1</span><div><strong id="selected-count">เลือก 0 รายการ</strong><span id="selected-total" class="amount">ค่าใช้จ่าย 0.00 บาท</span></div></div>
+    <span class="arrow" aria-hidden="true">→</span>
+    <button id="export" class="primary big" type="button" disabled>สร้าง ZIP 18 แฟ้ม</button>
+  </div>
+</footer>
+
+<div id="drawer-backdrop" class="drawer-backdrop" hidden></div>
+<aside id="drawer" class="drawer" hidden aria-label="รายละเอียด">
+  <div class="drawer-head"><div><h2 id="drawer-title"></h2><span id="drawer-sub" class="sub"></span></div><button type="button" id="drawer-close" class="ghost">ปิด ✕</button></div>
+  <div id="drawer-body"></div>
+</aside>
+
+<dialog id="confirm">
+  <h2 id="confirm-title"></h2>
+  <div id="confirm-body"></div>
+  <div class="dialog-actions">
+    <button type="button" id="confirm-cancel" class="ghost">ยกเลิก</button>
+    <button type="button" id="confirm-ok" class="primary">ยืนยัน</button>
+  </div>
+</dialog>
+<script src="/static/common.js?v={{ v }}"></script>
+<script src="/static/nhso18.js?v={{ v }}"></script>
+</body>
+</html>

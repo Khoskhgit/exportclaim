@@ -1,0 +1,4092 @@
+**Êè§ÍÍ¡ 16 á¿éÁÃÍº»¡µÔ
+close data
+if !readquerysql('resetitems','_handle')
+	=writeerror(_msg,oerror)
+endif
+if tonum(getsqldata([select sum(ifnull(drg_chrgitem_id,0)=0) cc from income ]))>0
+	=writeerror('¡ÃØ³Ò Map ËÁÇ´ Chrgitem(Ê»Êª.) ãËé¤Ãº¶éÇ¹',oerror)
+	retu .F.
+endif
+OnTop1=tologic(readsysvar('UC-ONTOP-1'))	&&OP Anywhere ã¹¨Ñ§ËÇÑ´
+OnTop2=tologic(readsysvar('UC-ONTOP-2'))	&&OP Anywhere µèÒ§¨Ñ§ËÇÑ´
+OnTop3=tologic(readsysvar('UC-ONTOP-3'))	&&OP Anywhere ©Ø¡à©Ô¹ ¢éÒÁ¨Ñ§ËÇÑ´
+OnTop4=tologic(readsysvar('UC-ONTOP-4'))	&&OP Anywhere ©Ø¡à©Ô¹ ¤Ø³ÀÒ¾
+OnTop5=tologic(readsysvar('UC-ONTOP-5'))	&&UCEP
+OnTop6=tologic(readsysvar('UC-ONTOP-6'))	&&CA
+OnTop7=tologic(readsysvar('UC-ONTOP-7'))	&&OP Refer
+
+type2=[2206,2207]
+type3=[1B004N,1B004P,1B004_ON,1B004_OP,FP001,FP002,AB001,AB002,AB003]
+type4=[1B0046_01,1B006_1,1B005,30014,30011,30012,30013,30010,30008,30009,30015,30016,90004,12001,12002,12003,12004,37550,90001,90002,13001,14001,15001,90005,PHONE_C,PHONE_M]
+type5=[]
+myOFC=[OFC|LGO|BKK|BMT|SRT|PVT]
+
+text to _sql noshow textmerge
+create table if not exists opitemrece_noexport (Seq varchar(50),ICode varchar(15),Type varchar(1),No_Export varchar(1),primary key (Seq,ICode,Type)) engine=MyISAM default charset=tis620;
+
+create table if not exists opitemrece_home (opitemrece_home_id int(11) not null,an varchar(9),opi_guid varchar(38),opitemrece_home_type_id int(11),order_no int(11)
+,primary key (opitemrece_home_id)
+,unique key ix_opi_guid (opi_guid)
+,key ix_an (an)
+,key ix_an_guid (an,opi_guid)
+,key ix_an_order_no (an,order_no)
+,key ix_an_guid_index (an,opi_guid)
+) engine=MyISAM default charset=tis620 collate=tis620_thai_ci;
+
+create table if not exists patient_bio_id (hn varchar(9) not null,bio_id varchar(200),update_datetime datetime
+,primary key (hn)
+) engine=MyISAM default charset=tis620 collate=tis620_thai_ci;
+
+create table if not exists person (person_id int(11) not null,house_id int(11) ,cid varchar(13) ,pname varchar(25) ,fname varchar(50) ,lname varchar(50) ,pcode char(2) ,sex char(1) ,nationality varchar(3)
+,citizenship varchar(3) ,education char(1) ,occupation varchar(4) ,religion char(2) ,marrystatus char(1) ,house_regist_type_id int(11) ,birthdate date ,has_house_regist char(1) ,chronic_disease_list varchar(250)
+,club_list varchar(250) ,village_id int(11) ,blood_group varchar(20) ,current_age int(11) ,death_date date ,hos_guid varchar(38) ,income_per_year int(11) ,home_position_id int(11) ,family_position_id int(11)
+,drug_allergy varchar(150) ,last_update datetime ,death char(1) ,pttype char(2) ,pttype_begin_date date ,pttype_expire_date date ,pttype_hospmain char(5) ,pttype_hospsub char(5) ,father_person_id int(11)
+,mother_person_id int(11) ,pttype_no varchar(50) ,sps_person_id int(11) ,birthtime time ,age_y int(11) ,age_m int(11) ,age_d int(11) ,family_id int(11) ,person_house_position_id int(11) ,couple_person_id int(11)
+,person_guid varchar(38) ,house_guid varchar(38) ,last_update_pttype datetime ,patient_link char(1) ,patient_hn varchar(9) ,found_dw_emr char(1) ,person_discharge_id int(11) ,movein_date date
+,discharge_date date ,person_labor_type_id int(11) ,father_name varchar(100) ,mother_name varchar(100) ,sps_name varchar(100) ,father_cid varchar(13) ,mother_cid varchar(13) ,sps_cid varchar(13)
+,bloodgroup_rh varchar(5) ,home_phone varchar(30) ,old_code varchar(50) ,deformed_status char(1) ,ncd_dm_history_type_id int(11) ,ncd_ht_history_type_id int(11) ,agriculture_member_type_id int(11)
+,senile char(1) ,in_region char(1) ,body_weight_kg double(15,3) ,height_cm double(15,3) ,nutrition_level int(11) ,height_nutrition_level int(11) ,bw_ht_nutrition_level int(11) ,hometel varchar(20)
+,worktel varchar(20) ,register_conflict char(1) ,care_person_name varchar(50) ,work_addr varchar(100) ,person_dm_screen_status_id int(11) ,person_ht_screen_status_id int(11)
+,person_stroke_screen_status_id int(11) ,person_obesity_screen_status_id int(11) ,person_dmht_manage_type_id int(11) ,last_screen_dmht_bdg_year int(11) ,dw_chronic_register char(1)
+,mobile_phone varchar(20) ,vid varchar(8) ,pttype_nhso_valid char(1) ,pttype_nhso_valid_datetime datetime
+,primary key (person_id)
+,key ix_cid (cid)
+,key ix_hos_guid (hos_guid)
+,key ix_house_id (house_id)
+,key ix_couple_person_id (couple_person_id)
+,key ix_father_person_id (father_person_id)
+,key ix_mother_person_id (mother_person_id)
+,key ix_death (death)
+,key ix_hn (patient_hn)
+,key ix_oldcode (old_code)
+,key ix_inregion (in_region)
+,key ix_village_id (village_id)
+,key ix_father_cid (father_cid)
+,key ix_mother_cid (mother_cid)
+,key ix_last_update (last_update)) engine=MyISAM default charset=tis620;
+
+create table if not exists person_anc (person_anc_id int(11) not null,person_id int(11) ,person_anc_no int(11) ,anc_register_date date ,anc_register_staff varchar(25) ,vaccine_tt1_date date
+,vaccine_tt2_date date ,vaccine_tt3_date date ,vaccine_tt4_date date ,vaccine_tt_complete char(1) ,blood_check1_date date ,blood_check2_date date ,blood_vdrl1_result varchar(25)
+,blood_vdrl2_result varchar(25) ,blood_hiv1_result varchar(25) ,blood_hiv2_result varchar(25) ,blood_of_result varchar(10) ,blood_hct_result varchar(10) ,blood_hct_grade int(11)
+,pre_labor_service1_date date ,pre_labor_service2_date date ,pre_labor_service3_date date ,pre_labor_service4_date date ,first_doctor_date date ,risk_list varchar(250) ,risk_refer_date date
+,psycho_eval_score int(11) ,anc_vc_result_id int(11) ,post_labor_service1_date date ,post_labor_service2_date date ,preg_no int(11) ,preg_begin_date date ,labor_date date ,labor_place_id int(11)
+,labor_doctor_type_id int(11) ,alive_child_count int(11) ,dead_child_count int(11) ,current_preg_age int(11) ,anc_finish char(1) ,labor_status_id int(11) ,edc date ,lmp date ,post_labor_service3_date date
+,labour_type_id int(11) ,labour_hospcode char(5) ,labor_icd10 varchar(7) ,ga int(11) ,discharge char(1) ,discharge_date date ,risk_level int(11) ,out_region char(1) ,thalassaemia_result_id int(11)
+,hos_guid varchar(38) ,last_update datetime ,new_book char(1) ,pre_labor_service_percent double(15,3) ,post_labor_service_percent double(15,3) ,thalasseima_preg_age int(11)
+,thalasseima_wife_of_result char(1) ,thalasseima_husband_of_result char(1) ,thalasseima_wife_dcip_result char(1) ,thalasseima_husband_dcip_result char(1) ,thalasseima_wife_hbtyping_result char(1)
+,thalasseima_husband_hbtyping_result char(1) ,thalasseima_wife_alpha1_result char(1) ,thalasseima_husband_alpha1_result char(1) ,thalasseima_wife_dx_icd10 varchar(9)
+,thalasseima_husband_dx_icd10 varchar(9) ,husband_pname varchar(30) ,husband_fname varchar(60) ,husband_lname varchar(60) ,husband_person_id int(11) ,dental_tx_date date
+,husban_thalassaemia_result_id int(11) ,pre_labor_service5_date date ,thalassemia_screen_date date ,thalassemia_confirm_date date ,thalassemia_prenatal_date date
+,thalassemia_prenatal_confirm char(1) ,thalassemia_prenatal_confirm_date date ,lmp_from_us char(1) ,vaccine_dtanc1_date date ,vaccine_dtanc2_date date ,vaccine_dtanc3_date date
+,vaccine_dtanc4_date date ,vaccine_dtanc5_date date ,ultrasound_text text,force_complete_export char(1) ,force_complete_date date ,send_nhso char(1) ,nhso_send_date date ,nhso_send_time time
+,nhso_send_staff varchar(20) ,nhso_data_ok char(1) ,nhso_reply_error char(1) ,nhso_error_code varchar(50) ,nhso_reply_update_datetime datetime ,thalassaemia_wife_location_type_id int(11)
+,service_count int(11) ,wife_thalassaemia_risk_type_id int(11) ,husband_thalassaemia_risk_type_id int(11) ,has_risk char(1) ,force_labor_complete_export char(1) ,force_labor_complete_date date
+,primary key (person_anc_id)
+,key ix_anc_finish (anc_finish)
+,key ix_discharge (discharge)
+,key ix_out_region (out_region)
+,key ix_person_id (person_id)
+,key ix_last_update (last_update)
+,key ix_post_labor_service3_date (post_labor_service3_date)
+,key ix_hos_guid (hos_guid)
+,key ix_force_complete_export (force_complete_export)
+,key ix_force_labor_complete_date (force_labor_complete_date)
+,key ix_force_labor_complete_date2 (force_labor_complete_export,force_labor_complete_date)
+,key person_id (person_id,preg_no)
+,key ix_force_labor_complete_date2_index (force_labor_complete_export,force_labor_complete_date)) engine=MyISAM default charset=tis620;
+
+create table if not exists person_anc_service (person_anc_service_id int(11) not null,person_anc_id int(11) ,anc_service_date date ,anc_service_note varchar(250) ,pa_week int(11) ,service_result char(1)
+,provider_type int(11) ,vn varchar(13) ,provider_hospcode char(5) ,old_visitno int(11) ,anc_service_type_id int(11) ,anc_service_number int(11) ,service_text varchar(250) ,hos_guid varchar(38)
+,anc_service_time time ,anc_location_type_id int(11) ,old_visitcode varchar(25) ,real_anc_service char(1) ,home_visit char(1) ,ga int(11) ,pass_quality char(1) ,service_note_text text
+,primary key (person_anc_service_id)
+,key ix_old_visitno (old_visitno)
+,key ix_person_anc_id (person_anc_id)
+,key ix_pa_week (pa_week)
+,key ix_old_visitcode (old_visitcode)
+,key ix_hos_guid (hos_guid)
+,key vn (vn)) engine=MyISAM default charset=tis620;
+
+create table if not exists dtmain (dtmain_id int(11) not null,dn varchar(7) ,doctor varchar(7) ,fee double(15,3) ,hn varchar(9) ,icd varchar(250) ,note text,scount int(11) ,tcount int(11) ,tmcode varchar(10)
+,ttcode varchar(250) ,vn varchar(13) ,vstage int(11) ,vstdate date ,vsttime time ,tm_no int(11) ,doctor_helper varchar(6) ,rcount int(11) ,icd9 varchar(9) ,qty_count int(11) ,opi_guid varchar(38)
+,begin_time datetime ,end_time datetime ,dtmain_guid varchar(38) ,staff varchar(25) ,pregnancy char(1) ,post_labour char(1) ,report_update char(1) ,pregnancy_caries_count int(11)
+,pregnancy_gingivitis char(1) ,pregnancy_calculus char(1) ,pregnancy_checkup char(1) ,hos_guid varchar(38) ,update_datetime datetime ,dx_guid varchar(38) ,dental_plan_detail_id int(11)
+,department char(3) ,an varchar(9) ,depcode char(3) ,rc_count int(11)
+,primary key (dtmain_id)
+,key ix_dn (dn)
+,key ix_hn (hn)
+,key ix_vn (vn)
+,key ix_vstdate (vstdate)
+,key ix_opi_guid (opi_guid)
+,key ix_tmcode (tmcode)
+,key ix_dtmain_guid (dtmain_guid)
+,key ix_dental_plan_detail_id (dental_plan_detail_id)
+,key ix_an (an)) engine=MyISAM default charset=tis620;
+
+create table if not exists dttm (code varchar(10) not null,name varchar(250) ,requiredtc char(1) ,vorder int(11) ,treatment char(1) ,icd10 varchar(9) ,icd9cm varchar(9) ,icode varchar(7) ,opd_price1 double(15,3)
+,opd_price2 double(15,3) ,opd_price3 double(15,3) ,ipd_price1 double(15,3) ,ipd_price2 double(15,3) ,ipd_price3 double(15,3) ,dttm_group_id int(11) ,unit varchar(20) ,charge_per_qty char(1)
+,active_status char(1) ,dttm_guid varchar(38) ,thai_name varchar(250) ,charge_area_qty char(1) ,dttm_subgroup_id int(11) ,icd10tm_operation_code varchar(15) ,dttm_dw_report_group_id int(11)
+,export_proced char(1) ,dent2006_item_code varchar(50) ,hos_guid varchar(38) ,hoi varchar(6)
+,primary key (code)
+,key name (name)
+,key treatment (treatment)
+,key ix_dttm_guid (dttm_guid)
+,key ix_hos_guid (hos_guid)) engine=MyISAM default charset=tis620;
+
+create table if not exists pp_special (pp_special_id int(11) not null,vn varchar(12) ,pp_special_type_id int(11) ,doctor varchar(25) ,pp_special_service_place_type_id int(11) ,entry_datetime datetime
+,dest_hospcode char(5) ,hos_guid char(38) ,pp_special_text text,hn varchar(9)
+,primary key (pp_special_id)
+,key ix_hos_guid (hos_guid)
+,key ix_vn (vn)) engine=MyISAM default charset=tis620;
+
+create table if not exists pp_special_type (pp_special_type_id int(11) not null,pp_special_type_name varchar(200) ,hos_guid char(38) ,pp_special_code varchar(6)
+,primary key (pp_special_type_id)
+,unique key ix_pp_special_type_name (pp_special_type_name)
+,key ix_hos_guid (hos_guid)) engine=MyISAM default charset=tis620;
+
+create table if not exists er_nursing_detail (vn varchar(13) not null,arrive_time datetime ,referin_person varchar(50) ,trauma char(1) ,bba char(1) ,dba char(1) ,psychic char(1) ,revisit48hr char(1)
+,gcs_e double(15,3) ,gcs_v double(15,3) ,gcs_m double(15,3) ,pupil_l double(15,3) ,pupil_r double(15,3) ,inform_person varchar(50) ,interview_person varchar(50) ,report_doctor_time datetime
+,doctor_finish_time datetime ,support_information varchar(250) ,visit_type char(1) ,transporter varchar(50) ,er_accident_type_id int(11) ,er_emergency_type int(11) ,er_refer_hosptype_id int(11)
+,er_refer_sender_id int(11) ,discharge_date date ,discharge_time time ,admit_2hr char(1) ,er_transfer_hosptype_id int(11) ,accident_in_province char(1) ,accident_admit char(1)
+,accident_dead_before_arrive char(1) ,accident_dead_in_hospital char(1) ,accident_transport_type_id int(11) ,accident_type_1 int(11) ,accident_type_2 int(11) ,accident_type_3 int(11) ,hos_guid varchar(38)
+,accident_type_4 int(11) ,accident_type_5 int(11) ,accident_type_6 int(11) ,o2sat double(15,3) ,accident_place_type_id int(11) ,accident_person_type_id int(11) ,accident_alcohol_type_id int(11)
+,accident_drug_type_id int(11) ,accident_airway_type_id int(11) ,accident_bleed_type_id int(11) ,accident_belt_type_id int(11) ,accident_helmet_type_id int(11) ,accident_splint_type_id int(11)
+,accident_fluid_type_id int(11) ,accident_note_text text,accident_gis_lat varchar(50) ,accident_gis_long varchar(50) ,accident_datetime datetime ,accident_place varchar(200) ,pupil_l_text varchar(200)
+,pupil_r_text varchar(200) ,accident_immo_cs_type_id int(11) ,accident_vehicle_regno varchar(100) ,coma_score int(11) ,br1 int(11) ,br2 int(11) ,br3 int(11) ,br4 int(11) ,br5 int(11) ,br6 int(11) ,ais1 int(11)
+,ais2 int(11) ,ais3 int(11) ,ais4 int(11) ,ais5 int(11) ,ais6 int(11) ,gcs int(11) ,rts double(22,6) ,ps double(22,3) ,iss double(22,6) ,is_blunt char(1)
+,primary key (vn)
+,key ix_hos_guid (hos_guid)) engine=MyISAM default charset=tis620;
+
+create table if not exists clinic_visit (hn varchar(9) ,clinic char(3) not null,vn varchar(13) not null,visit_type int(11) ,hos_guid varchar(38) ,afb_check char(1) ,afb_month_number int(11) ,hos_guid_ext varchar(64) ,pcu_code varchar(5) ,pcu_vn varchar(13)
+,primary key (clinic,vn)
+,key clinic (clinic)
+,key hn (hn)
+,key ix_hos_guid (hos_guid)
+,key ix_hos_guid_ext (hos_guid_ext)) engine=MyISAM default charset=tis620;
+
+create table if not exists fdh_claim_status (fdh_claim_status_id int(11) not null auto_increment,vn varchar(13) ,hn varchar(9) ,fdh_claim_status_datetime datetime ,fdh_claim_status_response text
+,fdh_claim_status_message varchar(100) ,staff_entry varchar(50) ,last_update datetime ,transaction_uid varchar(100) ,fdh_reservation_req_message text,fdh_reservation_status char(1)
+,fdh_reservation_datetime datetime ,fdh_reservation_resp_message text,fdh_cancel_status char(1) ,fdh_cancel_datetime datetime ,fdh_cancel_staff varchar(100) ,fdh_act_amt double(12,2)
+,fdh_settle_at varchar(200) ,fdh_stm_period varchar(200)
+,primary key (fdh_claim_status_id)
+,unique key vn (vn)) engine=MyISAM default charset=tis620;
+alter table fdh_claim_status modify column fdh_claim_status_id int(11) auto_increment;
+call addindex('fdh_claim_status','vn','vn','unique',null);
+call addcolumn('fdh_claim_status','fdh_act_amt','double(12,2)',null);
+call addcolumn('fdh_claim_status','fdh_settle_at','varchar(200)',null);
+call addcolumn('fdh_claim_status','fdh_stm_period','varchar(200)',null);
+
+create table if not exists fdh_claim_status_detail (fdh_claim_status_detail_id int(11) auto_increment,fdh_claim_status_id int(11) not null,fdh_error_code varchar(100) ,fdh_error_desc varchar(200) ,fdh_error_status char(1)
+,primary key (fdh_claim_status_detail_id)
+,key fdh_claim_status_id (fdh_claim_status_id)) engine=MyISAM default charset=tis620;
+
+create table if not exists ipt_type (ipt_type int(11) not null,ipt_type_name varchar(150) ,hos_guid varchar(38) ,is_ambulatory char(1)
+,primary key (ipt_type)
+) engine=MyISAM default charset=tis620;
+call modifycolumn('ipt_type','is_ambulatory','char(1)',null);
+
+create table if not exists fwf_item (fwf_item_id int(9) not null,fwf_item_name varchar(200),fwf_active char(1),fwf_item_unit_name varchar(100),fwf_opd_active char(1),fwf_ipd_active char(1),fwf_claim_group_id int(9),fwf_arv_active char(1),fwf_item_code varchar(10)
+,primary key (fwf_item_id)
+,unique key ix_fwf_item_code (fwf_item_code)
+,unique key ix_fwf_item_name (fwf_item_name)
+) engine=MyISAM default charset=tis620 collate=tis620_thai_ci;
+endtext
+=runsql(_sql,.T.)
+
+lshows=.T.
+=readquerysql('updatezone','_handle')
+=readquerysql('updatedrugitems','_handle')
+=readquerysql('rcmlabitem','_handle')
+=readquerysql('createtempauthencode')
+myHospMain=addpipe(getsqldata([select sys_value from sys_var where sys_name='CHI_HospMain']),,'XXXXX')
+fee=addpipe(getsqldata([select group_concat(icode separator '|') cc from fee_items]),,'XXXXXXX')
+Income_Drug=adddoublequote(getsqldata([select income_drug from opdconfig]),,'XXX')
+Income_Drug_NED=adddoublequote(getsqldata([select sys_value from sys_var where sys_name='non_drug_account_income']),,'XXX')
+Income_NonDrug=adddoublequote(getsqldata([select income_nondrug from opdconfig]),,'XXX')
+Income_HomeMed=adddoublequote(getsqldata([select sys_value from sys_var where sys_name='home_income']),,'XXX')
+homemed=getwordnum(income_homemed,1,',')
+mservice=adddoublequote(getsqldata([select group_concat(distinct sys_value) cc from sys_var where sys_name regexp 'doctor_fee_icode']),,'XXXXXX')
+us=adddoublequote(getsqldata([select group_concat(icode) cc from us_items]),,'XXXXXX')
+nICD10=3
+nDialy=1
+cFolder='C:\Temp\Export'
+cFolder=calfolder(getvariable(inifile,[16 á¿éÁ],[Folder],cfolder))
+store '' to oerr,m.hcode,m.yymm,m.vn,m.hn,m.an,mydata
+store .T. to leclaim,lopd,lipd,lshow,ltext,lTM
+store .F. to lmenu,lyymm,lCheckField
+lAll=icase(myhospcode$'14135' or lmaster,.T.,.F.)
+lNot=icase(myhospcode$'14135' or lmaster,.T.,.F.)
+nprogram=tonum(getvariable(inifile,[16 á¿éÁ],[Program],1))
+nprogram=icase(nprogram<1,1,nprogram)
+lsend=tologic(getvariable(inifile,[NHSO API],'Send','N'))
+lsend=.F.
+oldpttype=getsqldata([select group_concat(distinct pttype) cc from pttype where  isuse='Y' and hipdata_code regexp 'OFC|A2' order by pttype])
+mypttype=ntoc(getvariable(inifile,'EClaim2008','Pttype',oldpttype))
+mypttype=adddoublequote(mypttype)
+cyymm=ce2dmy('yymm',_end)
+sele 0
+create cursor tmpReport (No n(7),Selected L,Status c(30),Error c(1),Warn c(1),IMC c(1) null,HW c(1) null,ODS c(1) null,Demand c(50) null,ProjectCode c(30) null,UseRight c(1) null;
+,VN c(30) null,AN c(9) null,HN c(9) null,CID c(13) null;
+,PtName c(60) null,Sex c(1) null,Age n(3) null,Marry c(40) null,Nation c(100) null,OccupationName c(100) null;
+,Date c(10) null,Time c(8) null,Ward c(100) null,Department c(100) null,ComeIn c(100) null,ReferIn c(5) null,Discharge c(100) null,ReferOut c(5) null;
+,PttypeName_Patient c(100) null,Rounded c(1) null,MainInscl c(5) null,Pttype_EClaim c(2) null,PttypeName c(60) null,HospMain c(5) null,HomeWard c(30) null,ClaimCode c(30) null,ServiceType c(100) null;
+,Pdx c(7) null,Sdx c(100) null,Oper c(100) null,Doctor c(20) null,Money_HOSxP n(15,2) null,Rcpt_Money n(15,2) null,Money_Total n(15,2) null,Paid_Money n(15,2) null,Collected n(15,2) null;
+,ErrorName c(200) null,Rep_Rep c(60) null,Rep_Invoice c(60) null,Compensated n(15,2) null,InvNo c(50) null,EndPoint c(1) null,Reservation c(1) null,FDH_Status c(30) null,FDH_Error c(200) null,FDH_Amount n(15,2) null,FDH_Period c(40) null;
+,Confirm c(1) null,Confirm_Datetime T null,Confirm_Staff c(100) null)
+index on cid+dtos(be2ce(date)) tag cid
+index on vn+hn tag vn addi
+index on an+hn tag an addi
+index on hn+dtos(be2ce(date)) tag hn addi
+scatt memv blank
+store '' to _title,_width,_format,_position,oerr
+for ii=1 to fcount()
+	_field=field(ii)
+	_title=_title+icase(ii=1,'','|')+icase(_field='CID','CID',_field='FDH_STATUS','Ê¶Ò¹Ð',_field='FDH_ERROR','Error',_field='RESERVATION','¨Í§',_field='WARD','ËéÍ§µÃÇ¨/Ward',_field='COMEIN','»ÃÐàÀ·¡ÒÃÁÒ';
+	,_field='DISCHARGE','Ê¶Ò¹Ð¡ÒÃ¨ÓË¹èÒÂ',_field='DEMAND','à§×èÍ¹ä¢¡ÒÃàÃÕÂ¡à¡çº',_field='INVNO','InvNo',_field='CONFIRM_STAFF','Staff',_field='CONFIRM_DATETIME','ÇÑ¹·ÕèÂ×¹ÂÑ¹',_field='CONFIRM','OK';
+	,_field='MONEY_HOSXP','ÃÇÁ',_field='MONEY_TOTAL','ÃÇÁ',_field='DRUG','¤èÒÂÒ',_field='CLAIMCODE','ClaimCode',_field='PROJECTCODE','ProjectCode',_field='ERRORNAME','¤ÇÒÁËÁÒÂ Error';
+	,_field='DOCTOR','Ç.á¾·Âì',_field='DIAG','Dx',_field='OPER','ËÑµ¶¡ÒÃ',_field='COLLECTED','ÂÍ´àÃÕÂ¡à¡çº¨Ò¡ Web',_field='PTTYPE_ECLAIM','¡ÒÃà§Ô¹',_field='USERIGHT','UUC',_field='IMC','IMC',_field='HW','HW';
+	,_field='FDH_AMOUNT','ª´àªÂ',_field='FDH_PERIOD','§Ç´',_field='REP_REP','Rep',_field='REP_INVOICE','Invoice',_field='ODS','ODS',_field='HOMEWARD','HomeWard','x')
+	_format=_format+icase(ii=1,'','|')+icase('MONEY'$_field or _field='COLLECTED' or _field='FDH_AMOUNT',formatmoney,'x')
+	_width=_width+icase(ii=1,'','|')+icase(_field=='NO' or _field='IMC' or _field='HW' or _field='ODS','40',_field='SELECTED','30',_field='ERRORNAME','400',_field='CONFIRM_DATETIME','125','DATE'$_field,'70';
+	,_field$'PTNAME,SDX,OPER,WARD','200',_field='STATUS','120',_field='DEMAND' or _field$'COMEIN,DISCHARGE','150';
+	,_field='ENDPOINT','40';
+	,_field$'CLAIMCODE,PROJECTCODE,ENDPOINT,HOMEWARD','100',_field='DOCTOR','70','MONEY'$_field or _field='COLLECTED','120',_field='REFER','60';
+	,_field='PTTYPENAME','300',_field='RESERVATION','40',_field='FDH_STATUS','100',_field='FDH_ERROR','200',_field='INVNO','100',_field='CONFIRM_STAFF','200',_field$'CONFIRM','40';
+	,_field='FDH_AMOUNT','80',_field='FDH_PERIOD','100',_field='AGE','30','x')
+	_position=_position+icase(ii=1,'','|')+icase(_field='FDH_','x',_field$'ERROR,WARN,COVID,HI,CI,FIELDHOSP,LABRESULT,REFERIN,REFEROUT,FDH,PTTYPE_ECLAIM,USERIGHT,UUC,RESERVATION' or fsize(_field)=1,'2','0')
+next
+lno=.T.
+_caption='â»Ãá¡ÃÁÊè§ÍÍ¡ 16 á¿éÁ on '+_server+' '+icase(lmaster,'Master','')
+cFind='HN'
+clear class myreport
+oReport=create('myReport')
+oReport.show
+defi class myReport as myform
+	name='Export16File'
+	caption=_caption
+	minwidth=1050
+	minheight=500
+	windowstate=2
+	onexit=.F.
+	add object cntDialy as mydialy with top=5,left=5
+	add object grdData as mygrid with left=5,setdata=.T.
+	add object lstError as mylistbox with left=5,height=100,tabstop=.F.
+	add object ManyHeader1 as manyHeader
+	Proc Init
+		with this
+			oErr=.lsterror
+			.grddata.top=calpos(.cntdialy,5,.T.)
+			with .grddata
+				.recordsource='tmpReport'
+				.columnwidth=_width
+				.columncaption=_title
+				.columnformat=_format
+				.columnalignment=_position
+				.setresources()
+				for each _col in .columns
+					_col.dynamicbackcolor=[icase(status='ª´àªÂ' or alltrim(lower(fdh_status))$'settled',rgb(128,255,0),status='Êè§áÅéÇ',rgb(220,220,0),status='OnWeb',color('lightred'),error='Y',color('red'),warn='C',color('yellow'),warn='Y',color('orange'),color('white'))]
+				next
+				.setdynamicbackcolor('maininscl',[icase(alltrim(maininscl)$'UCS,OFC,LGO,SSS,NHS,STP,FWF,NRD,NRH,BMT,PVT',rgb(0,255,0),alltrim(maininscl)$'BKK,PTY,KKT,SSI',rgb(128,255,255),rgb(255,0,192))])
+				.setheaderbackcolor('maininscl',rgb(0,255,0))
+				.setheaderbackcolor('demand',rgb(0,255,0))
+				.setheaderbackcolor('projectcode',rgb(0,255,0))
+				.setheaderbackcolor('useright',color('red'))
+				.lockcolumns=fieldpos('an')
+			endwith
+			with .manyheader1
+				.nMinLock=this.grddata.lockcolumns
+				.lLock=icase(.nMinLock>0,.T.,.F.)
+				._fontname='Tahoma'
+				._backcolor=rgb(0,192,128)
+*				._backcolor=rgb(0,255,0)
+				.InitHeader(this.grdData)
+				.MergeHeader(fieldpos('rounded'),fieldpos('pttypename'),'ÊÔ·¸Ô Visit')
+				.MergeHeader(fieldpos('money_hosxp'),fieldpos('rcpt_money'),'¤èÒãªé¨èÒÂ HOSxP')
+				.MergeHeader(fieldpos('money_total'),fieldpos('paid_money'),'¤èÒãªé¨èÒÂ¨Ò¡ÃÒÂÅÐàÍÕÂ´')
+				.MergeHeader(fieldpos('reservation'),fieldpos('fdh_period'),'FDH')
+				.MergeHeader(fieldpos('rep_rep'),fieldpos('compensated'),'àÅ¢·ÕèË¹Ñ§Ê×Í')
+				.MergeHeader(fieldpos('confirm'),fieldpos('confirm_staff'),'¢éÍÁÙÅÊÁºÙÃ³ì¾ÃéÍÁÊè§')
+				.MergeHeader(fieldpos('imc'),fieldpos('hw'),'à§×èÍ¹ä¢')
+				.MergeHeader(fieldpos('homeward'),fieldpos('claimcode'),'AuthenCode')
+			endwith
+			.resize
+			.autocenter=.T.
+			.refresh
+		endwith
+	Proc DblClick
+	Proc RightClick
+	Proc SetOther
+		with this
+			.cntdialy.width=.width-10
+			.grddata.width=.width-10
+			.grddata.height=.lsterror.top-5-.grddata.top
+			.grddata.setcolumn(6,fcount(.grddata.recordsource))
+		endwith
+	Proc Keypress
+		lpara _key,_other
+		acti scree
+		?_key,_other
+		do case
+			case _key=28
+				=findhn()
+				this.setfocus
+			case _key=-1
+				=findvn()
+				this.setfocus
+			case _key=-2
+				=findan()
+				this.setfocus
+			case _key=-3
+				sele tmpreport
+				nrec=recno()
+				scan
+					m.selected=icase(money_hosxp>0 and empty(status),.T.,.F.)
+					repl selected with m.selected
+				ends
+				if recco()>0
+					go (nrec)
+				endif
+				this.refresh
+*			case _key=-4
+*				this.cntdialy.cmdfind.click
+			case _key=-5
+				this.setselect(1)
+			case _key=-9
+				sele tmpreport
+				nrec=recno()
+				repl selected with .T. all
+				if recco()>0
+					go (nrec)
+				endif
+				this.refresh
+			case _key=134
+				lmaster=!lmaster
+				_caption='â»Ãá¡ÃÁÊè§ÍÍ¡ 16 á¿éÁ on '+_server+' '+icase(lmaster,'Master','')
+				this.caption=_caption
+				this.refresh
+			case _key=136 and _other=1									&&Shift+F12
+				this.setmoney
+			case inlist(_key,33,43) and _other=1								&&Shift+1
+				sele tmpreport
+				nrec=recno()
+				*repl useright with '1' all
+				scan
+					thisform.setuuc('1')
+				ends
+				if recco()>0
+					go (nrec)
+				endif
+			case inlist(_key,64,241) and _other=1							&&Shift+2
+				sele tmpreport
+				nrec=recno()
+				*repl useright with '2' all
+				scan
+					thisform.setuuc('2')
+				ends
+				if recco()>0
+					go (nrec)
+				endif
+		endcase
+	Proc SetUUC
+		lpara _is
+		_is=ntoc(_is)
+		_is=icase(_is='2','2','1')
+		sele tmpreport
+		scatt memv memo
+		if !eof()
+			_value=icase(_is='2','N',.null.)
+			m.useright=_is
+			repl useright with m.useright
+			=sqlexec(_handle,textmerge([update visit_pttype set request_funds=?_value where vn=?m.vn]))
+		endif
+	Proc ReSetData
+		sele tmpreport
+		zap
+		this.refresh
+	Proc SelectData
+		para _is
+		sele tmpreport
+		m.selected=tologic(_is)
+		nrec=recno()
+		scan
+			if _is
+				if money_hosxp>0 and empty(status) and error#'Y' and warn#'C'
+					repl selected with m.selected
+				endif
+			else
+				repl selected with m.selected
+			endif
+		ends
+		if recco()>0
+			go (nrec)
+		endif
+		this.refresh
+	Proc SetSelect
+		lpara _no
+		_no=tonum(_no)
+		_is=icase(_no=1,.F.,.T.)
+		sele tmpreport
+		if recco()>0
+			nrec=recno()
+			if _no=2
+				repl selected with .F. all
+				go (nrec)
+				repl selected with _is rest
+			else
+				repl selected with _is all
+			endif
+			go (nrec)
+		endif
+		thisform.refresh
+	Proc manyHeader1.OnClick
+		lpara _obj
+		acti scree
+		myname=''
+		mycaption=_obj.caption
+		_col=textmerge('thisform.grddata.<<_obj.name>>')
+		if type(_col)='O'
+			_col=eval(_col)
+			mysource=ntoc(_col.controlsource)
+			myname=justext(mysource)
+			myname=icase(empty(myname),mysource,myname)
+		endif
+		do case
+			case mycaption=='à§×èÍ¹ä¢'
+				index on imc+hw tag no
+			other
+				thisform.toclick
+		endcase
+		thisform.setfocus
+	Proc manyHeader1.OnRightClick
+		lpara _obj
+		acti scree
+		myname=''
+		mycaption=_obj.caption
+		_col=textmerge('thisform.grddata.<<_obj.name>>')
+		if type(_col)='O'
+			_col=eval(_col)
+			mysource=ntoc(_col.controlsource)
+			myname=justext(mysource)
+			myname=icase(empty(myname),mysource,myname)
+		endif
+		do case
+			case mycaption=='à§×èÍ¹ä¢'
+				index on hw+imc tag no
+			other
+				thisform.torightclick
+		endcase
+		thisform.setfocus
+	Proc ToClick
+		acti scree
+		do case
+			case myname$'STATUS,ERROR,WARN,AN,VN,HN,CID,DATE,CLAIMCODE,MAININSCL,PROJECTCODE,DEMAND,FDH,RESERVATION,ERRORNAME,COMEIN,DISCHARGE,USERIGHT,CONFIRM,IMC,HW,FDH_STATUS,DEPARTMENT,WARD'
+				do case
+					case myname='CLAIMCODE'
+						index on claimcode+status tag claimcode
+					case myname='DATE'
+						index on dtos(be2ce(date))+hn tag date
+					case myname='ERRORNAME'
+						index on errorname tag errorname
+					case myname='ERROR'
+						index on error+warn+status tag error
+					case myname='WARN'
+						index on warn+error+status tag warn
+					case myname='STATUS'
+						index on status+error+warn tag status
+					case myname='MAININSCL'
+						index on maininscl+pttypename tag maininscl
+					case myname='DEMAND' &&and lmaster
+						sele tmpreport
+						if recco()>0
+							nrec=recno()
+							_code=SelectDemand(.F.,.T.)
+							repl demand with _code all
+							=resetdemand()
+							go (nrec)
+						endif
+					case myname='PROJECTCODE' &&and lmaster
+						sele tmpreport
+						if recco()>0
+							nrec=recno()
+							_code=SelectProject(.F.)
+							repl projectcode with _code all
+							=resetdemand()
+							go (nrec)
+						endif
+					case myname=='FDH'
+						sele tmpreport
+						if recco()>0
+							nrec=recno()
+							repl selected with .T. for fdh<>'Y'
+							go (nrec)
+						endif
+					case myname='USERIGHT'
+						=resetuuc(.T.)
+					case myname='CONFIRM'
+						sele tmpreport
+						if recco()>0
+							nrec=recno()
+							repl confirm with 'Y',confirm_datetime with datetime(),confirm_staff with 'RCM' all
+							go (nrec)
+						endif
+					case myname='HW'
+						sele tmpreport
+						if recco()>0
+							nrec=recno()
+							repl hw with '' all
+							repl hw with 'Y' for !empty(nvl(an,''))
+							go (nrec)
+						endif
+					case myname='IMC'
+						sele tmpreport
+						if recco()>0
+							nrec=recno()
+							repl imc with '' all
+							repl imc with 'Y' for !empty(nvl(an,''))
+							go (nrec)
+						endif
+					other
+						if checktag(myname)
+							set order to &myname
+						else
+							try
+								index on &myname tag myOrder
+							catch to oExec
+								=messagebox(oExec.message)
+							endtry
+						endif
+				endcase
+			other
+				thisform.selectdata(.T.)
+		endcase
+		thisform.setfocus
+	Proc ToRightClick
+		sele tmpreport
+		nrec=recno()
+		do case
+			case myname$'DEMAND,PROJECTCODE'
+				if recco()>0
+					repl &myname with '' all
+					=resetdemand()
+				endif
+			case myname='USERIGHT'
+				=resetuuc(.F.)
+			case myname='CONFIRM'
+				repl confirm with .null.,confirm_datetime with .null.,confirm_staff with .null. all
+			case myname='HW'
+				repl hw with '' all
+			case myname='IMC'
+				repl imc with '' all
+			other
+				thisform.selectdata(.F.)
+		endcase
+		go (nrec)
+		thisform.setfocus
+	Proc grdData.Keypress
+		lpara _key,_other
+		do case
+			case _key=32
+				repl selected with !selected
+			case _key=-4
+				=checkupdata()
+			case _key=-6
+				this.quickexcel
+			case _key=-7
+				this.exporttextfile
+			case _key=-8
+				this.ExportExcel
+			case inlist(_key,49,229)											&&1
+				thisform.setuuc('1')
+				thisform.setfocus
+			case inlist(_key,47,50)											&&2
+				thisform.setuuc('2')
+				thisform.setfocus
+		endcase
+	Proc grdData.Click
+		if recco()>0 and nWhere=3
+			do case
+				case myname='SELECTED'
+					repl selected with !selected
+				case myname='DEMAND'
+					=SelectDemand(.F.)
+				case myname='PROJECTCODE'
+					=SelectProject(.F.)
+				case myname='USERIGHT'
+					_value=icase(useright='2','1','2')
+					thisform.setuuc(_value)
+				case myname='CONFIRM'
+					_confirm=ntoc(confirm)
+					repl confirm with icase(_confirm='Y',.null.,'Y'),confirm_datetime with icase(_confirm='Y',.null.,datetime()),confirm_staff with icase(_confirm='Y',.null. ,'RCM')
+				case myname='HW'
+					if !empty(nvl(m.an,''))
+						repl hw with icase(hw='Y','','Y')
+					endif
+				case myname='IMC'
+					if !empty(nvl(m.an,''))
+						repl imc with icase(imc='Y','','Y')
+					endif
+			endcase
+		endif
+		this.refresh
+	Proc grdData.RightClick
+		if recco()>0 and nWhere=3
+			do case
+				case myname='DEMAND'
+*					=SelectDemand()
+					repl demand with ''
+					=resetdemand()
+				case myname='PROJECTCODE'
+*					=SelectProject()
+					repl projectcode with ''
+					=resetdemand()
+				case myname='HW'
+					repl hw with ''
+				case myname='IMC'
+					repl imc with ''
+				other
+					this.ExportExcel
+			endcase
+		endif
+	Proc grdData.DblClick
+		sele tmpreport
+		if recco()>0 and empty(status) and nWhere=3
+			repl selected with !selected
+		endif
+		this.refresh
+enddefi
+defi class mydialy as xptitle
+	caption=''
+	add object lblStart as mylabels with caption='µÑé§áµèÇÑ¹·Õè',left=5,space=5
+	add object txtStart as mytextboxdate with controlsource='_start',width=120,tabstop=.T.
+	add object lblEnd as mylabels with caption='¶Ö§',tocheck=.T.,cap=5
+	add object txtEnd as mytextboxdate with controlsource='_end',width=120,tabstop=.T.
+	add object lblFolder as mylabels with caption='Folder',left=5
+	add object txtFolder as mytextbox with controlsource='cfolder',width=355,enabled=.F.
+	add object lblPttype as mylabels with caption='ÊÔ·¸Ô',left=5,space=5
+	add object txtPttype as myeditbox with controlsource='mypttype',height=60,width=600,tabstop=.F.,enabled=.T.,scrollbars=0
+	add object lblFind as mylabels with caption='¤é¹ËÒ HN',left=5,space=5
+	add object txtFind as mytextbox with controlsource='mydata',width=120,tabstop=.F.
+
+	add object cmdMenu as mybutton with caption='BMS',height=34,tabstop=.F.,width=35,visible=.F.
+	add object cmdStart as mybutton with caption='àÃÔèÁãËÁè',height=34,tabstop=.F.,cancel=.T.,width=50
+	add object cmdFind as mybutton with caption='¤é¹ËÒ',height=34,width=50
+	add object cmdExport as mybutton with caption='Êè§ÍÍ¡',height=34,width=50
+*	add object cmdReservation as mybutton with caption='¨Í§à¤ÅÁ',height=34,width=75,enabled=.T.
+	add object cmdExit as mybutton with caption='E\<xit',height=34,width=50
+
+	add object cmdImport as mybutton with caption='¹Óà¢éÒ¢éÍÁÙÅ',height=34,width=100
+	add object cmdDrug as mybutton with caption='ReSet Drug/NonDrug',height=34,width=125
+	add object cmdClaimCode as mybutton with caption='ReSet ClaimCode',height=34,width=125
+
+	add object chkOPD as mycheckbox with controlsource='lopd',caption='OPD',tabstop=.F.
+	add object chkIPD as mycheckbox with controlsource='lipd',caption='IPD',tabstop=.F.
+	add object chkTM as mycheckbox with controlsource='ltm',caption='ãªéËÑµ¶¡ÒÃ TM',tabstop=.F.
+	add object chkYYMM as mycheckbox with controlsource='lyymm',caption='YYMM:',tabstop=.F.
+	add object txtYYMM as mytextbox with controlsource='cyymm',width=35,inputmask='9999'
+	add object chkText as mycheckbox with controlsource='ltext',caption='áºº TEXT',tabstop=.F.,visible=.F.
+	add object chkShow as mycheckbox with controlsource='lshow',caption='áÊ´§·Ø¡ÊÔ·¸Ô',tabstop=.F.
+	add object chkSend as mycheckbox with controlsource='lsend',caption='Êè§´éÇÂ API',tabstop=.F.
+	add object chkProgram as myoptiongroup with controlsource='nprogram',resetvalue=.F.,optioncaption='New-EClaim|KTB|FDH',optionenabled='1|1'
+
+	add object lblICD10 as mylabels with caption='µÃÇ¨ÊÍº ICD10',left=5,space=5
+	add object txtICD10 as myoptiongroup with controlsource='nICD10',optioncaption='äÁèµÃÇ¨ÊÍº|HOSxP|Ê»Êª.|Ê¡Ê.',optionenabled='1|1|1|1',ondown=.F.,auto=.T.,top=0,width=400,spaceoption=0,resetvalue=.F.
+
+	add object chkAll as mycheckbox with controlsource='lall',caption='All',format=1
+	add object chkNot as mycheckbox with controlsource='lnot',caption='äÁèÊè§',format=0
+	add object chkField as mycheckbox with controlsource='lcheckfield',caption='',format=0
+	Proc Init
+		with this
+			.setall('width',110,'mylabels')
+			.calpos('start',5,5)
+			.calpos('end',5,calpos(.txtstart,5))
+			.calpos('folder',calpos(.txtend,2,.T.),5)
+			.calpos('pttype',calpos(.txtfolder,2,.T.),5)
+			.calpos('find',calpos(.txtpttype,2,.T.),5)
+			.calpos('icd10',.txtfind.top,.txtend.left)
+			.chkprogram.setother
+			.txticd10.setother
+		endwith
+	Proc SetOther
+		with this
+			thisform.buttonsides('Exit|Export|Find|Start',,5)
+			thisform.buttonsides('Drug',,calpos(.cmdexit,0,.T.))
+			thisform.buttonsides('ClaimCode|Import|Menu',,calpos(.cmddrug,0,.T.))	&&.height-5-.cmdexit.height)
+			.height=max(calpos(.txtfind,5,.T.),calpos(.cmdclaimcode,5,.T.))
+			.position('chkopd',.txtend.top+3,calpos(.txtend,5))
+			.position('chkipd',.chkopd.top,calpos(.chkopd,5))
+			.position('chktm',.chkipd.top,calpos(.chkipd,5))
+			.position('chkyymm',.chktm.top,calpos(.chktm,5))
+			.position('txtyymm',.chkyymm.top-3,calpos(.chkyymm,0))
+			.position('chktext',.chktm.top,calpos(.chktm,5))
+			.position('chkshow',.txtpttype.top+3,calpos(.txtpttype,5))
+			.position('chksend',.txtfolder.top+3,calpos(.txtfolder,5))
+			.position('chkprogram',.chksend.top-5,calpos(.chksend,5))
+			.position('chkall',.txtfind.top+3,calpos(.txtfind,5))
+			.position('chknot',.txtfind.top+3,calpos(.chkall,5))
+			.position('chkfield',.txtfind.top+3,calpos(.chknot,5))
+		endwith
+	Proc Refresh
+		with this
+			.lblfind.caption='¤é¹ËÒ '+cFind
+			.cmdMenu.caption=icase(lmenu,'BMS','RCM')
+			.chkSend.fontbold=lsend
+			.chkSend.nowcolor=icase(lsend,rgb(255,0,0),0)
+			.position('chkprogram',.chksend.top-5,calpos(.chksend,5))
+			.txtYYMM.enabled=lyymm
+		endwith
+	Proc chkNot.SetOther
+		thisform.setfocus
+	Proc chkAll.SetOther
+		thisform.resetdata
+	Proc chkOPD.SetOther
+		lopd=tologic(icase(nprogram=2,.T.,nprogram=3,.T.,lopd))
+		thisform.resetdata
+	Proc chkIPD.SetOther
+		lipd=tologic(icase(nprogram=2,.F.,nprogram=3,.T.,lipd))
+		thisform.resetdata
+	Proc txtYYMM.Lostfocus
+		this.value=ntoc(this.value)
+		this.value=icase(len(this.value)#4,ce2dmy('yymm',_end),this.value)
+	Proc chkSend.SetOther
+		=writevariable(inifile,[NHSO API],'Send',icase(this.value,'Y','N'))
+		this.parent.refresh
+	Proc chkProgram.SetOther
+		nprogram=tonum(nprogram)
+		nprogram=icase(nprogram<1,1,nprogram)
+		=writevariable(inifile,[16 á¿éÁ],[Program],nprogram)
+		lopd=tologic(icase(nprogram=2,.T.,nprogram=3,.T.,lopd))
+		lipd=tologic(icase(nprogram=2,.F.,nprogram=3,.T.,lipd))
+		lyymm=tologic(icase(nprogram=2,.T.,.F.))
+		if nprogram>0
+			this.objects(nprogram).forecolor=rgb(255,0,0)
+			this.objects(nprogram).fontbold=.T.
+			this.setside(this.ondown)
+		endif
+		thisform.resetdata
+	Proc txtICD10.SetOther
+		micd10=tonum(nicd10)
+		nicd10=icase(nicd10<1,1,nicd10)
+		if nicd10>0
+			this.objects(nicd10).forecolor=rgb(255,0,0)
+			this.objects(nicd10).fontbold=.T.
+			this.setside(this.ondown)
+		endif
+	Proc cmdMenu.Click
+		lmenu=!lmenu
+		thisform.setfocus
+	Proc cmdImport.Click
+		=calrowcols(this)
+		menu=0
+		defi popup ListMenu shortcut from nrow,ncol font 'Tahoma',10
+		defi bar 1 of listmenu prompt '¨Ò¡ HN'
+		defi bar 2 of listmenu prompt '¨Ò¡ VN'
+		defi bar 3 of listmenu prompt '¨Ò¡ AN'
+		defi bar 4 of listmenu prompt '\-'
+		defi bar 5 of listmenu prompt '¨Ò¡ä¿Åì Excel'
+		defi bar 6 of listmenu prompt '¨Ò¡ä¿Åì New-EClaim'
+		defi bar 7 of listmenu prompt '¨Ò¡ä¿Åì FDH'
+		on select popup listmenu menu=bar()
+		acti popup listmenu
+		do case
+			case menu=1
+				=findhn()
+			case menu=2
+				=findvn()
+			case menu=3
+				=findan()
+			case menu=5
+				oerr.clear
+				=addbyexcel()
+			case menu=6
+				oerr.clear
+				thisform.resetdata
+				=readquerysql('import4status')
+			case menu=7
+				oerr.clear
+				=addbyfdh()
+		endcase
+		thisform.setfocus
+	Proc cmdStart.Click
+		this.parent.txtstart.setfocus
+	Proc cmdStart.RightClick
+		=mydates()
+		this.parent.txtstart.setfocus
+	Proc cmdExit.Click
+		thisform.destroy
+	Proc lblStart.Click
+		_start=startyear(_start)
+		this.parent.txtstart.setfocus
+	Proc lblStart.RightClick
+		_start=startmonth(date())
+		this.parent.txtstart.setfocus
+	Proc txtStart.Gotfocus
+		oerr.clear
+		thisform.resetdata
+	Proc txtStart.Lostfocus
+		this.value=ce2cbe(caldate(this.value,this.tag))
+	Proc lblEnd.Click
+		_end=endyear(_end)
+		this.parent.txtend.setfocus
+	Proc lblEnd.RightClick
+		_end=endmonth(date())
+		this.parent.txtend.setfocus
+	Proc txtEnd.Gotfocus
+		oerr.clear
+		thisform.resetdata
+	Proc txtEnd.Lostfocus
+		this.value=ce2cbe(caldate(this.value,this.tag))
+		cyymm=ce2dmy('yymm',this.value)
+		thisform.refresh
+	Proc lblFolder.Click
+		cfolder=calfolder('C:\Temp\Export')
+		thisform.refresh
+	Proc lblFolder.RightClick
+		this.parent.txtfolder.enabled=.T.
+		this.parent.txtfolder.setfocus
+	Proc txtFolder.Lostfocus
+		this.enabled=.F.
+		this.value=calfolder(this.value)
+		=writevariable(inifile,[16 á¿éÁ],[Folder],cfolder)
+	Proc lblPttype.Click
+		oerr.clear
+		thisform.resetdata
+		if lshow
+			mypttype=getdatamultiple([select left(concat(pttype,':',name),60) name from pttype where  isuse='Y' order by name],[getwordnum(m.name,1,':')],'àÅ×Í¡ÊÔ·¸Ô',400,600,.T.,mypttype,.F.)
+		else
+			_code=addpipe(getsqldata([select group_concat(distinct seekhipdata(hipdata_code,1)) cc from pttype where pttype in (<<mypttype>>)]))
+			mypttype=getdatamultiple(textmerge([select left(concat(pttype,':',name),60) name from pttype where  isuse='Y' and seekhipdata(hipdata_code,1) regexp ?_code order by name]),[getwordnum(m.name,1,':')],'àÅ×Í¡ÊÔ·¸Ô',400,600,.T.,mypttype,.F.)
+		endif
+		mypttype=checkasdata(mypttype,1,',','',.T.)
+		mypttype=adddoublequote(mypttype)
+		=writevariable(inifile,'EClaim2008','Pttype',checkasdata(mypttype))
+		thisform.refresh
+	Proc lblPttype.RightClick
+		local _str,i,ii,j,_value
+		nspace=10
+		store 0 to nrow,ncol
+		=calrowcols(this)
+		menu=''
+		defi popup ListMenu shortcut from nrow,ncol font 'Tahoma',10
+		_str=checkasdata('UCS,OFC,BKK,SSS,LGO,NHS,FWF,STP,BMT,SRT,PVT,¾.Ã.º.')
+		for ii=1 to getwordcount(_str,',')
+			_value=padc(getwordnum(_str,ii,','),nspace)
+			defi bar ii of listmenu prompt _value
+		next
+		on select popup listmenu menu=prompt()
+		acti popup listmenu
+		menu=ntoc(menu)
+		do case
+			case menu='UCS'
+				mypttype=getsqldata([select group_concat(pttype) cc from pttype where hipdata_code regexp 'UC|WEL' and isuse='Y' order by pttype])
+			case menu='OFC'
+				mypttype=getsqldata([select group_concat(pttype) cc  from pttype where hipdata_code regexp '^A2|OFC|PTY|KTT' and isuse='Y' order by pttype])
+			case menu='BKK'
+				mypttype=getsqldata([select group_concat(pttype) cc  from pttype where hipdata_code regexp 'BKK' and isuse='Y' order by pttype])
+			case menu='SSS'
+				mypttype=getsqldata([select group_concat(pttype) cc  from pttype where hipdata_code regexp 'SS' and isuse='Y' order by pttype])
+			case menu='LGO'
+				mypttype=getsqldata([select group_concat(pttype) cc  from pttype where hipdata_code regexp 'LGO' and isuse='Y' order by pttype])
+			case menu='NHS'
+				mypttype=getsqldata([select group_concat(pttype) cc  from pttype where hipdata_code regexp 'NHS' and isuse='Y' order by pttype])
+			case menu='STP'
+				mypttype=getsqldata([select group_concat(pttype) cc  from pttype where (pcode='ST' or hipdata_code regexp '^ST') and  isuse='Y' order by pttype])
+			case menu='¾.Ã.º.'
+				mypttype=getsqldata([select group_concat(pttype) cc  from pttype where (pcode regexp '^A9' or hipdata_code regexp 'INS') and  isuse='Y' order by pttype])
+			case menu='BMT'
+				mypttype=getsqldata([select group_concat(pttype) cc  from pttype where (name regexp '¢ÊÁ¡|¢¹Êè§ÁÇÅª¹¡ÃØ§à·¾' or hipdata_code regexp 'BMT') and isuse='Y' order by pttype])
+			case menu='SRT'
+				mypttype=getsqldata([select group_concat(pttype) cc  from pttype where hipdata_code regexp 'SRT' and  isuse='Y' order by pttype])
+			case menu='FWF'
+				mypttype=getsqldata([select group_concat(pttype) cc  from pttype where (name regexp 'µèÒ§´éÒÇ' or hipdata_code regexp 'NRD|NRH|FWF') and isuse='Y' order by pttype])
+			case menu='PVT'
+				mypttype=getsqldata([select group_concat(pttype) cc  from pttype where (name regexp '¤ÃÙàÍ¡ª¹' or hipdata_code regexp 'PVT') and isuse='Y' order by pttype])
+		endcase
+		mypttype=checkasdata(mypttype,1,',','',.T.)
+		mypttype=adddoublequote(mypttype)
+		=writevariable(inifile,'EClaim2008','Pttype',checkasdata(mypttype))
+		thisform.refresh
+	Proc txtPttype.LostFocus
+		this.value=chrtran(this.value,CRLF,[])
+		this.value=checkasdata(this.value,1,',','',.T.)
+		this.value=adddoublequote(this.value)
+		=writevariable(inifile,'EClaim2008','Pttype',checkasdata(this.value))
+		thisform.refresh
+	Proc lblFind.RightClick
+		this.parent.txtfind.setfocus
+		nspace=10
+		store 0 to nrow,ncol
+		=calrowcols(this)
+		menu=''
+		defi popup ListMenu shortcut from nrow,ncol font 'Tahoma',10
+		defi bar 1 of listmenu prompt padc('HN',nspace)
+		defi bar 2 of listmenu prompt padc('AN',nspace)
+		defi bar 3 of listmenu prompt padc('VN',nspace)
+		defi bar 4 of listmenu prompt padc('CID',nspace)
+		on select popup listmenu menu=prompt()
+		acti popup listmenu
+		cFind=ntoc(icase(empty(menu),cFind,menu))
+		thisform.refresh
+	Proc txtFind.Lostfocus
+		with thisform
+			_value=alltrim(this.value)
+			sele tmpreport
+			set order to (cFind)
+			if recco()>0
+				_no=recno()
+				locate for _value$&cFind
+				if !found()
+					go (_no)
+				endif
+			endif
+			this.value=''
+			.setfocus
+		endwith
+	Proc cmdFind.Click
+		with thisform
+			oerr.clear
+			oerr.columncount=4
+			oerr.columnwidths='300,250,250,500'
+			if !lopd and !lipd
+				=writeerror('¡ÃØ³ÒàÅ×Í¡»ÃÐàÀ·¼Ùé»èÇÂ....',oerr)
+				retu .F.
+			endif
+			=writeerror('¡ÓÅÑ§»ÃÐÁÇÅ¼Å....',oerr)
+			=adddata()
+			=writeerror('»ÃÐÁÇÅ¼Å...àÃÕÂºÃéÍÂáÅéÇ',oerr)
+			.topform()
+			.refresh
+			.setfocus()
+		endwith
+	Proc cmdDrug.Click
+		oerr.clear
+		thisform.resetdata
+		=readquerysql('updatedrugitems','_handle')
+		thisform.setfocus
+	Proc cmdClaimCode.Click
+		oerr.clear
+		thisform.resetdata
+		=readquerysql('createtempauthencode','_handle')
+		thisform.setfocus
+	Proc cmdExport.Click
+		oerr.clear
+		oerr.columncount=4
+		oerr.columnwidths='300,250,250,500'
+		oerr.setfocus
+		=ExportData()
+*	Proc cmdReservation.Click
+*		oerr.clear
+*		oerr.columncount=4
+*		oerr.columnwidths='300,250,250,500'
+*		oerr.setfocus
+*		=SendReservation()
+enddefi
+
+Proc ClearEClaim
+oerr.clear
+if !ok('Confirm','Are you to Clear?',2)
+	retu .F.
+endif
+text to _sql noshow textmerge
+alter table <<myeclaim>>.m_12_registerdata modify column ID int(11) auto_increment;
+
+select table_name tablename
+from information_schema.tables
+where table_schema='<<myeclaim>>'
+and table_name regexp '^m\_12|^m\_18'
+endtext
+=runsql(_sql,.T.)
+scan
+	scatt memv memo
+	m.tablename=myeclaim+'.'+ntoc(m.tablename)
+	=writeerror(m.tablename,oerr,.T.)
+	=sqlexec(_handle,textmerge([truncate table <<m.tablename>>]))
+ends
+=writeerror('OK...',oerr)
+
+Proc CheckUUC
+lpara _str
+local _ret,_sql,_pttype
+store '' to _ret,_sql
+_str=ntoc(_str)
+_str=icase(_str='2','2','1')
+_ret=_str
+_pttype=getwordnum(m.pttypename,1,':')
+_uuc=ntoc(getsqldata([select if(request_funds='N','2','') cc from visit_pttype where vn=?m.vn]))
+_ret=icase(!empty(_uuc),_uuc,_ret)
+_ret=icase(!empty(m.an),'1',m.pttype_eclaim$'01,02,27','2',_ret)
+text to _sql noshow textmerge
+select group_concat(distinct if(d.icode is not null,'Y',null)) cc from opitemrece oo join s_drugitems d on d.icode=oo.icode where oo.vn=?m.vn
+and (
+d.nhso_adp_code regexp '30001|42330|42333|42338|42339|Cons01|Eva001|DRUGP|TELMED|STEMI1|STROK1|SPECC|^37550|30009|^2006|^2007|^13001|^15001|1B004|1B005|^AB00|^3001[0-7]|^1200[1-4]|^9000[1-5]|^DEN|^FP|^HERB|^HC0|^HD000|80008'
+or d.name regexp 'Clopido|streptoki|Tamoxifen|methadone'
+or d.nhso_adp_type_id in (2,5)
+or (d.nhso_adp_code regexp '^14001' and ?m.age between 13 and 45)
+)
+endtext
+_adp=ntoc(getsqldata(_sql))
+_ret=icase(_adp='Y','1',!empty(m.projectcode) or !empty(m.demand),'1',!empty(m.vn) and m.discharge='2','2',_ret)
+_ret=icase(_ret='2','2','1')
+retu _ret
+
+Proc ResetUUC
+lpara _is
+local nrec
+_is=tologic(_is)
+sele tmpreport
+nrec=recno()
+scan
+	scatt memv memo
+	m.useright=checkuuc(icase(_is,'2','1'))
+	repl useright with m.useright
+	_value=icase(m.useright='2','N',.null.)
+	=sqlexec(_handle,textmerge([update visit_pttype set request_funds=?_value where vn=?m.vn]))
+ends
+if recco()>0
+	go (nrec)
+endif
+
+Proc ResetDemand
+local _demand,_project,nrec
+sele tmpreport
+nrec=recno()
+scan
+	_vn=ntoc(vn)
+	_an=ntoc(an)
+	_date=be2ce(date)
+	_maininscl=ntoc(maininscl)
+	_demand=ntoc(demand,0)
+	_projectcode=ntoc(projectcode)
+	if _projectcode='ADSCOV'
+		_projectcode=icase(!empty(m.vn),'',_maininscl#'UC','',_projectcode)
+	endif
+	_projectcode=icase(_projectcode='ADSCOV' and _date>=be2ce('1/10/2566'),'',_projectcode)
+	_projectcode=icase(_projectcode='SCRCOV' and _date>=be2ce('1/10/2566'),'',_projectcode)
+	_projectcode=icase(_projectcode='CANCER' and !OnTop6,'',_projectcode)
+	_projectcode=icase(_projectcode='ER-EXT' and !OnTop4,'',_projectcode)
+*	_projectcode=icase(_projectcode='ER-EXT' and (!OnTop4 or _date>=be2ce('1/7/2567')),'',_projectcode)
+	_projectcode=icase(!empty(_an) and _projectcode$'WALKIN','',_projectcode)
+	_demand=icase(_projectcode$'R9OPCH,R9OPFS','',_projectcode='ER-EXT',iif(empty(_demand),'Normal',_demand),_demand)
+	_ods=icase(_demand='Ambulatory Care','Y','')
+	repl demand with _demand,projectcode with _projectcode,ods with _ods
+ends
+if recco()>0
+	go (nrec)
+endif
+
+Proc SelectDemand
+lpara _is,_header
+priv _caption,_title,formwidth,formheight
+oerr.clear
+_is=tologic(_is)
+_header=tologic(_header)
+sele tmpreport
+m.vn=ntoc(vn)
+m.an=ntoc(m.an)
+m.demand=ntoc(demand)
+m.checkdate=be2ce(date)
+m.maininscl=ntoc(maininscl)
+if recco()=0
+	retu ''
+endif
+text to _sql noshow textmerge
+create table if not exists <<myeclaim>>.l_demand_claim (Name varchar(50),MainInscl varchar(10),Demand_Claim varchar(5) ,SVCType varchar(5) ,StartDate datetime,ExpDate datetime
+,Page6 varchar(1) ,Page7 varchar(1) ,Page8 varchar(1) ,Seq varchar(2) ,OpRefer_Mode varchar(1) ,Demand_16File varchar(2)
+,primary key (Name,MainInscl)
+) engine=MyISAM default charset=tis620;
+call addprimarykey('l_demand_claim','name,maininscl','<<myeclaim>>');
+insert ignore into <<myeclaim>>.l_demand_claim (name,maininscl,seq,svctype) values ('Normal','UCS',1,null);
+insert ignore into <<myeclaim>>.l_demand_claim (name,maininscl,seq,svctype) values ('Accident','UCS',2,null);
+insert ignore into <<myeclaim>>.l_demand_claim (name,maininscl,seq,svctype) values ('Emergency','UCS',3,null);
+insert ignore into <<myeclaim>>.l_demand_claim (name,maininscl,seq,svctype) values ('OP Refer ¢éÒÁ¨Ñ§ËÇÑ´','UCS',4,9);
+insert ignore into <<myeclaim>>.l_demand_claim (name,maininscl,seq,svctype) values ('OP Refer ã¹¨Ñ§ËÇÑ´','UCS',5,9);
+insert ignore into <<myeclaim>>.l_demand_claim (name,maininscl,seq,svctype) values ('ÂéÒÂË¹èÇÂà¡Ô´ÊÔ·¸Ô·Ñ¹·Õ','UCS',6,null);
+insert ignore into <<myeclaim>>.l_demand_claim (name,maininscl,seq,svctype) values ('ºÃÔ¡ÒÃàªÔ§ÃØ¡','UCS',7,null);
+insert ignore into <<myeclaim>>.l_demand_claim (name,maininscl,seq,svctype) values ('IPD','UCS',0,1);
+insert ignore into <<myeclaim>>.l_demand_claim (name,maininscl,seq,svctype) values ('Ambulatory Care','UCS',1,2);
+
+select name
+from <<myeclaim>>.l_demand_claim
+where ifnull(svctype,0) <<icase(empty(m.an),'not','')>> in (1,2)
+<<icase(empty(m.an),'and seq>0','')>>
+and (startdate is null or startdate<=?m.checkdate)
+#and maininscl=?m.maininscl
+group by name
+order by seq
+endtext
+
+text to _sql noshow textmerge
+drop temporary table if exists tmpData;
+create temporary table tmpData (Type varchar(3),Name varchar(60),Seq int
+,primary key (Type,Name)
+) engine=MyISAM default charset=tis620;
+replace into tmpData values ('OPD','Normal',1);
+replace into tmpData values ('OPD','Accident',2);
+replace into tmpData values ('OPD','Emergency',3);
+replace into tmpData values ('OPD','OP Refer ¢éÒÁ¨Ñ§ËÇÑ´',4);
+replace into tmpData values ('OPD','OP Refer ã¹¨Ñ§ËÇÑ´',5);
+replace into tmpData values ('OPD','ÂéÒÂË¹èÇÂà¡Ô´ÊÔ·¸Ô·Ñ¹·Õ',6);
+replace into tmpData values ('OPD','ºÃÔ¡ÒÃàªÔ§ÃØ¡',7);
+replace into tmpData values ('IPD','IPD',1);
+replace into tmpData values ('IPD','Ambulatory Care',2);
+replace into tmpData values ('IPD','Accident',3);
+replace into tmpData values ('IPD','Emergency',4);
+
+select name
+from tmpData
+where type='<<icase(empty(m.an) or _header,[OPD],[IPD])>>'
+order by seq
+endtext
+if !runsql(_sql,.T.)
+	retu ''
+endif
+if recco()=0
+	=writeerror('äÁèÁÕÃÒÂ¡ÒÃãËéàÅ×Í¡...¡ÃØ³ÒµÃÇ¨ÊÍºÊÔ·¸Ô',oerr)
+	retu ''
+endif
+menu=''
+_caption='à§×èÍ¹ä¢¡ÒÃàÃÕÂ¡à¡çº'
+_title='ÃÒÂ¡ÒÃ'
+formwidth=400
+formheight=300
+setcolumn=1
+oreport.setlockscreen(.F.)
+_name=wontop()
+sele temp
+if _is
+	defi popup listmenu shortcut rela from mrow,mcol title 'Demand' in wind (_name)
+	scan
+		defi bar recno() of listmenu prompt alltrim(name)
+	ends
+	on select popup listmenu menu=prompt()
+	acti popup listmenu
+else
+	menu=listdata()
+endif
+menu=ntoc(getwordnum(menu,1,':'),0)
+sele tmpreport
+repl demand with menu
+=resetdemand()
+retu menu
+
+Proc SelectProject
+lpara _is
+priv _caption,_title,formwidth,formheight
+oerr.clear
+_is=tologic(_is)
+sele tmpreport
+m.an=ntoc(an)
+m.checkdate=be2ce(date)
+m.maininscl=ntoc(maininscl)
+text to _sql noshow textmerge
+create table if not exists <<myeclaim>>.l_projectcode (Code varchar(10),Name varchar(200),GYear varchar(4)
+,Con_Chk_ICD10 varchar(1)
+,Con_Chk_ICD09 varchar(1)
+,Con_chk_OpRefer varchar(1)
+,Flag varchar(1),MainInscl varchar(5),StartDate datetime,ExpDate datetime
+,primary key (Code,GYear,MainInscl)
+,key Code(Code)) engine=MyISAM default charset=tis620;
+
+select code,name
+from <<myeclaim>>.l_projectcode
+where maininscl='<<m.maininscl>>'
+and ifnull(con_chk_oprefer,'')<>'N'
+and (startdate is null or startdate<=?m.checkdate)
+<<icase(!empty(m.an),[and code<>'CANCER'],[])>>
+group by code
+order by 1
+endtext
+
+text to _sql noshow textmerge
+select nhso_adp_code code
+,replace(nhso_adp_code_name,'(5-Project code)-','') name
+from nhso_adp_code
+where nhso_adp_type_id=5
+order by 1
+endtext
+
+text to _sql noshow textmerge
+create table if not exists <<myeclaim>>.l_projectcode (Code varchar(10),Name varchar(200),GYear varchar(4)
+,Con_Chk_ICD10 varchar(1)
+,Con_Chk_ICD09 varchar(1)
+,Con_chk_OpRefer varchar(1)
+,Flag varchar(1),MainInscl varchar(5),StartDate datetime,ExpDate datetime
+,primary key (Code,GYear,MainInscl)
+,key Code(Code)) engine=MyISAM default charset=tis620;
+
+drop temporary table if exists tmpData;
+create temporary table tmpData (Code varchar(10) primary key,Name varchar(200));
+replace into tmpData values ('UCEP24','ºÃÔ¡ÒÃ©Ø¡à©Ô¹ÀÒ¤ÃÑ°'),('ER-EXT','©Ø¡à©Ô¹¤Ø³ÀÒ¾');
+replace into tmpData select nhso_adp_code,replace(nhso_adp_code_name,'(5-Project code)-','') from nhso_adp_code where nhso_adp_type_id=5;
+replace into tmpData select code,name from <<myeclaim>>.l_projectcode;
+
+select * from tmpdata order by code
+endtext
+if !runsql(_sql,.T.)
+	retu ''
+endif
+if recco()=0
+	=writeerror('äÁèÁÕÃÒÂ¡ÒÃãËéàÅ×Í¡...¡ÃØ³ÒµÃÇ¨ÊÍºÊÔ·¸Ô',oerr)
+	retu ''
+endif
+menu=''
+_caption='Project Code'
+_title='ÃËÑÊ|ÃÒÂ¡ÒÃ'
+_width='60'
+formwidth=400
+formheight=300
+setcolumn=2
+oreport.setlockscreen(.F.)
+_name=wontop()
+sele temp
+if _is
+	if recco()>5
+		defi popup listmenu shortcut rela from mrow,mcol to mrow+15,mcol+80 title 'Project' in wind (_name)
+	else
+		defi popup listmenu shortcut rela from mrow,mcol title 'Project' in wind (_name)
+	endif
+	scan
+		defi bar recno() of listmenu prompt alltrim(code)+':'+alltrim(name)
+	ends
+	on select popup listmenu menu=prompt()
+	acti popup listmenu
+else
+	menu=listdata()
+endif
+menu=ntoc(getwordnum(menu,1,':'),0)
+sele tmpreport
+repl projectcode with menu
+if empty(menu)
+	repl demand with ''
+endif
+=resetdemand()
+retu menu
+
+Proc FindVN
+priv _ret,i,ii,_sql,_opd,_ipd,_caption,_title,_format,_width,_position,_color,_risk,reportname,reportfield,setcolumn,lockcolumns,maxform,formwidth,formheight,formtop,formleft,gridtop,gridleft,lsubheader,setcaption
+oerr.clear
+m.vn=mybox('','VN','ÃÐºØ VN',300)
+m.vn=ntoc(m.vn)
+if empty(m.vn)
+	=writeerror('äÁèÃÐºØ VN ¼Ô´¾ÅÒ´....',oerr)
+	retu .F.
+endif
+=addvn()
+
+Proc FindHN
+priv _ret,i,ii,_sql,_opd,_ipd,_caption,_title,_format,_width,_position,_color,_risk,reportname,reportfield,setcolumn,lockcolumns,maxform,formwidth,formheight,formtop,formleft,gridtop,gridleft,lsubheader,setcaption
+oerr.clear
+m.hn=mybox('','HN','ÃÐºØ HN',300)
+m.hn=checkhn(m.hn)
+if empty(m.hn)
+	=writeerror('äÁèÃÐºØ HN ¼Ô´¾ÅÒ´....',oerr)
+	retu .F.
+endif
+store '' to _ret,_sql,m.vn
+text to _sql noshow
+select o.vn,ce2be(o.vstdate) vstdate,date_format(o.vsttime,'%T') vsttime,o.pttype
+from ovst o
+where o.hn=?m.hn
+order by o.vn desc
+limit 500
+endtext
+=runsql(_sql,.T.)
+if recco()#0
+	_title='VN|ÇÑ¹·ÕèµÃÇ¨|àÇÅÒ|ÊÔ·¸Ô'
+	_width='120|80|80|50'
+	_position='2|2|2|2'
+	setcolumn=1
+	formwidth = 340
+	formheight = 300
+	m.vn=listdata()
+	=addvn()
+endif
+
+Proc AddVN
+oerr.columncount=4
+oerr.columnwidths='300,250,250,500'
+sele tmpreport
+set order to vn
+m.vn=ntoc(m.vn)
+if empty(m.vn)
+	retu .F.
+endif
+=writeerror(m.vn,oerr)
+=AddOPD(.T.)
+
+Proc FindAN
+priv _ret,i,ii,_sql,_opd,_ipd,_caption,_title,_format,_width,_position,_color,_risk,reportname,reportfield,setcolumn,lockcolumns,maxform,formwidth,formheight,formtop,formleft,gridtop,gridleft,lsubheader,setcaption
+oerr.clear
+m.an=mybox('','AN','ÃÐºØ AN',300)
+m.an=checkan(m.an)
+if empty(m.an)
+	=writeerror('äÁèÃÐºØ AN ¼Ô´¾ÅÒ´....',oerr)
+	retu .F.
+endif
+=addan()
+
+Proc AddAN
+oerr.columncount=4
+oerr.columnwidths='300,250,250,500'
+sele tmpreport
+set order to an
+m.an=checkan(m.an)
+if empty(m.an)
+	retu .F.
+endif
+=writeerror(m.an,oerr)
+=AddIPD(.T.)
+
+Proc Data2Report
+lpara _str
+local n,rec,oActive,_type
+_type=ntoc(_str)
+if !used('temp')
+	retu
+endif
+sele temp
+go top
+rec=recco()
+n=0
+starttime=datetime()
+=writeas(trans(n)+'/'+trans(rec),oerr,2)
+=writeas('ãªéàÇÅÒ '+sec2string(datetime()-starttime),oerr,3)
+do while !eof() and inkey()=0
+	n=n+1
+	=writeas(trans(n)+'/'+trans(rec),oerr,2)
+	store '' to m.status,m.error,m.errorname,m.warn,m.invno,m.vn,m.an,m.hn,m.date,m.time,m.pdx,m.doctor,m.claimcode,m.rep_rep,m.rep_invoice,m.servietype,m.demand,m.projectcode,m.referin,m.referout,m.ward
+	store '' to m.pttype,m.pttypename,m.pttype_eclaim,m.maininscl,m.comein,m.discharge,m.diag,m.oper
+	store '' to m.fdh,m.reservation,m.fdh_claim_status_response,m.fdh_status,m.fdh_error,m.confirm,m.useright,m.homeward
+	store 0 to m.money_hosxp,m.money_total,m.rcpt_money,m.paid_money
+	scatt memv memo
+	m.vn=ntoc(m.vn)
+	m.an=ntoc(m.an)
+	cfield=icase(empty(m.an),'vn','an')
+	m.hn=ntoc(m.hn)
+	m.cid=ntoc(m.cid)
+	m.date=ntoc(m.date)
+	_date=be2ce(m.date)
+	m.time=ntoc(m.time)
+	m.pdx=ntoc(m.pdx)
+	m.doctor=ntoc(m.doctor)
+	m.homeward=ntoc(m.homeward)
+	m.claimcode=ntoc(m.claimcode)
+	m.servicetype=ntoc(m.servicetype,0)
+	m.demand=ntoc(m.demand,0)
+	if !empty(m.vn)
+		_demand=ntoc(getsqldata([select t.nhso_ucae_type_name from ovst o join visit_pttype vp on vp.vn=o.vn and vp.pttype=o.pttype join nhso_ucae_type t on t.nhso_ucae_type_code=vp.nhso_ucae_type_code where o.vn=?m.vn]))
+		m.demand=icase(!empty(_demand),_demand,m.demand)
+	endif
+	m.projectcode=ntoc(m.projectcode)
+	_project=ntoc(getsqldata([select d.nhso_adp_code from opitemrece oo left join s_drugitems d on d.icode=oo.icode where <<cfield>>=?m.<<cfield>> and d.nhso_adp_type_id=5]))
+	m.projectcode=icase(empty(_project),m.projectcode,_project)
+	if m.projectcode='ADSCOV'
+		m.projectcode=icase(!empty(m.vn),'',m.maininscl#'UC','',m.projectcode)
+	endif
+	m.projectcode=icase(m.projectcode='ADSCOV' and be2ce(m.date)>=be2ce('1/10/2566'),'',m.projectcode)
+	m.projectcode=icase(m.projectcode='SCRCOV' and be2ce(m.date)>=be2ce('1/10/2566'),'',m.projectcode)
+	m.projectcode=icase(m.projectcode='CANCER' and !OnTop6,'',m.projectcode)
+	m.projectcode=icase(m.projectcode='ER-EXT' and !OnTop4,'',m.projectcode)
+*	m.projectcode=icase(m.projectcode='ER-EXT' and (!OnTop4 or _date>=be2ce('1/7/2567')),'',m.projectcode)
+	m.projectcode=icase(!empty(m.an) and m.projectcode$'WALKIN','',m.projectcode)
+
+	m.demand=icase(m.projectcode$'R9OPCH,R9OPFS','',m.projectcode='ER-EXT',iif(empty(m.demand),'Normal',m.demand),m.demand)
+	m.ods=icase(m.demand='Ambulatory Care','Y','')
+
+	m.rep_rep=ntoc(m.rep_rep)
+	m.rep_invoice=ntoc(m.rep_invoice)
+	m.money_hosxp=tonum(m.money_hosxp,2)
+	m.rcpt_money=tonum(m.rcpt_money,2)
+	m.money_total=tonum(m.money_total,2)
+	m.paid_money=tonum(m.paid_money,2)
+	m.collected=tonull(getsqldata([select collected from <<myrcm>>.neweclaim where seq=?m.<<cfield>>]))
+	m.referout=ntoc(m.referout)
+	m.comein=ntoc(m.comein,0)
+	m.discharge=ntoc(m.discharge,0)
+	m.maininscl=ntoc(m.maininscl)
+	m.pttype=ntoc(m.pttype)
+	m.pttyename=ntoc(m.pttypename,0)
+	m.pttype_eclaim=ntoc(m.pttype_eclaim)
+	m.rounded=ntoc(getsqldata([select round_money from pttype where pttype='<<getwordnum(m.pttypename,1,":")>>']))
+	m.rounded=icase(m.rounded='N','N','Y')
+	m.useright=checkuuc(m.useright)
+	m.invno=ntoc(m.invno)
+	m.invno=ntoc(getwordnum(m.invno,1,'#'))
+	m.invno=chrtran(m.invno,['"],[])
+	m.confirm=checkyes(m.confirm)
+	m.fdh=checkyes(m.fdh)
+	m.reservation=ntoc(m.reservation)
+	m.errordate=icase(empty(m.date),'Y','')
+	m.errorrefer=0
+	if !empty(m.referout)
+		_sql=[select group_concat(distinct d.nhso_adp_code order by d.nhso_adp_code) cc from opitemrece oo join nondrugitems d on d.icode=oo.icode where <<cfield>>=?m.<<cfield>> and d.nhso_adp_code regexp '^S180']
+		m.cscode=adddoublequote(getsqldata(_sql),.T.)
+		usecar=checkyes(getsqldata([select group_concat(distinct nullif(with_ambulance,'')) cc from referout where vn=?m.<<cfield>>]))
+		do case
+			case empty(m.cscode)
+				m.errorrefer=9
+			case 'S1802'$m.cscode and !'S1801'$m.cscode
+				m.errorrefer=1
+			case (m.discharge#'3' and !empty(m.vn)) or (m.discharge#'4' and !empty(m.an))
+				m.errorrefer=2
+		endcase
+	endif
+	_sql=[select group_concat(distinct if(ifnull(dd.hospdrugcode,'')='','Y',null)) cc from opitemrece oo join drugitems d on d.icode=oo.icode ]+;
+	[ left join <<myrcm>>.eclaim_drugcatalog dd on dd.hospdrugcode=<<icase(myhis$HISData,'d.oldcode','oo.icode')>> ]+;
+	[ where oo.<<cfield>>=?m.<<cfield>> and oo.sum_price<>0]
+	m.errordrug=checkyes(getsqldata(_sql))
+	_sql=[select group_concat(distinct if(ifnull(d.tpu_code_list,'')=ifnull(dd.tmtid,''),null,'Y')) cc from opitemrece oo join drugitems d on d.icode=oo.icode ]+;
+	[ left join <<myrcm>>.eclaim_drugcatalog dd on dd.hospdrugcode=<<icase(myhis$HISData,'d.oldcode','oo.icode')>> ]+;
+	[ where oo.<<cfield>>=?m.<<cfield>> and oo.sum_price<>0]
+	m.errortmt=checkyes(getsqldata(_sql))
+	_sql=[select group_concat(distinct if(ifnull(d.nhso_adp_code,'')='','Y',null)) cc from opitemrece oo left join income inc on inc.income=oo.income left join s_drugitems d on d.icode=oo.icode ]+;
+	[ where oo.<<cfield>>=?m.<<cfield>> and inc.drg_chrgitem_id in (1,2,5,6,7,8,9,10,11,12,13,14,15,19)]	&&and oo.paidst not in ('01','03')]
+	m.erroradp=checkyes(getsqldata(_sql))
+	_sql=[select group_concat(distinct if(ifnull(inc.income,'')='','Y',null)) cc from opitemrece oo left join income inc on inc.income=if(oo.item_type='H' ,<<icase(empty(homemed),'oo.income',homemed)>>,oo.income) where oo.<<cfield>>=?m.<<cfield>> ]
+	m.errorincome=checkyes(getsqldata(_sql))
+*	_sql=[select if(bw>999 or temperature>999 or bps>999 or bpd>999 or pulse>999 or rr>999,'Y',null) cc from opdscreen where vn=?m.vn]
+*	m.errorscreen=checkyes(getsqldata(_sql))
+	_sql=[select case ]+;
+	[when bw>999 then ',ºÑ¹·Ö¡¹éÓË¹¡¼Ô´¾ÅÒ´' ]+;
+	[when temperature>999 then ',ºÑ¹·Ö¡ÍØ³ËÀÙÁÔ¼Ô´¾ÅÒ´' ]+;
+	[when bps>999 or bpd>999 then ',ºÑ¹·Ö¡ BP ¼Ô´¾ÅÒ´' ]+;
+	[when pulse>999 then ',ºÑ¹·Ö¡ªÕ¾¨Ã¼Ô´¾ÅÒ´' ]+;
+	[when rr>999 then ',ºÑ¹·Ö¡ÍÑµÃÒ¡ÒÃËÒÂã¨¼Ô´¾ÅÒ´' else '' end cc from opdscreen where vn=?m.vn]
+	m.errorscreen=ntoc(getsqldata(_sql),0)
+	m.errorhn=checkyes(getsqldata([select group_concat(distinct if(hn=?m.hn,null,'Y')) cc from opitemrece where <<cfield>>=?m.<<cfield>> ]))
+	m.erroradmit=0
+	if !empty(m.vn)
+		hasAN=tologic(getsqldata([select ifnull(an,'')<>'' cc from ovst  where vn=?m.vn]))
+		do case
+			case hasAN and m.discharge#'2'
+				m.erroradmit=1
+			case m.discharge='2' and !hasAN
+				m.erroradmit=2
+		endcase
+	endif
+	m.oper=ntoc(m.oper)
+	if !empty(m.an)
+		_disease=checkyes(getsqldata("select group_concat(distinct if(dx.icd10 regexp 'I6[0-9]|S06[1-9]|S140| S141|S24.0|S241|S340|S341|S343','Y',null)) cc from ipt i join iptdiag dx on dx.an=i.an where i.an=?m.an"))
+	else
+		_disease=checkyes(getsqldata("select group_concat(distinct if(dx.icd10 regexp 'I6[0-9]|S06[1-9]|S140| S141|S24.0|S241|S340|S341|S343','Y',null)) cc from ovstdiag dx where dx.vn=?m.vn"))
+	endif
+	_adp=checkyes(getsqldata("select group_concat(distinct if(d.nhso_adp_code='IMC','Y',null)) cc from opitemrece oo left join s_drugitems d on d.icode=oo.icode where oo.<<cfield>>=?m.<<cfield>>"))
+	m.imc=icase('IMC'$m.oper,'Y','')
+	m.imc=checkyes(icase(_disease='Y' and _adp='Y','Y',m.imc))
+	_disease=checkyes(getsqldata("select group_concat(distinct if(dx.icd10 regexp 'E1[0-4]|I1[0-5]|L89|N39|J1[0-9]|K3[5-8]|U07','Y',null)) cc from ipt i join iptdiag dx on dx.an=i.an where i.an=?m.an"))
+	_ward=checkyes(getsqldata([select group_concat(distinct if(w.name regexp 'HW|HomeWard|Home Ward','Y',null)) cc from ipt i join ward w on w.ward=i.ward where i.an=?m.an]))
+	m.hw=icase('HOMEWARD'$m.oper,'Y','')
+	m.hw=checkyes(icase(_disease='Y' and _ward='Y','Y',m.hw))
+
+	m.fdh_status=ntoc(m.fdh_status,3)
+	m.fdh_error=ntoc(m.fdh_error,0)
+	_response=ntoc(m.fdh_claim_status_response,0)
+	_status=strextract(_response,["status_message_th":"],["])
+	_error=strextract(_response,["description":"],["])
+	m.fdh_error=icase(empty(m.fdh_error),_error,m.fdh_error)
+	m.web=ntoc(getsqldata([select statusname from <<myrcm>>.neweclaim where seq=?m.<<cfield>>]),0)
+	m.status=ntoc(m.status,0)
+	m.status=icase(!empty(m.rep_rep),'Êè§áÅéÇ',m.status)
+	m.status=icase(lower(m.fdh_status)$'settled,cut_off_batch',_status,m.status)
+	m.status=icase(!empty(m.rep_invoice),'ª´àªÂáÅéÇ',m.status)
+	_seamless=ntoc(getsqldata([select status from <<myrcm>>.seamless where vn=?m.vn]))
+	if empty(m.status) and !empty(_seamless)
+		m.status=icase(_seamless='ª´àªÂ','ª´àªÂ Seamless',_seamless)
+		m.rep_invoice=getsqldata([select rep from <<myrcm>>.seamless where vn=?m.vn])
+		m.compensated=tonum(getsqldata([select compensated from <<myrcm>>.seamless where vn=?m.vn]),2)
+	endif
+	if empty(m.status) and !empty(m.fdh_status)
+		m.status=icase(lower(m.fdh_status)$'incompleted',m.status,_status)
+		m.status=icase(empty(_status),m.fdh_status,_status)
+	endif
+	m.status=icase(empty(m.status) and !empty(m.web),m.web,m.status)
+	m.errorfwf=''
+	if m.maininscl$'HRD,NRH,FWF'
+		_has=ntoc(getsqldata([select bio_id from patient_bio_id where hn=?m.hn]))
+		m.errorfwf=icase(_has='F','','Y')
+	endif
+
+	m.warn=ntoc(m.warn)
+	m.warn=icase(m.money_hosxp#m.money_total,'Y',m.warn)
+	m.warn=icase(m.errordrug='Y','Y',m.warn)
+
+	m.error=ntoc(m.error)
+	m.error=icase(m.maininscl='OFC' and empty(m.claimcode),'Y',m.error)
+	m.error=icase(empty(m.pdx),'Y',m.error)
+	m.error=icase(m.errorrefer#0,'Y',m.error)
+	m.error=icase(m.errortmt='Y','Y',m.error)
+	m.error=icase(m.erroradp='Y','Y',m.error)
+	m.error=icase(m.errorincome='Y','Y',m.error)
+	m.error=icase(!empty(m.errorscreen),'Y',m.error)
+	m.error=icase(m.erroradmit#0,'Y',m.error)
+	m.error=icase(m.errordate='Y','Y',m.error)
+	m.error=icase(m.errorhn='Y','Y',m.error)
+	m.error=icase(m.errorfwf='Y','Y',m.error)
+
+	m.errorname=ntoc(m.errorname)
+	m.errorname=m.errorname+icase(m.maininscl='OFC' and empty(m.claimcode),',äÁè¾º ClaimCode','')
+	m.errorname=m.errorname+icase(empty(m.pdx),',äÁè¾º Pdx','')
+	m.errorname=m.errorname+icase(m.money_hosxp#m.money_total,',ÂÍ´¤èÒãªé¨èÒÂ¼Ô´¾ÅÒ´','')
+	m.errorname=m.errorname+icase(m.errorrefer=9,',äÁèÁÕ¤èÒãªé¨èÒÂã¹¡ÒÃ Refer','')
+	m.errorname=m.errorname+icase(m.errorrefer=1,',ºÑ¹·Ö¡¡ÒÃ Refer ¼Ô´¾ÅÒ´','')
+	m.errorname=m.errorname+icase(m.errorrefer=2,',¾º ReferOut áµèÊ¶Ò¹Ð¡ÒÃ¨ÓË¹èÒÂäÁèãªè Refer','')
+	m.errorname=m.errorname+icase(m.erroradmit=1,',¾º AN áµèäÁèÅ§Ê¶Ò¹Ð Admit','')
+	m.errorname=m.errorname+icase(m.erroradmit=2,',Å§Ê¶Ò¹Ð Admit áµèäÁè¾º AN','')
+	m.errorname=m.errorname+icase(m.errordrug='Y',',äÁè¾ºÃËÑÊÂÒã¹ EClaim2008','')
+	m.errorname=m.errorname+icase(m.errortmt='Y',',TMT äÁè¶Ù¡µéÍ§','')
+	m.errorname=m.errorname+icase(m.erroradp='Y',',ÂÑ§ Map ADP äÁè¤Ãº¶éÇ¹','')
+	m.errorname=m.errorname+icase(m.errorincome='Y',',Billmaud ¼Ô´¾ÅÒ´','')
+	m.errorname=m.errorname+icase(!empty(m.errorscreen),m.errorscreen,'')
+	m.errorname=m.errorname+icase(m.errorhn='Y',',¾º HN Í×è¹ã¹ÃÒÂ¡ÒÃ','')
+	m.errorname=m.errorname+icase(empty(m.errordate),'',!empty(m.an),',äÁè¾ºÇÑ¹·Õè D/C',',äÁè¾ºÇÑ¹·ÕèµÃÇ¨')
+	m.errorname=m.errorname+icase(m.errorfwf='Y',',äÁè¾º FCode','')
+	m.errorname=checkasdata(m.errorname,0,',',,.T.)
+
+	m.selected=icase(m.error='Y' or !empty(m.status) or m.warn='C',.F.,.T.)
+	sele tmpreport
+	if  _type='OPD' or _type='IPD'
+		if !seek(icase(_type='OPD',m.vn,m.an))
+			append blank
+		endif
+	else
+		append blank
+	endif
+	gath memv memo
+	=writeas('ãªéàÇÅÒ '+sec2string(datetime()-starttime),oerr,3)
+	sele temp
+	skip
+enddo
+=writeas(icase(n<rec,'Cancel','OK'),oerr,2)
+
+Proc CreateOpitemrece
+text to _sql noshow textmerge
+create temporary table if not exists tmpOpitemrece (hos_guid varchar(38),vn varchar(15),hn varchar(15),an varchar(15)
+,vstdate date,vsttime time,rxdate date,rxtime time
+,doctor varchar(20),pttype varchar(2)
+,paidst varchar(2)
+,oldcode varchar(25),icode varchar(15),drugname varchar(100)
+,qty int,unitprice double(15,2),unitcost double(15,2),sum_price double(15,2)
+,drugusage varchar(15),sp_use varchar(15),itemtype varchar(1),ED varchar(1)
+,income varchar(2),billmuad varchar(2),nhso_adp_type_id int
+,cscode varchar(25)
+,tmt varchar(25),tmlt varchar(25),did varchar(24)
+,ucs double(15,2),ofc double(15,2),lgo double(15,2),sss double(15,2),fs double(15,2),ucep double(15,2)
+,primary key (hos_guid)
+,key vn(vn)
+,key an(an)
+,key (hn)) engine=MyISAM default charset=tis620;
+
+select  oo.hos_guid,oo.vn,oo.an,oo.hn
+,oo.vstdate,oo.vsttime,oo.rxdate,oo.rxtime
+,oo.doctor,oo.pttype
+,oo.icode,concat_ws(' ',d.name,d.strength) drugname,oo.qty,oo.unitprice,oo.cost unitcost,oo.sum_price,oo.drugusage,oo.sp_use
+,case
+when oo.item_type='H' and inc.drg_chrgitem_id in (3,4) then '<<income_homemed>>'
+else oo.income end income
+oo.income
+,d.nhso_adp_type_id
+,case
+when oo.item_type='H' or oo.income in (<<income_homemed>>) then 4
+else inc.drg_chrgitem_id end billmuad
+,case
+when inc.drg_chrgitem_id in (3,4) then ifnull(d.sks_drug_code,d.tpu_code_list)
+when inc.drg_chrgitem_id in (6,7) then d.tmlt_code
+else d.nhso_adp_code end cscode
+,if(inc.drg_chrgitem_id in (3,4),ifnull(d.sks_drug_code,d.tpu_code_list),null) tmt
+,d.tmlt_code tmlt
+,d.did
+,case
+when inc.drg_chrgitem_id in (3,4) then if(ifnull(d.drugaccount,'')='' or d.drugaccount='-','N','Y')
+end ED
+,if(oo.item_type='H' or oo.income in (<<income_homemed>>),'H','') itemtype,oo.paidst
+,adp.ucs,adp.ofc,adp.lgo,adp.sss,adp.fs,adp.ucep
+from opitemrece oo
+left join s_drugitems d on d.icode=oo.icode
+left join nhso_adp_code adp on adp.nhso_adp_code=d.nhso_adp_code and zero(adp.drg_chrgitem_id)=zero(d.drg_chrgitem_id)
+left join income inc on inc.income=oo.income
+where oo.<<cfield>>=?m.<<cfield>>
+endtext
+=runsql(_sql,.T.,'tmpList')
+scan
+	scatt memv memo
+	=savedata2mysql('tmpOpitemrece')
+ends
+
+Proc AddData
+local oForm
+sele tmpreport
+zap
+if lOPD
+	=addopd()
+endif
+if lIPD
+	=addipd()
+endif
+sele tmpreport
+go top
+
+Proc ResetPttype
+ReferIns=adddoublequote(getsqldata([select sys_value from sys_var where sys_name='Referin']),,'XXX')
+OpRefer=adddoublequote(getsqldata([select sys_value from sys_var where sys_name='OpRefer']),,'XXX')
+CupRefer=adddoublequote(getsqldata([select sys_value from sys_var where sys_name='CupRefer']),,'XXX')
+MoveRight=adddoublequote(getsqldata([select sys_value from sys_var where sys_name='MoveRight']),,'XXX')
+WalkIn=adddoublequote(getsqldata([select sys_value from sys_var where sys_name='Walkin']),,'XXX')
+Emergency=adddoublequote(getsqldata([select sys_value from sys_var where sys_name regexp 'UCAE']),,'XXX')
+FreeRight=adddoublequote(getsqldata([select sys_value from sys_var where sys_name regexp 'FreeRight']),,'XXX')
+ODSMIS=adddoublequote(getsqldata([select sys_value from sys_var where sys_name regexp 'ODSMIS']),,'XXX')
+_demand=adddoublequote(referins+','+oprefer+','+cuprefer+','+moveright)
+OnTop1=tologic(readsysvar('UC-ONTOP-1'))	&&OP Anywhere ã¹¨Ñ§ËÇÑ´
+OnTop2=tologic(readsysvar('UC-ONTOP-2'))	&&OP Anywhere µèÒ§¨Ñ§ËÇÑ´
+OnTop3=tologic(readsysvar('UC-ONTOP-3'))	&&OP Anywhere ©Ø¡à©Ô¹ ¢éÒÁ¨Ñ§ËÇÑ´
+OnTop4=tologic(readsysvar('UC-ONTOP-4'))	&&OP Anywhere ©Ø¡à©Ô¹ ¤Ø³ÀÒ¾
+OnTop5=tologic(readsysvar('UC-ONTOP-5'))	&&UCEP
+OnTop6=tologic(readsysvar('UC-ONTOP-6'))	&&CA
+OnTop7=tologic(readsysvar('UC-ONTOP-7'))	&&OP Refer
+
+Proc AddOPD
+lpara _is
+_is=tologic(_is)
+=settype()
+=resetpttype()
+if _is
+	_remark=textmerge([where o.vn='<<m.vn>>'])
+else
+	=writeerror('Add OPD',oerr)
+	_pttype=textmerge(icase(empty(mypttype),[],[and o.pttype in (<<mypttype>>)]))
+	_all=icase(lall,[],[and ifnull(o.an,'')=''])
+	_remark=textmerge([where o.vstdate between @ds1 and @ds2 <<_pttype>> <<_all>>])
+endif
+_sql=''
+if !checktemporary('tmpclaimcode') or !checktemporary('tmpproject')
+	=writeas('äÁè¾º Temporary Table',oerr,2)
+	retu .F.
+endif
+text to _sql noshow textmerge
+replace into tmpproject  select a.vn,a.project_code from visit_pttype a join ovst b on b.vn=a.vn where ifnull(a.project_code,'')<>'' and a.project_code not regexp '^PG' <<icase(_is,[and a.vn=?m.vn],[])>>;
+
+delete a.* from <<myrcm>>.neweclaim a join <<myrcm>>.repdata b on b.id=a.tranid where ifnull(errorcode,'')='';
+delete a.* from <<myrcm>>.neweclaim a join <<myrcm>>.repeclaim b on b.id=a.tranid where ifnull(errorcode,'')='';
+
+select o.vn,o.hn,pt.cid,concat(pt.pname,pt.fname,' ',pt.lname) ptname
+#,seekname(pt.sex,'sex') sex
+,pt.sex
+,timestampdiff(year,pt.birthday,o.vstdate) age
+,seekname(pt.marrystatus,'marry') marry
+,seekname(pt.nationality,'nation') nation
+,seekname(pt.occupation,'occupation') occupationname
+,setdate(o.vstdate) date,settime(o.vsttime) time
+,seekname(o.main_dep,'kskdepartment') ward
+,seekname(o.spclty,'spclty') department
+,seekhipdatas(o.pttype,0) maininscl
+,pttypeeclaim(o.pttype) pttype_eclaim
+,o.pttype,seeknames(o.pttype,'pttype') pttypename
+,seeknames(pt.pttype,'pttype') pttypename_patient
+,hospmain(o.vn) hospmain
+,doctorlicense(o.doctor) doctor
+,v.income money_hosxp
+,v.rcpt_money
+,(select sum(qty*unitprice) from opitemrece where vn=o.vn) money_total
+,(select sum(sum_price) from opitemrece where vn=o.vn and paidst in ('03')) paid_money
+,diagnosis('opd',o.vn,1) pdx
+,diagnosis('opd',o.vn,3) sdx
+,operation('opd',o.vn) oper
+,if(d.vn is not null,'Y',null) accident
+,cc.claimcode,seekname(cc.claimtype,'claimtype') servicetype
+,(select group_concat(distinct rep) cc from <<myrcm>>.repdata where vn=o.vn and ifnull(errorcode,'')='') rep_rep
+,(select group_concat(distinct rep) cc from <<myrcm>>.repeclaim where vn=o.vn and ifnull(errorcode,'')='') rep_invoice
+,(select sum(compensated) cc from <<myrcm>>.repeclaim where vn=o.vn and ifnull(errorcode,'')='') compensated
+,case
+when o.pttype in (<<oprefer>>) or o.pttype in (<<referins>>) then 'OP Refer ¢éÒÁ¨Ñ§ËÇÑ´'
+when o.pttype in (<<cuprefer>>) then 'OP Refer ã¹¨Ñ§ËÇÑ´'
+when o.pttype in (<<moveright>>) then 'ÂéÒÂË¹èÇÂà¡Ô´ÊÔ·¸Ô·Ñ¹·Õ'
+when tt.ucae='A' then 'Accident'
+when tt.ucae='E' then 'Emergency'
+when o.pttype in (<<emergency>>) then if(v.pdx regexp 'S|T','Accident','Emergency')
+end demand
+,case
+when ifnull(pj.projectcode,'')<>'' then pj.projectcode
+when o.pttype in (<<oprefer>>) then if(?myzone='09' and hospitalzone(v.hospmain)='09','R9OPFS','')
+when o.pttype in (<<cuprefer>>) then if(?myzone='09' and hospitalzone(v.hospmain)='09','R9OPCH','')
+when o.pttype in (<<walkin>>) then 'WALKIN'
+when (select group_concat(distinct if(d.nhso_adp_code in (select code from covid_items_detail),'Y',null)) from opitemrece oo join nondrugitems d on d.icode=oo.icode where oo.vn=o.vn)='Y' then 'SCRCOV'
+when diagnosis('opd',o.vn,0) regexp 'Z115' then 'SCRCOV'
+when pdx between 'C00' and 'D4899' or diagnosis('opd',o.vn,0) regexp 'Z511|Z08' then 'CANCER'
+end projectcode
+,concat_ws(':',seekexport(o.ovstist,'ovstist',null),seekname(o.ovstist,'ovstist')) comein
+,concat_ws(':',seekexport(o.ovstost,'ovstost',null),seekname(o.ovstost,'ovstost')) discharge
+,ifnull((select refer_hospcode from referin where vn=o.vn limit 1),if(ist.export_code=3,o.rfrilct ,null)) referin
+,ifnull((select refer_hospcode from referout where vn=o.vn limit 1),if(ost.export_code=3,o.rfrolct,null)) referout
+,if(re.fdh_reservation_status='N','',re.fdh_reservation_status) reservation
+,if(ifnull(re.fdh_claim_status_message,'')='' or re.fdh_claim_status_message regexp 'äÁèÁÕÃÒÂ¡ÒÃ¹Õé',concat(fdh.status,':Excel'),re.fdh_claim_status_message) fdh_status
+,re.fdh_act_amt fdh_amount
+,re.fdh_stm_period fdh_period
+,re.fdh_claim_status_response
+,(select group_concat(distinct concat_ws(':',fdh_error_code,fdh_error_desc) separator '|') from fdh_claim_status_detail where fdh_claim_status_id=re.fdh_claim_status_id) fdh_error
+,(select group_concat(distinct nullif(confirm_and_locked,'')) cc from visit_pttype where vn=o.vn) confirm
+,(select confirm_and_locked_datetime from visit_pttype where vn=o.vn limit 1) confirm_datetime
+,(select seekname(confirm_and_locked_staff,'staff') cc from visit_pttype where vn=o.vn limit 1) confirm_staff
+,v.debt_id_list invno
+,if(cp.vn is not null,'Y',null) endpoint
+from ovst o
+left join patient pt on pt.hn=o.hn
+left join vn_stat v on v.vn=o.vn
+left join ovstist ist on ist.ovstist=o.ovstist
+left join ovstost ost on ost.ovstost=o.ovstost
+left join er_regist er on er.vn=o.vn
+left join er_nursing_detail d on d.vn=er.vn and d.er_accident_type_id between 1 and 19
+left join er_pt_type tt on tt.er_pt_type=er.er_pt_type
+left join tmpclaimcode cc on cc.vn=o.vn
+left join tmpproject pj on pj.vn=o.vn
+left join fdh_claim_status re on re.vn=o.vn
+left join nhso_confirm_privilege cp on cp.vn=o.vn and cp.nhso_status='Y'
+left join <<myrcm>>.repfdh fdh on fdh.vn=o.vn
+<<_remark>>
+group by o.vn
+endtext
+=writeas('¡ÓÅÑ§´Ö§¢éÍÁÙÅ',oerr,2)
+if !runsql(_sql,.T.)
+	=writeas('Query Error',oerr,2)
+	retu .F.
+endif
+=data2report(icase(_is,'OPD',''))
+
+Proc AddIPD
+lpara _is
+local oActive
+_is=tologic(_is)
+=settype()
+=resetpttype()
+if _is
+	_remark=textmerge([where i.an='<<m.an>>'])
+else
+	=writeerror('Add IPD',oerr)
+	_pttype=textmerge(icase(empty(mypttype),[],[and i.pttype in (<<mypttype>>)]))
+	_remark=textmerge([where i.dchdate between @ds1 and @ds2 <<_pttype>>])
+endif
+_sql=''
+if !checktemporary('tmpclaimcode') or !checktemporary('tmpproject')
+	=writeas('äÁè¾º Temporary Table',oerr,2)
+	retu .F.
+endif
+text to _sql noshow textmerge
+replace into tmpproject select a.an,a.project_code from ipt_pttype a join ipt b on b.an=a.an where ifnull(a.project_code,'')<>'' and a.project_code not regexp '^PG' <<icase(_is,[and a.an=?m.an],[])>>;
+
+delete a.* from <<myrcm>>.neweclaim a join <<myrcm>>.repdata b on b.id=a.tranid where ifnull(errorcode,'')='';
+delete a.* from <<myrcm>>.neweclaim a join <<myrcm>>.repeclaim b on b.id=a.tranid where ifnull(errorcode,'')='';
+
+select i.an,i.hn,pt.cid,concat(pt.pname,pt.fname,' ',pt.lname) ptname
+#,seekname(pt.sex,'sex') sex
+,pt.sex
+,timestampdiff(year,pt.birthday,i.regdate) age
+,seekname(pt.marrystatus,'marry') marry
+,seekname(pt.nationality,'nation') nation
+,seekname(pt.occupation,'occupation') occupationname
+,setdate(i.dchdate) date
+,settime(i.dchtime) time
+,seekname(i.ward,'ward') ward
+,seekname(i.spclty,'spclty') department
+,seekhipdatas(i.pttype,0) maininscl
+,pttypeeclaim(i.pttype) pttype_eclaim
+,i.pttype,seeknames(i.pttype,'pttype') pttypename
+,seeknames(pt.pttype,'pttype') pttypename_patient
+,hospmain(i.an) hospmain
+,doctorlicense(i.dch_doctor) doctor
+,a.income money_hosxp
+,a.rcpt_money
+,(select sum(qty*unitprice) from opitemrece where an=i.an) money_total
+,(select sum(sum_price) from opitemrece where an=i.an and paidst in ('03')) paid_money
+,diagnosis('ipd',i.an,1) pdx
+,diagnosis('ipd',i.an,3) sdx
+,operation('ipd',i.an) oper
+,cc.claimcode,seekname(cc.claimtype,'claimtype') servicetype
+,(select group_concat(distinct rep) cc from <<myrcm>>.repdata where an=i.an and ifnull(errorcode,'')='') rep_rep
+,(select group_concat(distinct rep) cc from <<myrcm>>.repeclaim where an=i.an and ifnull(errorcode,'')='') rep_invoice
+,(select sum(compensated) cc from <<myrcm>>.repeclaim where an=i.an and ifnull(errorcode,'')='') compensated
+,case
+when ac.ac_ae='A' then 'Accident'
+when ac.ac_ae='E' then 'Emergency'
+when i.pttype in (<<Emergency>>) then if(a.pdx regexp 'S|T','Accident','Emergency')
+when tt.is_ambulatory='Y' then 'Ambulatory Care'
+when i.pttype in (<<ODSMIS>>) then 'Ambulatory Care'
+end demand
+,case
+when ifnull(pj.projectcode,'')<>'' then pj.projectcode
+when i.pttype in (<<walkin>>) then 'WALKIN'
+when (select group_concat(distinct if(d.nhso_adp_code in (select code from covid_items_detail),'Y',null)) from opitemrece oo join nondrugitems d on d.icode=oo.icode where oo.an=i.an)='Y' then 'ADSCOV'
+when diagnosis('ipd',i.an,0) regexp 'Z115' then 'ADSCOV'
+when pdx between 'C00' and 'D4899' or diagnosis('ipd',i.an,0) regexp 'Z511|Z08' then 'CANCER'
+end projectcode
+,concat_ws(':',seekexport(i.ivstist,'ovstist',null),seekname(i.ivstist,'ovstist')) comein
+,concat_ws(':',seekexport(i.dchtype,'dchtype',null),seekname(i.dchtype,'dchtype')) discharge
+,ifnull((select refer_hospcode from referin where vn=i.vn limit 1),if(ist.export_code=3,i.rfrilct,null)) referin
+,ifnull((select refer_hospcode from referout where vn=i.an limit 1),if(dchtype.nhso_dchtype=4,i.rfrolct,null)) referout
+,if(ifnull(re.fdh_claim_status_message,'')='' or re.fdh_claim_status_message regexp 'äÁèÁÕÃÒÂ¡ÒÃ¹Õé',concat(fdh.status,':Excel'),re.fdh_claim_status_message) fdh_status
+,re.fdh_act_amt fdh_amount
+,re.fdh_stm_period fdh_period
+,re.fdh_claim_status_response
+,(select group_concat(distinct nullif(confirm_and_locked,'')) cc from ipt_pttype where an=i.an) confirm
+,(select confirm_and_locked_datetime from ipt_pttype where an=i.an limit 1) confirm_datetime
+,(select seekname(confirm_and_locked_staff,'staff') cc from ipt_pttype where an=i.an limit 1) confirm_staff
+,au.authencode homeward
+from ipt i
+left join ipt_type tt on tt.ipt_type=i.ipt_type
+left join patient pt on pt.hn=i.hn
+left join an_stat a on a.an=i.an
+left join ipt_accident ac on ac.an=i.an
+left join ovstist ist on ist.ovstist=i.ivstist
+left join dchtype  on dchtype.dchtype=i.dchtype
+left join tmpclaimcode cc on cc.vn=i.an
+left join tmpproject pj on pj.vn=i.an
+left join fdh_claim_status re on re.vn=i.an
+left join <<myrcm>>.repfdh fdh on fdh.an=i.an
+left join <<myrcm>>.authencode au on au.an=i.an and au.servicecode='PG0140001'
+<<_remark>>
+group by i.an
+endtext
+=writeas('¡ÓÅÑ§´Ö§¢éÍÁÙÅ',oerr,2)
+if !runsql(_sql,.T.)
+	=writeas('Query Error',oerr,2)
+	retu .F.
+endif
+=data2report(icase(_is,'IPD',''))
+
+Proc AddByFDH
+local i,j,ii
+sele tmpreport
+zap
+if type('oErr')='O'
+	oerr.clear
+	oerr.columncount=5
+	oerr.columnwidths='300,250,250,100,100'
+endif
+store '' to m.vn,m.an
+=readquerysql('IMPORT4FDHSTATUS-BY-CSV')
+sele tmpreport
+go top
+=writeerror('OK',oerr)
+
+Proc Set2Data
+acti scree
+do case
+	case !empty(nvl(m.vn,''))
+		=addvn()
+	case !empty(nvl(m.an,''))
+		=addan()
+endcase
+
+Proc AddByExcel
+local i,j,ii
+sele tmpreport
+zap
+if type('oErr')='O'
+	oerr.clear
+	oerr.columncount=5
+	oerr.columnwidths='300,250,250,100,100'
+endif
+xlsfile=selectfile('C:\Temp\*.XLS*')
+if !file(xlsfile)
+	retu .F.
+endif
+=writeerror(xlsfile,oerr,.T.)
+=writeas('¡ÓÅÑ§à»Ô´ä¿Åì',oerr,2)
+if !openexcel(xlsfile)
+	=writeas(_msg,oerr,2)
+	retu .F.
+endif
+=writeas('',oerr,2)
+with oExcel
+	for nSheet=1 to .Sheets.Count
+		with .Sheets(nsheet)
+			SheetName=ntoc(.name)
+			=writeerror('=>'+sheetname,oerr)
+			nRow=.Cells.SpecialCells(11).Row
+			nColumn=.Cells.SpecialCells(11).Column
+			nColumn=icase(ncolumn>100,100,nColumn)
+			store 1 to nStart,nData
+			lhas=.F.
+			for i=1 to 30
+				for ii=1 to ncolumn
+					_value=ntoc(.cells(i,ii).value)
+					if _value=='VN' or _value=='AN' or '(AN)'$_value or '(VN)'$_value or '(SEQ)'$_value
+						nstart=i
+						lhas=.T.
+						exit
+					endif
+				next
+				if lhas
+					exit
+				endif
+			next
+			if lhas
+				fieldname='VN|AN'
+				columnname=calrange('!VN#$(VN)#$(SEQ)|!AN#$(AN)')
+				for ii=nstart+1 to nrow
+					store '' to m.vn,m.an
+					for i=1 to getwordcount(columnname,'|')
+						_cell=getwordnum(columnname,i,'|')
+						_field=getwordnum(fieldname,i,'|')
+						m.&_field=icase(_cell='0','',.range(_cell+trans(ii)).value)
+					next
+					m.vn=ntoc(m.vn)
+					m.an=ntoc(m.an)
+					do case
+						case !empty(m.an)
+							=addan()
+						case !empty(m.vn)
+							=addvn()
+					endcase
+					if inkey()#0
+						exit
+					endif
+				next
+			endif
+		endwith
+	next
+endwith
+=CloseExcel()
+sele tmpreport
+go top
+=writeerror('OK',oerr)
+
+Proc ExportData
+local nrec
+=settype()
+oerr.clear
+oerr.columncount=5
+oerr.columnwidths='300,250,250,100,100'
+=writeerror('Êè§ÍÍ¡¢éÍÁÙÅ',oerr)
+=writeerror('µÃÇ¨ÊÍº Temp File',oerr)
+if !checktemporary('tmpclaimcode') or !checktemporary('tmpproject')
+	=writeas('äÁè¾º Temporary Table',oerr,2)
+	retu .F.
+endif
+=writeas('OK',oerr,2)
+=writeerror('ÊÃéÒ§ Temp File',oerr)
+starttime=datetime()
+text to _sql noshow textmerge
+drop temporary table if exists tmpExport;
+create temporary table tmpExport (VN varchar(30) primary key,ComeDate date,IMC varchar(1),HW varchar(1),UUC varchar(1),MainInscl varchar(15),HospMain varchar(5)
+,ODS varchar(1),Demand varchar(50),ProjectCode varchar(50),AncID int(11),PregNo int(11),LMP date,GA int(11));
+endtext
+if !runsql(_sql,.T.)
+	=writeas('äÁè¾ºµÒÃÒ§ÊÓËÃÑº Export',oerr,2)
+	retu .F.
+endif
+=writeas('OK',oerr,2)
+sele tmpreport
+nrec=recno()
+rec=recco()
+n=0
+ntotal=0
+scan
+	n=n+1
+	doevents
+	scatt memv memo
+	m.vn=ntoc(m.vn)
+	m.an=ntoc(m.an)
+	m.vn=icase(empty(m.vn),m.an,m.vn)
+	m.hn=ntoc(m.hn)
+	m.comedate=be2ce(m.date)
+	m.imc=checkyes(m.imc)
+	m.hw=checkyes(m.hw)
+	m.uuc=ntoc(m.useright)
+	m.maininscl=ntoc(m.maininscl)
+	m.hospmain=ntoc(m.hospmain)
+	m.ods=checkyes(m.ods)
+	m.demand=ntoc(m.demand,0)
+	m.projectcode=ntoc(m.projectcode)
+	m.selected=tologic(m.selected)
+	m.selected=icase(nprogram=2 and !empty(m.an),.F.,m.selected)
+	if m.selected
+		ntotal=ntotal+1
+		m.ancid=tonull(getsqldata([select min(person_anc_id) cc from person p join person_anc anc on anc.person_id=p.person_id where p.patient_hn=?m.hn and  timestampdiff(week,lmp,?m.comedate) between 0 and 50]))
+		m.pregno=tonull(getsqldata([select preg_no from person_anc where person_anc_id=?m.ancid]))
+		m.lmp=tonull(getsqldata([select lmp from person_anc where person_anc_id=?m.ancid]))
+		m.ga=tonull(getsqldata([select timestampdiff(week,?m.lmp,?m.comedate) cc]))
+		=savedata2mysql('tmpExport')
+	endif
+	=writeas([<<ntotal>>/<<n>>/<<rec>>],oerr,2)
+ends
+if recco()>0
+	go (nrec)
+endif
+if ntotal=0
+	=writeas('äÁè¾ºÊÓËÃÑºÊè§ÍÍ¡...',oerr)
+	retu .F.
+endif
+*=sqlexec(_handle,[select * from tmpexport],[tmpExport])
+=createtempfile()
+cfolder=calfolder(cfolder)
+=makepath(cfolder)
+=erasefile(cfolder+'*.*')
+local strFile,i,ii,j
+errorfile='C:\Temp\Error.TXT'
+=strtofile('',errorfile)
+strFile='ins,pat,opd,orf,odx,oop,ipd,irf,idx,iop,cht,cha,aer,adp,lvd,dru,lab,phdb'
+strFile=icase(nprogram=2,'ins,pat,opd,odx,adp,dru',strFile)		&&KTB
+strFile=icase(nprogram=3,'ins,pat,ipd,irf,idx,iop,cht,cha',strFile)	&&SIP09M
+for ii=1 to getwordcount(strFile,',')
+	_file=getwordnum(strFile,ii,',')
+	=readquery(_file)
+next
+if lsend and nprogram=1
+	do sendapi
+endif
+endtime=datetime()
+=writeerror('ãªéàÇÅÒ·Ñé§ËÁ´ '+sec2string(endtime-starttime),oerr)
+=writeerror('àÊÃç¨ÊÔé¹¡ÒÃ·Ó§Ò¹...',oerr,.T.)
+if !empty(readfromfile(errorfile))
+	=writeerror('¾ºÁÕ¡ÒÃ¼Ô´¾ÅÒ´ã¹¡ÒÃÊè§ÍÍ¡...¡ÃØ³ÒµÃÇ¨ÊÍº...',oerr,.T.)
+endif
+
+Proc ReadQuery
+para _file
+local myhospital
+mytime=datetime()
+_file=ntoc(_file)
+_table=textmerge('Export4<<_file>>')
+=writeerror(_file,oerr)
+=writeas('¡ÓÅÑ§´Ö§¢éÍÁÙÅ...',oerr,2)
+_sql=getquery(_file)
+if !checktemporary(_table)
+	=writeas('Not Found',oerr,2)
+	retu .F.
+endif
+=writeas('Create Temp:0/0',oerr,2)
+=writeas('ãªéàÇÅÒ '+sec2string(datetime()-mytime),oerr,3)
+if !runsql(_sql,.T.,'temp')
+	=exportdbf()
+	retu .F.
+endif
+rec=recco()
+n=0
+mytime=datetime()
+=writeas('Create Temp:'+trans(n)+'/'+trans(rec),oerr,2)
+do while !eof() and inkey()=0
+	n=n+1
+	=writeas('Create Temp:'+trans(n)+'/'+trans(rec),oerr,2)
+	store '' to m.seq,m.hn,m.an,m.cid,m.pname,m.fname,m.lname,m.birthday,m.sex,m.marrystatus,m.occupation,m.nationality,m.nation,m.chwpart,m.amppart,m.inscl,m.maininscl,m.subinscl,m.hospmain,m.hospsub,m.person_id
+	store '' to m.diag,m.oper,m.dateopd,m.datedx,m.dateop,m.datein,m.dateout,m.dateexp,m.comein,m.referin,m.discharge,m.referout
+	store '' to m.icode
+	scatt memv memo
+	m.seq=ntoc(m.seq)
+	m.hcode=myhospcode
+	m.idtype=icase(nprogram=3,'0','1')
+	m.title=ntoc(m.pname)
+	m.kumnum=m.title
+	m.title=strtran(m.title,'¹Ò§ÊÒÇ','¹.Ê.')
+	m.title=strtran(m.title,'¹Ê.','¹.Ê.')
+	m.title=strtran(m.title,'à´ç¡ªÒÂ','´.ª.')
+	m.title=strtran(m.title,'´ª.','´.ª.')
+	m.title=strtran(m.title,'à´ç¡Ë­Ô§','´.­.')
+	m.title=strtran(m.title,'´­.','´.­.')
+	m.sex=ntoc(m.sex)
+	m.marrystatus=ntoc(m.marrystatus)
+	store 0 to xymd,xage
+	m.dob=be2ce(m.birthday)
+	=nowage(m.dob)
+	do case
+		case inlist(m.title,'¹ÒÂ','¹Ò§','¹.Ê.','´.ª.','´.­.')
+		case m.sex='1'
+			m.title=icase(xymd=1 and xage>=15,'¹ÒÂ','´.ª.')
+		case m.sex='2'
+			m.title=icase(xymd=1 and xage>=15,icase(m.marrystatus='1','¹.Ê.','¹Ò§'),'´.­.')
+		other
+			m.title='¹ÒÂ'
+	endcase
+	m.fname=ntoc(m.fname)
+	m.lname=ntoc(m.lname)
+	m.namepat=m.fname+' '+m.lname+','+m.title
+	m.name=m.fname+' '+m.lname
+	m.lname=icase(nprogram=3,m.fname+' '+m.lname,m.lname)
+	m.changwat=zero(m.chwpart,2)
+	m.amphur=zero(m.amppart,2)
+	m.cid=ntoc(m.cid)
+	m.person_id=ntoc(m.person_id)
+	m.person_id=icase(empty(m.person_id),m.cid,m.person_id)
+	m.pidpat=m.cid
+	m.marriage=m.marrystatus
+	m.occupa=m.occupation
+	m.nationality=zero(m.nationality,3)
+	m.nation=ntoc(m.nation)
+	m.nation=icase(empty(m.nation),m.nationality,m.nation)
+	m.maininscl=ntoc(m.maininscl)
+	m.inscl=ntoc(m.inscl)
+	m.inscl=icase(nprogram=3 or _file='PHDB',m.inscl,m.maininscl)
+	m.subinscl=ntoc(m.subinscl)
+	m.subinscl=''
+	m.diag=ntoc(m.diag)
+	m.diag=icase(nicd10=1,m.diag,moreicd(m.diag,icase(nicd10=3,'NHSO',nicd10=4,'SSS','')))
+	m.oper=ntoc(m.oper)
+	m.hospmain=ntoc(m.hospmain)
+	m.hospsub=ntoc(m.hospsub)
+	m.dateopd=toengdate(m.dateopd)
+	m.datedx=toengdate(m.datedx)
+	m.dateop=toengdate(m.dateop)
+	m.datein=toengdate(m.datein)
+	m.dateexp=toengdate(m.dateexp)
+	m.dateout=toengdate(m.dateout)
+	m.icode=ntoc(m.icode)
+	m.icode=icase(empty(m.icode),'XX',m.icode)
+	if !m.maininscl$'UCS,SSS,SSI,STP,FWF' and !empty(m.maininscl)
+		store '' to m.hospmain,m.hospsub
+		store .null. to m.datein,m.dateexp
+	endif
+	mynull=.F.
+*	=savedata2mysql(_table,_handle,2)
+	sele mytable
+	append blank
+	myhospital='14135'
+	if myhospcode$myhospital or lCheckField
+		if !setfielddata()
+			=strtofile(_file+'=>'+m.seq+'=>'+msgerror+crlf,errorfile,.T.)
+		endif
+	endif
+	gath memv memo
+	=writeas('ãªéàÇÅÒ '+sec2string(datetime()-mytime),oerr,3)
+	sele temp
+	skip
+enddo
+=importbyfile()
+=exportdbf()
+
+Proc ImportByFile
+local txtfile
+txtfile='C:\Temp\Export.TXT'
+=erasefile(txtfile)
+sele mytable
+if recco()=0
+	retu .F.
+endif
+set date ymd
+copy to (txtfile) type delimited with "" with character '|'
+set date dmy
+text to _sql noshow textmerge
+load data local infile "<<strtran(txtfile,'\','/')>>"
+replace into table <<_table>>
+columns terminated by '|'
+optionally enclosed by '"'
+escaped by '"'
+lines terminated by '\r\n';
+endtext
+if file(txtfile)
+	=runsql(_sql,.T.)
+endif
+
+Proc ExportDBF
+_file=_file+icase(lyymm,cyymm,'')
+_dbf=cfolder+_file+'.DBF'
+_sql=textmerge([select * from <<_table>>])
+if !runsql(_sql,.T.)
+	retu .F.
+endif
+if recco()>0
+	if fieldpos('an')>0 and fieldpos('seq')>0
+		repl seq with '' for !empty(nvl(an,''))
+	endif
+endif
+if file(_dbf)
+	do while !checkopen(_dbf)
+		=ok('Error','ÁÕ¼Ùéãªéá¿éÁ:'+_dbf+' ÍÂÙè',2,.T.,405,,,3000)
+	enddo
+endif
+_dec=set('decimal')
+copy to (_dbf) type foxplus
+if ltext
+	mynull=.F.
+	myclosed=[]
+	mymark=[]
+	txtfile=cfolder+_file+'.TXT'
+	=export2csv('temp','|',.T.)
+endif
+=writeas(icase(file(_dbf),'OK','Fail'),oerr,2)
+
+Proc CalRunning
+=writeas('Export Data:'+trans(n)+'/'+trans(rec),oerr,2)
+
+Proc GetQuery
+para _file
+priv _ret,remark_opd,remark_ipd
+_file=ntoc(_file)
+
+text to _pat noshow textmerge
+drop temporary table if exists tmpData;
+create temporary table tmpdata (primary key (hn)) select * from patient limit 0;
+
+replace into tmpData select pt.* from patient pt join ovst o on o.hn=pt.hn where o.vn in (select vn from tmpExport);
+replace into tmpdata select pt.* from patient pt join ipt i on i.hn=pt.hn where i.an in (select vn from tmpExport);
+
+#update tmpdata t join patient_bio_id bb on bb.hn=t.hn set t.cid=bb.bio_id where ifnull(bb.bio_id,'')<>'';
+
+select ifnull(occ.zip09_code,'13') occupa,nn.nhso_code nation,t.*
+from tmpData t
+left join occupation occ on occ.occupation=t.occupation
+left join nationality nn on nn.nationality=t.nationality
+endtext
+
+*_has=tologic(getsqldata([select 1=1 from information_schema.columns where table_schema=database() and table_name='an_stat' and column_name='hospmain']))
+*_has=checkfield('an_stat','hospmain')
+text to _ins noshow textmerge
+drop temporary table if exists tmpData;
+create temporary table tmpData (seq varchar(30),cid varchar(13),hn varchar(9),an varchar(9),pname varchar(20),fname varchar(40),lname varchar(40),maininscl varchar(10),inscl varchar(2),subtype varchar(2),subinscl varchar(2),datein date,dateexp date,hospmain varchar(5),hospsub varchar(5),permitno varchar(30),htype varchar(1)
+,primary key (seq)) engine=MyISAM default charset=tis620;
+
+replace into tmpdata select o.vn seq,if(ex.maininscl regexp 'NRD|NRH|FWF' and ifnull(bb.bio_id,'')<>'',bb.bio_id,pt.cid) cid
+,o.hn,space(9) an,pt.pname,pt.fname,pt.lname
+,seekhipdata(ptt.hipdata_code,1) maininscl
+,ptt.pcode inscl
+,if(ptt.pcode like 'U%','UC',ptt.pcode) subtype
+,o.pttype subinscl
+,seekpttypes('opd',o.vn,'datein') datein
+,seekpttypes('opd',o.vn,'dateexp') dateexp
+,if(o.pttype in (<<freeright>>),'NHSO',seekpttypes('opd',o.vn,'hospmain')) hospmain
+,if(o.pttype in (<<freeright>>),'NHSO',seekpttypes('opd',o.vn,'hospsub')) hospsub
+,cc.claimcode permitno
+,if(ex.maininscl='SSS',
+	case
+		when ?myhospcode regexp ?myhospmain then '1'
+#		when ex.hospmain regexp ?myhospmain then '2'
+#		when ex.hospmain like 'X%' or hospitalchangwat(ex.hospmain)<>hospitalchangwat(?myhospcode) then '4'
+		else '2'
+	end
+,'') htype
+from tmpExport ex
+join ovst o on o.vn=ex.vn
+left join patient pt on pt.hn=o.hn
+left join patient_bio_id bb on bb.hn=pt.hn
+left join vn_stat v on v.vn=o.vn
+left join pttype ptt on ptt.pttype=o.pttype
+left join tmpclaimcode cc on cc.vn=o.vn;
+
+replace into tmpData
+select i.an seq,if(ex.maininscl regexp 'NRD|NRH|FWF' and ifnull(bb.bio_id,'')<>'',bb.bio_id,pt.cid) cid
+,i.hn,i.an,pt.pname,pt.fname,pt.lname
+,seekhipdata(ptt.hipdata_code,1) maininscl
+,ptt.pcode inscl
+,if(ptt.pcode like 'U%','UC',ptt.pcode) subtype
+,i.pttype subinscl
+,seekpttypes('ipd',i.an,'datein') datein
+,seekpttypes('ipd',i.an,'dateexp') dateexp
+,if(i.pttype in (<<freeright>>),'NHSO',seekpttypes('ipd',i.an,'hospmain')) hospmain
+,if(i.pttype in (<<freeright>>),'NHSO',seekpttypes('ipd',i.an,'hospsub')) hospsub
+,if(ex.hw='Y',au.authencode,cc.claimcode) permitno
+,if(ex.maininscl='SSS',
+	case
+		when ?myhospcode regexp ?myhospmain then '1'
+#		when ex.hospmain regexp ?myhospmain then '2'
+#		when ex.hospmain like 'X%' or hospitalchangwat(ex.hospmain)<>hospitalchangwat(?myhospcode) then '4'
+		else '2'
+	end
+,'') htype
+from tmpExport ex
+join ipt i on i.an=ex.vn
+left join patient pt on pt.hn=i.hn
+left join patient_bio_id bb on bb.hn=pt.hn
+left join an_stat a on a.an=i.an
+left join vn_stat v on v.vn=i.vn
+left join pttype ptt on ptt.pttype=i.pttype
+left join tmpclaimcode cc on cc.vn=i.an
+left join <<myrcm>>.authencode au on au.an=i.an and au.servicecode='PG0140001';
+
+select t.* from tmpData t
+endtext
+
+text to _opd noshow textmerge
+drop temporary table if exists tmpData;
+create temporary table tmpData (index (seq))
+select o.vn seq,o.hn
+,sp.provis_code clinic
+,o.vstdate dateopd
+,date_format(o.vsttime,'%H%i') timeopd
+,if(ex.uuc='2','2','1') uuc
+,asstring(s.cc) detail
+,nullif(s.temperature,0) btemp,nullif(s.bps,0) sbp,nullif(s.bpd,0) dbp,nullif(s.pulse,0) pr,nullif(s.rr,0) rr
+,' ' optype
+,seekexport(o.ovstist,'ovstist',null) typein
+,seekexport(o.ovstost,'ovstost',null) typeout
+from tmpExport ex
+join ovst o on o.vn=ex.vn
+left join opdscreen s on s.vn=o.vn
+left join spclty sp on sp.spclty=o.spclty;
+
+select t.* from tmpData t
+endtext
+
+text to _orf noshow textmerge
+call modifycolumn('referin','refer_hospcode','varchar(5)',null);
+call modifycolumn('referout','refer_hospcode','varchar(5)',null);
+
+drop temporary table if exists tmpData;
+create temporary table tmpData (primary key (seq,refer,refertype))
+select o.vn seq,o.vn,o.hn
+,ifnull(r.refer_date,o.vstdate) dateopd
+,sp.provis_code clinic
+,ifnull(r.refer_hospcode,o.rfrilct) refer
+,'1' refertype
+from tmpExport ex
+join ovst o on o.vn=ex.vn
+left join ovstist ist on ist.ovstist=o.ovstist
+left join spclty sp on sp.spclty=o.spclty
+left join referin r on r.vn=o.vn
+where (ist.export_code=3 or r.vn is not null);
+
+replace into tmpdata select o.vn seq,o.vn,o.hn
+,ifnull(r.refer_date,o.vstdate) dateopd
+,sp.provis_code clinic
+,ifnull(r.refer_hospcode,o.rfrolct) refer
+,'2' refertype
+from tmpExport ex
+join ovst o on o.vn=ex.vn
+left join ovstost ost on ost.ovstost=o.ovstost
+left join spclty sp on sp.spclty=o.spclty
+left join referout r on r.vn=o.vn
+where (ost.export_code=3 or r.vn is not null);
+
+select t.* from tmpData t
+endtext
+
+text to _odx noshow textmerge
+update ovstdiag set diagtype='5' where vstdate between @ds1 and @ds2  and icd10 regexp '^[V-Y]';
+
+drop temporary table if exists tmpData;
+create temporary table tmpData (index (seq,dxtype,diag))
+select o.vn seq,o.hn,seekcid(o.hn,null) cid
+,o.vstdate datedx
+,sp.provis_code clinic
+,dx.icd10 diag
+,dx.diagtype dxtype
+,doctorlicense(dx.doctor) drdx
+from tmpExport ex
+join ovst o on o.vn=ex.vn
+left join spclty sp on sp.spclty=o.spclty
+join ovstdiag dx on dx.vn=o.vn
+where dx.icd10 not regexp '^[0-9]'
+order by o.vn,dx.diagtype,dx.ovst_diag_id;
+
+select t.* from tmpData t
+endtext
+
+text to _oop noshow textmerge
+drop temporary table if exists tmpData;
+create temporary table tmpData (index (seq,oper))
+select o.vn seq,o.hn,seekcid(o.hn,null) cid
+,o.vstdate dateopd
+,sp.provis_code clinic
+,op.icd10 oper
+,op.diagtype optype
+,doctorlicense(op.doctor) dropid
+from tmpExport ex
+join ovst o on o.vn=ex.vn
+left join spclty sp on sp.spclty=o.spclty
+join ovstdiag op on op.vn=o.vn
+where op.icd10 regexp '^[0-9]'
+order by o.vn,op.ovst_diag_id;
+
+insert into tmpdata select o.vn seq,o.hn,seekcid(o.hn,null) cid
+,o.vstdate dateopd
+,sp.provis_code clinic
+,op.icd9cm oper
+,'2' optype
+,doctorlicense(dr.doctor) dropid
+from tmpExport ex
+join ovst o on o.vn=ex.vn
+left join spclty sp on sp.spclty=o.spclty
+join er_regist_oper dr on dr.vn=o.vn
+join er_oper_code op on op.er_oper_code=dr.er_oper_code
+where ifnull(op.icd9cm,'')<>'';
+
+insert into tmpdata select o.vn seq,o.hn,seekcid(o.hn,null) cid
+,o.vstdate dateopd
+,sp.provis_code clinic
+,op.icd9cm oper
+,'2' optype
+,doctorlicense(dr.doctor) dropid
+from tmpExport ex
+join ovst o on o.vn=ex.vn
+left join spclty sp on sp.spclty=o.spclty
+join doctor_operation dr on dr.vn=o.vn
+join er_oper_code op on op.er_oper_code=dr.er_oper_code
+where ifnull(op.icd9cm,'')<>'';
+
+insert into tmpdata select o.vn seq,o.hn,seekcid(o.hn,null) cid
+,o.vstdate dateopd
+,sp.provis_code clinic
+,tm.icd9cm oper
+,'2' optype
+,doctorlicense(dt.doctor) dropid
+from tmpExport ex
+join ovst o on o.vn=ex.vn
+left join spclty sp on sp.spclty=o.spclty
+join dtmain dt on dt.vn=o.vn
+join dttm tm on tm.code=dt.tmcode
+where ifnull(tm.icd9cm,'')<>'';
+
+insert into tmpdata select o.vn seq,o.hn,seekcid(o.hn,null) cid
+,o.vstdate dateopd
+,sp.provis_code clinic
+,op.icd10tm oper
+,'2' optype
+,doctorlicense(dr.doctor) dropid
+from tmpExport ex
+join ovst o on o.vn=ex.vn
+left join spclty sp on sp.spclty=o.spclty
+join er_regist_oper dr on dr.vn=o.vn
+join er_oper_code op on op.er_oper_code=dr.er_oper_code
+where ifnull(op.icd10tm,'')<>'';
+
+insert into tmpdata select o.vn seq,o.hn,seekcid(o.hn,null) cid
+,o.vstdate dateopd
+,sp.provis_code clinic
+,op.icd10tm oper
+,'2' optype
+,doctorlicense(dr.doctor) dropid
+from tmpExport ex
+join ovst o on o.vn=ex.vn
+left join spclty sp on sp.spclty=o.spclty
+join doctor_operation dr on dr.vn=o.vn
+join er_oper_code op on op.er_oper_code=dr.er_oper_code
+where ifnull(op.icd10tm,'')<>'';
+
+insert into tmpdata select o.vn seq,o.hn,seekcid(o.hn,null) cid
+,o.vstdate dateopd
+,sp.provis_code clinic
+,tm.icd10tm_operation_code oper
+,'2' optype
+,doctorlicense(dt.doctor) dropid
+from tmpExport ex
+join ovst o on o.vn=ex.vn
+left join spclty sp on sp.spclty=o.spclty
+join dtmain dt on dt.vn=o.vn
+join dttm tm on tm.code=dt.tmcode
+where ifnull(tm.icd10tm_operation_code,'')<>'';
+
+insert into tmpdata select o.vn seq,o.hn,seekcid(o.hn,null) cid
+,o.vstdate dateopd
+,sp.provis_code clinic
+,tt.icd10tm oper
+,'2' optype
+,doctorlicense(provider(s.health_med_doctor_id,'health')) dropid
+from tmpExport ex
+join ovst o on o.vn=ex.vn
+left join spclty sp on sp.spclty=o.spclty
+join health_med_service s on s.vn=o.vn
+left join health_med_service_operation ops on ops.health_med_service_id=s.health_med_service_id
+left join health_med_operation_item tt on tt.health_med_operation_item_id=ops.health_med_operation_item_id
+where tt.icd10tm regexp '^[0-9]';
+
+select t.* from tmpData t <<icase(ltm,'','where length(oper)<=5')>>
+order by seq,cast(oper as signed)
+endtext
+
+text to _ipd noshow textmerge
+drop temporary table if exists tmpData;
+create temporary table tmpData (index (an))
+select i.an,i.hn
+,i.regdate dateadm,formattime(i.regtime) timeadm
+,i.dchdate datedsc,formattime(i.dchtime) timedsc
+,s.nhso_dchstts dischs
+,t.nhso_dchtype discht
+,i.ward warddsc
+,ifnull(st.nhso_code,'01') dept
+,i.bw/1000 adm_w
+,if(ex.uuc='2','2','1') uuc
+,case
+when ex.ods='Y' then 'A'
+when ex.demand='Ambulatory Care' then 'A'
+#when tt.is_ambulatory='Y' then 'A'
+#when i.pttype in (<<ODSMIS>>) then 'A'
+else 'I' end svctype
+from tmpExport ex
+join ipt i on i.an=ex.vn
+left join ipt_type tt on tt.ipt_type=i.ipt_type
+left join dchstts s on s.dchstts=i.dchstts
+left join dchtype t on t.dchtype=i.dchtype
+left join spclty st on st.spclty=i.spclty;
+
+select t.* from tmpData t
+endtext
+
+text to _irf noshow textmerge
+call modifycolumn('referin','refer_hospcode','varchar(5)',null);
+call modifycolumn('referout','refer_hospcode','varchar(5)',null);
+
+drop temporary table if exists tmpData;
+create temporary table tmpData (Seq varchar(30),AN varchar(15),HN varchar(15),DateOPD date,Clinic varchar(5),Refer varchar(5),ReferType varchar(1)
+,primary key (seq,refer,refertype));
+
+replace into tmpData
+select i.an seq,i.an,i.hn
+,ifnull(r.refer_date,i.dchdate) dateopd
+,sp.provis_code clinic
+,ifnull(r.refer_hospcode,i.rfrolct) refer
+,'2' refertype
+from tmpExport ex
+join ipt i on i.an=ex.vn
+left join dchtype t on t.dchtype=i.dchtype
+left join spclty sp on sp.spclty=i.spclty
+left join referout r on r.vn=i.an
+where t.nhso_dchtype=4 or r.vn is not null;
+
+replace into tmpData
+select i.an seq,i.an,i.hn
+,ifnull(r.refer_date,i.dchdate) dateopd
+,sp.provis_code clinic
+,ifnull(r.refer_hospcode,i.rfrilct) refer
+,'1' refertype
+from tmpExport ex
+join ipt i on i.an=ex.vn
+left join ovstist ist on ist.ovstist=i.ivstist
+left join spclty sp on sp.spclty=i.spclty
+left join referin r on r.vn=i.vn
+where ist.export_code=3 or r.vn is not null;
+
+select t.* from tmpData t
+endtext
+
+text to _idx noshow textmerge
+drop temporary table if exists tmpData;
+create temporary table tmpData (index (an,diag,dxtype))
+select i.an
+,i.dchdate datedx
+,sp.provis_code clinic
+,dx.icd10 diag
+,dx.diagtype dxtype
+,doctorlicense(dx.doctor) drdx
+from tmpExport ex
+join ipt i on i.an=ex.vn
+left join spclty sp on sp.spclty=i.spclty
+join iptdiag dx on dx.an=i.an
+order by i.an,dx.diagtype,dx.ipt_diag_id;
+
+select t.* from tmpData t
+endtext
+
+*set @no:=0,@code='';
+*@no:=IF(@code=code,@no + 1, if(@code:= code, 1, 1)) as num
+text to _iop noshow textmerge
+drop temporary table if exists tmpData;
+create temporary table tmpData (primary key (an,oper))
+ignore as
+select i.an
+,sp.provis_code clinic
+,concat_ws('+',op.icd9,nullif(op.ext_code,'')) oper
+,ifnull(op.oper_type,1) optype
+,ifnull(op.opdate,i.regdate) datein,formattime(ifnull(op.optime,i.regtime)) timein
+,case
+when ex.hw='Y' then ifnull(op.opdate,i.regdate)
+else if(op.enddate<op.opdate,op.opdate,op.enddate) end dateout
+,case
+when ex.hw='Y' then formattime(ifnull(op.optime,i.regtime))
+else formattime(op.endtime) end timeout
+,doctorlicense(op.doctor) dropid
+from tmpExport ex
+join ipt i on i.an=ex.vn
+left join spclty sp on sp.spclty=i.spclty
+join iptoprt op on op.an=i.an
+order by i.an,op.oper_type,op.iptoprt_id;
+
+replace into tmpdata
+select i.an
+,sp.provis_code clinic
+,'HOMEWARD' oper
+,'2' optype
+,i.regdate datein,formattime(i.regtime) timein
+,i.regdate dateout,formattime(i.regtime) timeout
+,doctorlicense(i.admdoctor) dropid
+from tmpExport ex
+join ipt i on i.an=ex.vn
+left join iptoprt op on op.an=i.an and op.icd9='HOMEWARD'
+left join spclty sp on sp.spclty=i.spclty
+where ex.hw='Y' and op.an is null;
+
+replace into tmpdata
+select i.an
+,sp.provis_code clinic
+,'IMC' oper
+,'2' optype
+,i.regdate datein,formattime(i.regtime) timein
+,i.dchdate dateout,formattime(i.dchtime) timeout
+,doctorlicense(i.admdoctor) dropid
+from tmpExport ex
+join ipt i on i.an=ex.vn
+left join iptoprt op on op.an=i.an and op.icd9='IMC'
+left join spclty sp on sp.spclty=i.spclty
+where ex.imc='Y' and op.an is null;
+
+select t.* from tmpData t
+endtext
+
+text to _cht noshow textmerge
+drop temporary table if exists tmpData;
+create temporary table tmpData (seq varchar(30),cid varchar(13),hn varchar(9),an varchar(9),date date,pttype varchar(2),total double (15,2),paid double(15,2)
+,primary key (seq)) engine=MyISAM default charset=tis620;
+
+replace into tmpdata select o.vn seq,pt.cid,o.hn,null an,o.vstdate date,o.pttype
+#,v.income total,v.rcpt_money paid
+,sum(oo.sum_price) total,sum(if(oo.paidst in ('01','03'),oo.sum_price,0)) paid
+from tmpExport ex
+join ovst o on o.vn=ex.vn
+left join patient pt on pt.hn=o.hn
+left join vn_stat v on v.vn=o.vn
+left join opitemrece oo on oo.vn=o.vn
+left join opitemrece_noexport no on no.seq=oo.vn and no.icode=oo.icode and no.type=if(oo.item_type='H' or oo.income in (<<income_homemed>>),'H','')
+where no.seq is null
+group by o.vn;
+
+replace into tmpdata select i.an seq,pt.cid,i.hn,i.an,i.dchdate date,i.pttype
+#,a.income total,a.rcpt_money paid
+,sum(oo.sum_price) total,sum(if(oo.paidst in ('01','03'),oo.sum_price,0)) paid
+from tmpExport ex
+join ipt i on i.an=ex.vn
+left join patient pt on pt.hn=i.hn
+left join an_stat a on a.an=i.an
+left join opitemrece oo on oo.an=i.an
+left join opitemrece_noexport no on no.seq=oo.an and no.icode=oo.icode and no.type=if(oo.item_type='H' or oo.income in (<<income_homemed>>),'H','')
+where no.seq is null
+group by i.an;
+
+select t.* from tmpData t
+endtext
+
+text to _cha noshow textmerge
+drop temporary table if exists tmpData;
+create temporary table tmpData (seq varchar(30),cid varchar(13),hn varchar(9),an varchar(9),date date,billmaud varchar(2),chrgitem varchar(2),sum_price double(15,2),maininscl varchar(10));
+
+insert into tmpdata select o.vn seq,pt.cid,o.hn,null an,o.vstdate date
+,drg.drg_chrgitem_id billmaud
+,if(oo.paidst in ('03'),chrgitem_code2,chrgitem_code1) chrgitem
+,sum_price,ex.maininscl
+from tmpExport ex
+join ovst o on o.vn=ex.vn
+left join patient pt on pt.hn=o.hn
+join opitemrece oo on oo.vn=o.vn
+left join s_drugitems d on d.icode=oo.icode
+left join income inc on inc.income=if(oo.item_type='H' ,<<icase(empty(homemed),[oo.income],homemed)>>,oo.income)
+left join drg_chrgitem drg on drg.drg_chrgitem_id=inc.drg_chrgitem_id
+left join opitemrece_noexport no on no.seq=oo.vn and no.icode=oo.icode and no.type=if(oo.item_type='H' or oo.income in (<<income_homemed>>),'H','')
+where no.seq is null;
+
+insert into tmpdata select i.an seq,pt.cid,i.hn,i.an,i.dchdate date
+,drg.drg_chrgitem_id billmaud
+,if(oo.paidst in ('03'),chrgitem_code2,chrgitem_code1) chrgitem
+,sum_price,ex.maininscl
+from tmpExport ex
+join ipt i on i.an=ex.vn
+left join patient pt on pt.hn=i.hn
+join opitemrece oo on oo.an=i.an
+left join s_drugitems d on d.icode=oo.icode
+left join income inc on inc.income=if(oo.item_type='H' ,<<icase(empty(homemed),[oo.income],homemed)>>,oo.income)
+left join drg_chrgitem drg on drg.drg_chrgitem_id=inc.drg_chrgitem_id
+left join opitemrece_noexport no on no.seq=oo.an and no.icode=oo.icode and no.type=if(oo.item_type='H' or oo.income in (<<income_homemed>>),'H','')
+where no.seq is null;
+
+select t.*,sum(sum_price) amount from tmpData t group by seq,chrgitem having amount<>0
+endtext
+
+*ÃËÑÊ ProjetCode ·ÕèÂÑ§à¢éÒ Web äÁèä´é HOSPIC|SCRCOV|SSSOBS|SSSSPC|INJDFO|KNEE17|KTLGOD|Z38000
+_field=''
+text to _adp noshow textmerge
+create table if not exists <<myeclaim>>.l_sev12 (Code varchar(10),Name varchar(200),Unit varchar(50),Cost decimal(15,2),GYear decimal(4,0) not null,ExpDate datetime,StartDate datetime
+,MainInscl varchar(5) not null,Flag varchar(1)
+,primary key (Code,GYear,MainInscl)) engine=MyISAM default charset=tis620;
+
+create table if not exists <<myeclaim>>.l_medical_supplies (MainInscl varchar(5),Code varchar(7),Name varchar(200),Unit varchar(50),Cost decimal(15,2),GYear varchar(4),EditTable varchar(1)
+,StartDate datetime,ExpDate datetime
+,primary key (MainInscl,Code,GYear)) engine=MyISAM default charset=tis620;
+
+create table if not exists <<myeclaim>>.l_icd10_ca (Code varchar(10),Desc_R varchar(200),GYear varchar(4),Protocol varchar(2),StartDate varchar(8),ExpDate varchar(8)
+,Primary key (Code)) engine=MyISAM default charset=tis620;
+call addprimarykey('l_icd10_ca','code','<<myeclaim>>');
+
+drop temporary table if exists tmpNurse;
+create temporary table tmpNurse (index (code)) select code,group_concat(distinct maininscl) maininscl
+from <<myeclaim>>.l_sev12
+where maininscl<>'UCS'
+group by code
+order by 1;
+set @nurse=(select count(*) from tmpNurse);
+
+drop temporary table if exists tmpSupply;
+create temporary table tmpSupply (index (code)) select code,group_concat(distinct maininscl) maininscl
+from <<myeclaim>>.l_medical_supplies
+where maininscl<>'UCS'
+group by code
+order by 1;
+set @supply=(select count(*) from tmpSupply);
+
+drop temporary table if exists tmpIncome;
+create temporary table tmpIncome select oo.vn seq,oo.an,oo.hn
+,oo.rxdate dateopd,ex.maininscl
+,oo.paidst
+,inc.drg_chrgitem_id billmaud
+,if(oo.paidst in ('03'),chrgitem_code2,chrgitem_code1) chrgitem
+,if(drg.drg_chrgitem_id in (3,4,6,7),<<icase(myhis$HISData,'d.oldcode','d.icode')>>,oo.icode) icode
+,concat_ws(' ',d.name,d.strength) drugname
+,d.nhso_adp_type_id type
+,case
+when ex.maininscl regexp  'NRD|NRH|FWF' and fwf.fwf_item_code is not null  then fwf.fwf_item_code
+when d.nhso_adp_code in ('21301') then if(ex.maininscl regexp 'SSS','XXXXXX',d.nhso_adp_code)
+when inc.drg_chrgitem_id=5 then
+	case
+	when ex.maininscl regexp 'UCS' then d.nhso_adp_code
+	when @supply=0 then ifnull(d.nhso_adp_code,'XXXXXX')
+	else ifnull(ss.code,'XXXXXX') end
+when inc.drg_chrgitem_id=9 then if(ex.maininscl regexp  '<<myOFC>>',d.nhso_adp_code,ifnull(d.nhso_adp_code,'51999'))
+when inc.drg_chrgitem_id=10 then if(ex.maininscl regexp  '<<myOFC>>',d.nhso_adp_code,ifnull(d.nhso_adp_code,'52999'))
+when inc.drg_chrgitem_id=11 and ex.maininscl regexp '<<myOFC>>' and adp.nhso_adp_code not like'7%' then '72999'
+when inc.drg_chrgitem_id=12 then
+	case
+	when ex.maininscl regexp '<<myOFC>>' or ex.projectcode is not null then d.nhso_adp_code
+	when @nurse=0 then ifnull(d.nhso_adp_code,'55999')
+	else ifnull(nn.code,'55999') end
+when inc.drg_chrgitem_id=14 and ex.maininscl regexp '<<myOFC>>' and oo.rxdate>='2024-05-31' then 'XXX14'
+when inc.drg_chrgitem_id=19 then
+	case
+	when ex.maininscl regexp  '<<myOFC>>' then d.nhso_adp_code
+	else ifnull(d.nhso_adp_code,'XXX19') end
+when ifnull(d.nhso_adp_code,'')<>'' then d.nhso_adp_code
+else 'XXXXXX' end code
+,case
+when oo.paidst not in ('03') then
+	case
+	when d.nhso_adp_code regexp 'HERB' then if(oo.qty>d.max_qty,d.max_qty,oo.qty)
+	else oo.qty end
+else 0 end qty
+,@rate:=case
+when d.nhso_adp_code regexp 'HERB' then d.stdprice
+when ex.projectcode='UCEP24' and adp.ucep>0 then adp.ucep
+when inc.drg_chrgitem_id=14 and ex.maininscl regexp '<<myOFC>>' and oo.rxdate>='2024-05-31' then 0
+else oo.unitprice end rate
+,@price:=case
+when inc.drg_chrgitem_id=14 and ex.maininscl regexp '<<myOFC>>' and oo.rxdate>='2024-05-31' then sum_price
+else oo.qty*@rate end sum_price
+,if(oo.paidst in ('03'),@price,0) totcopay
+,ll.tmlt_code tmltcode
+,if(d.nhso_adp_type_id=11,'2',null) use_status
+,space(20) status1,ex.pregno gravida,ex.ga ga_week,ex.lmp lmp
+,space(2) dcip
+,if(ex.projectcode='UCEP24' and adp.ucep>0 and <<icase(myhis$'EPHIS','oo.firstdate','caldatetime(oo.rxdate,oo.rxtime)')>><=date_add(caldatetime(o.vstdate,o.vsttime),interval 24 hour),'01',null) sp_item
+
+#,nullif(ff.ovst_functional_score,0) bi
+,nullif((select ovst_functional_score from ovst_functional where vn=o.vn order by ovst_functional_id desc limit 1),0) bi
+
+,ex.demand
+from tmpExport ex
+left join ovst o on o.vn=ex.vn
+join opitemrece oo on oo.vn=o.vn
+join s_drugitems d on d.icode=oo.icode
+left join fwf_item fwf on fwf.fwf_item_id=d.fwf_item_id
+left join income inc on inc.income=oo.income
+left join drg_chrgitem drg on drg.drg_chrgitem_id=inc.drg_chrgitem_id
+left join nhso_adp_code adp on adp.nhso_adp_code=d.nhso_adp_code and zero(adp.drg_chrgitem_id)=zero(d.drg_chrgitem_id)
+left join <<myRCM>>.labitem ll on ll.icode=oo.icode and (chi=1 or eclaim=1)
+left join tmpnurse nn on nn.code=d.nhso_adp_code
+left join tmpsupply ss on ss.code=d.nhso_adp_code
+left join opitemrece_noexport no on no.seq=oo.vn and no.icode=oo.icode and no.type=if(oo.item_type='H','H','')
+#left join ovst_functional ff on ff.vn=o.vn
+where (oo.sum_price<>0 or d.nhso_adp_code is not null)
+and no.seq is null;
+
+insert into tmpIncome select oo.an seq,oo.an,oo.hn
+,oo.rxdate dateopd,ex.maininscl
+,oo.paidst
+,inc.drg_chrgitem_id billmaud
+,if(oo.paidst in ('03'),chrgitem_code2,chrgitem_code1) chrgitem
+,if(drg.drg_chrgitem_id in (3,4,6,7),<<icase(myhis$HISData,'d.oldcode','d.icode')>>,oo.icode) icode
+,concat_ws(' ',d.name,d.strength) drugname
+,d.nhso_adp_type_id type
+,case
+when ex.maininscl regexp  'NRD|NRH|FWF' and fwf.fwf_item_code is not null  then fwf.fwf_item_code
+when d.nhso_adp_code in ('21301') then if(ex.maininscl regexp 'SSS','XXXXXX',d.nhso_adp_code)
+when inc.drg_chrgitem_id=5 then
+	case
+	when ex.maininscl regexp 'UCS' then d.nhso_adp_code
+	when @supply=0 then ifnull(d.nhso_adp_code,'XXXXXX')
+	else ifnull(ss.code,'XXXXXX') end
+when inc.drg_chrgitem_id=9 then if(ex.maininscl regexp  '<<myOFC>>',d.nhso_adp_code,ifnull(d.nhso_adp_code,'51999'))
+when inc.drg_chrgitem_id=10 then if(ex.maininscl regexp  '<<myOFC>>',d.nhso_adp_code,ifnull(d.nhso_adp_code,'52999'))
+when inc.drg_chrgitem_id=11 and ex.maininscl regexp '<<myOFC>>' and adp.nhso_adp_code not like'7%' then '72999'
+when inc.drg_chrgitem_id=12 then
+	case
+	when ex.maininscl regexp '<<myOFC>>' or ex.projectcode is not null then d.nhso_adp_code
+	when @nurse=0 then ifnull(d.nhso_adp_code,'55999')
+	else ifnull(nn.code,'55999') end
+when inc.drg_chrgitem_id=14 and ex.maininscl regexp '<<myOFC>>' and oo.rxdate>='2024-05-31' then 'XXX14'
+when inc.drg_chrgitem_id=19 then
+	case
+	when ex.maininscl regexp  '<<myOFC>>' then d.nhso_adp_code
+	else ifnull(d.nhso_adp_code,'XXX19') end
+when ifnull(d.nhso_adp_code,'')<>'' then d.nhso_adp_code
+else 'XXXXXX' end code
+,if(oo.paidst not in ('03'),oo.qty,0) qty
+,@rate:=case
+when d.nhso_adp_code regexp 'HERB' then d.stdprice
+when ex.projectcode='UCEP24' and adp.ucep>0 then adp.ucep
+when inc.drg_chrgitem_id=14 and ex.maininscl regexp '<<myOFC>>' and oo.rxdate>='2024-05-31' then 0
+else oo.unitprice end rate
+,@price:=case
+when inc.drg_chrgitem_id=14 and ex.maininscl regexp '<<myOFC>>' and oo.rxdate>='2024-05-31' then sum_price
+else oo.qty*@rate end sum_price
+,if(oo.paidst in ('03'),@price,0) totcopay
+,ll.tmlt_code tmltcode
+,if(d.nhso_adp_type_id=11,'2',null) use_status
+,space(20) status1,ex.pregno gravida,ex.ga ga_week,ex.lmp lmp
+,space(2) dcip
+,if(ex.projectcode='UCEP24' and adp.ucep>0 and <<icase(myhis$'EPHIS','oo.firstdate','caldatetime(oo.rxdate,oo.rxtime)')>><=date_add(caldatetime(i.regdate,i.regtime),interval 24 hour),'01',null) sp_item
+
+#,nullif(ifnull(ass.score,ff.ovst_functional_score),0) bi
+,nullif(ifnull((select score from ipd_nurse_ass_adls_scale where an=i.an order by ipd_nurse_ass_adls_scale_id desc limit 1)
+,(select ovst_functional_score from ovst_functional where vn=i.vn order by ovst_functional_id desc limit 1)
+),0) bi
+
+,ex.demand
+from tmpExport ex
+left join ipt i on i.an=ex.vn
+join opitemrece oo on oo.an=i.an
+join s_drugitems d on d.icode=oo.icode
+left join fwf_item fwf on fwf.fwf_item_id=d.fwf_item_id
+left join income inc on inc.income=oo.income
+left join drg_chrgitem drg on drg.drg_chrgitem_id=inc.drg_chrgitem_id
+left join nhso_adp_code adp on adp.nhso_adp_code=d.nhso_adp_code and zero(adp.drg_chrgitem_id)=zero(d.drg_chrgitem_id)
+left join <<myRCM>>.labitem ll on ll.icode=oo.icode and (chi=1 or eclaim=1)
+left join tmpnurse nn on nn.code=d.nhso_adp_code
+left join tmpsupply ss on ss.code=d.nhso_adp_code
+left join opitemrece_noexport no on no.seq=oo.an and no.icode=oo.icode and no.type=if(oo.item_type='H','H','')
+#left join ipd_nurse_ass_adls_scale ass on ass.an=i.an
+#left join ovst_functional ff on ff.vn=i.vn
+where (oo.sum_price<>0 or d.nhso_adp_code is not null)
+and no.seq is null;
+
+update tmpIncome set type='10' where billmaud=1;
+update tmpIncome set type='11' where billmaud=5;
+update tmpIncome set type='12' where billmaud=13;
+update tmpIncome set type='14' where billmaud=6;
+update tmpIncome set type='15' where billmaud=7;
+update tmpIncome set type='16' where billmaud=8;
+update tmpIncome set type='17' where billmaud=12;
+update tmpIncome set type='18' where billmaud=10;
+update tmpIncome set type='19' where billmaud=11;
+update tmpIncome set type='20' where billmaud=14;
+
+drop temporary table if exists tmpData;
+create temporary table tmpData (seq varchar(30),an varchar(9),hn varchar(9),dateopd date,billmaud varchar(2),chrgitem varchar(2),type varchar(2),code varchar(15),ICode varchar(15),DrugName varchar(100)
+,qty int(11),rate double(15,2),totcopay double(15,2),total double(15,2),tmltcode varchar(20),use_status varchar(1),status1 varchar(1),gravida varchar(2),ga_week varchar(2),lmp date,dcip varchar(2)
+,sp_item varchar(2),cagcode varchar(10),ca_type varchar(10),bi int,demand varchar(50),maininscl varchar(10)
+,primary key (seq,type,code,rate,sp_item)) engine=MyISAM default charset=tis620;
+
+replace into tmpdata
+select seq,an,hn,dateopd,billmaud,chrgitem,type,code,icode,drugname
+,case
+when code in ('XXXXXX','51999','52999','55999','72999') and maininscl in ('OFC','LGO','STP') then 1
+else sum(if(paidst not in ('03'),qty,0)) end qty
+,if(code in ('XXXXXX','51999','52999','55999','72999') and maininscl in ('OFC','LGO','STP'),0,rate) rates
+,sum(if(paidst in ('03'),sum_price,0)) totcopay
+,sum(sum_price) total
+,tmltcode,use_status,status1,gravida,ga_week,lmp,dcip,sp_item,null,null,bi,demand
+,maininscl
+from tmpIncome
+group by seq,type,code,rates,sp_item;
+
+update tmpdata set rate=total where code in ('XXXXXX','51999','52999','55999','72999') and rate=0;
+
+replace into tmpdata (seq,an,hn,dateopd,billmaud,type,code,qty,rate,total,maininscl)
+select i.an seq,i.an,i.hn,i.dchdate dateopd
+,'19'
+,'3' type
+,if(pt.sex='1','SSSTRM','SSSTRW') code
+,1 qty
+,if(pt.sex='1',500,1000) rate
+,if(pt.sex='1',500,1000) total
+,ex.maininscl
+from tmpExport ex
+join ipt i on i.an=ex.vn
+left join patient pt on pt.hn=i.hn
+left join iptoprt op on op.an=i.an
+left join (select oo.an,d.nhso_adp_code fp
+	from opitemrece oo
+	join s_drugitems d on d.icode=oo.icode where oo.an is not null and d.nhso_adp_code regexp '^SSSTR'
+) oo on  oo.an=i.an
+where ex.maininscl regexp '^SS'
+and op.icd9 regexp '^637|^66[2|3]'
+and oo.an is null;
+
+replace into tmpdata (seq,an,hn,dateopd,billmaud,type,code,drugname,qty,rate,bi,maininscl)
+select i.an seq,i.an,i.hn,i.regdate dateopd
+,'15'
+,'13' type
+,'IMC' code
+,'IMC'
+,1 qty
+,0 rate
+,asnumber((select score from ipd_nurse_ass_adls_scale where an=i.an order by ipd_nurse_ass_adls_scale_id desc limit 1))
+,ex.maininscl
+from tmpExport ex
+join ipt i on i.an=ex.vn
+left join (select oo.an,d.nhso_adp_code imc
+	from opitemrece oo
+	join s_drugitems d on d.icode=oo.icode where oo.an is not null and d.nhso_adp_code='IMC'
+) oo on  oo.an=i.an
+where ex.imc='Y'
+and oo.an is null;
+
+replace into tmpdata (seq,hn,dateopd,type,code,qty,rate,demand,maininscl)
+select o.vn seq,o.hn,o.vstdate dateopd
+,case
+when ex.projectcode='ER-EXT' then if(curdate()>='2024-07-01','3','5')
+else '5' end type
+,ex.projectcode code
+,1 qty
+,case
+when ex.projectcode='ER-EXT' then if(curdate()>='2024-07-01',150,0)
+else 0 end rate
+,ex.demand
+,ex.maininscl
+from tmpexport ex
+join ovst o on o.vn=ex.vn
+left join (select oo.vn,d.nhso_adp_code projectcode
+	from opitemrece oo
+	join s_drugitems d on d.icode=oo.icode where oo.vn is not null and d.nhso_adp_type_id in (5)
+) oo on  oo.vn=o.vn and oo.projectcode=ex.projectcode
+where ifnull(ex.projectcode,'')<>''
+and oo.vn is null;
+
+replace into tmpdata (seq,an,hn,dateopd,type,code,qty,demand,maininscl)
+select i.an seq,i.an,i.hn,i.dchdate dateopd
+,'5' type
+,ex.projectcode code
+,1 qty
+,ex.demand
+,ex.maininscl
+from tmpExport ex
+join ipt i  on i.an=ex.vn
+left join (select oo.an,d.nhso_adp_code projectcode
+	from opitemrece oo
+	join s_drugitems d on d.icode=oo.icode where oo.an is not null and d.nhso_adp_type_id in (5)
+) oo on  oo.an=i.an and oo.projectcode=ex.projectcode
+where ifnull(ex.projectcode,'')<>''
+and oo.an is null;
+
+#'»ÃÑº»ÃØ§ ProjectCode';
+delete from tmpdata where code='WALKIN' and ifnull(an,'')<>'';
+delete from tmpdata where code='WALKIN' and demand='ÂéÒÂË¹èÇÂà¡Ô´ÊÔ·¸Ô·Ñ¹·Õ';
+delete from tmpdata where code='ER-EXT' and !?OnTop4;
+update tmpdata set billmaud=null,chrgitem=null,qty=1 where type in (5);
+#'ER ¤Ø³ÀÒ¾';
+update tmpdata set billmaud=19,qty=1,rate=150,total=150,type='3' where code='ER-EXT' and curdate()>='2024-07-01';
+update tmpdata set billmaud=19,qty=1,rate=150,total=150 where code='ER-EXT' and type='3';
+#DRUGP|TELMED|PP ·Ø¡¡Ã³Õ|55021 ãËéÅºÍÍ¡;
+
+replace into tmpdata (seq,hn,dateopd,billmaud,type,code,qty,rate,maininscl)
+select o.vn seq,o.hn,o.vstdate dateopd
+,'18'
+,'4' type
+,case
+when icd10tm_operation_code='2377020' then '50001'
+when icd10tm_operation_code='238703A' then '50002'
+when icd10tm_operation_code='238703B' then '50003'
+when icd10tm_operation_code='238703C' then '50004'
+when icd10tm_operation_code='238703D' then '50005'
+when icd10tm_operation_code='238703E' then '50006'
+when icd10tm_operation_code='238703F' then '50007'
+when icd10tm_operation_code='238703G' then '50008'
+when icd10tm_operation_code='238703H' then '50009'
+else '' end code
+,1 qty
+,if(icd10tm_operation_code='2377020',100,250) rate
+,ex.maininscl
+from tmpExport ex
+join ovst o on o.vn=ex.vn
+join dtmain dt on dt.vn=o.vn
+join dttm tm on tm.code=dt.tmcode
+where tm.icd10tm_operation_code regexp '^2377020|^238703[A-H]';
+
+replace into tmpdata (seq,hn,dateopd,billmaud,type,code,drugname,qty,rate,gravida,ga_week,lmp,maininscl)
+select o.vn seq,o.hn,o.vstdate dateopd
+,'18'
+,'4' type
+#,case
+#when pa_week<13 then '30002'
+#when pa_week<21 then '30003'
+#when pa_week<27 then '30004'
+#when pa_week<33 then '30005'
+#when pa_week<41 then '30006'
+#else '30007' end code
+,'30011' code
+,'ANC'
+,1 qty
+,360 rate
+,ex.pregno,ex.ga,ex.lmp
+,ex.maininscl
+from tmpExport ex
+join ovst o on o.vn=ex.vn
+join person_anc_service s on s.vn=o.vn
+left join person_anc anc on anc.person_anc_id=s.person_anc_id
+left join (select oo.vn,d.nhso_adp_code projectcode
+	from opitemrece oo
+	join s_drugitems d on d.icode=oo.icode where oo.vn is not null and d.nhso_adp_code='30011'
+) oo on  oo.vn=o.vn
+where s.anc_service_type_id=1
+and oo.vn is null;
+
+#'Â¡àÅÔ¡ LabANC1';
+/*
+replace into tmpdata (seq,hn,dateopd,billmaud,type,code,drugname,qty,rate,gravida,ga_week,lmp,maininscl)
+select o.vn seq,o.hn,o.vstdate dateopd
+,'18'
+,'4' type
+,'30012' code
+,'LabANC1'
+,1 qty
+,600 rate
+,ex.pregno,ex.ga,ex.lmp
+,ex.maininscl
+from tmpExport ex
+join ovst o on o.vn=ex.vn
+join person_anc_service s on s.vn=o.vn
+left join person_anc anc on anc.person_anc_id=s.person_anc_id
+where s.anc_service_type_id=1
+and s.anc_service_number in (1,2)
+and (pre_labor_service1_date=vstdate or pre_labor_service2_date=vstdate)
+and (blood_vdrl1_result is not null and blood_hiv1_result is not null and blood_hct_result is not null)
+*/;
+
+#'Â¡àÅÔ¡ LabANC2';
+/*replace into tmpdata (seq,hn,dateopd,type,code,drugname,qty,rate,gravida,ga_week,lmp,maininscl)
+select o.vn seq,o.hn,o.vstdate dateopd
+,'4' type
+,'30013' code
+,'LabANC2'
+,1 qty
+,190 rate
+,ex.pregno,ex.ga,ex.lmp
+,ex.maininscl
+from tmpExport ex
+join ovst o on o.vn=ex.vn
+join person_anc_service s on s.vn=o.vn
+left join person_anc anc on anc.person_anc_id=s.person_anc_id
+where s.anc_service_type_id=1
+and s.anc_service_number not in  (1,2)
+and (pre_labor_service4_date=vstdate or pre_labor_service5_date=vstdate)
+and (blood_vdrl2_result is not null and blood_hiv2_result is not null )
+*/;
+
+#'Â¡àÅÔ¡ µÃÇ¨ªèÍ§»Ò¡/¢Ñ´¿Ñ¹';
+/*replace into tmpdata (seq,hn,dateopd,billmaud,type,code,drugname,qty,rate,gravida,ga_week,lmp,maininscl)
+select o.vn seq,o.hn,o.vstdate dateopd
+,'18'
+,'4' type
+,case
+when icd10tm_operation_code='2330011' then '30008'
+when icd10tm_operation_code='2277310' then '30009'
+when icd10tm_operation_code='2287310' then '30009'
+when icd10tm_operation_code='2287010' then '30009'
+else '' end code
+,if(icd10tm_operation_code='2330011','µÃÇ¨ªèÍ§»Ò¡','¢Ñ´¿Ñ¹')
+,1 qty
+,if( icd10tm_operation_code='2330011',0,500) rate
+,ex.pregno,ex.ga,ex.lmp
+,ex.maininscl
+from tmpExport ex
+join ovst o on o.vn=ex.vn
+join person_anc a on a.person_anc_id=ex.ancid
+join dtmain dt on dt.vn=o.vn
+join dttm tm on tm.code=dt.tmcode
+where tm.icd10tm_operation_code regexp '2330011|2277310|2287310|2287010'
+*/;
+
+replace into tmpdata (seq,hn,dateopd,billmaud,type,code,drugname,qty,rate,gravida,ga_week,lmp,maininscl)
+select o.vn seq,o.hn,o.vstdate dateopd
+,'18'
+,'4' type
+,'30010' code
+,'U/S'
+,1 qty
+,400 rate
+,ex.pregno,ex.ga,ex.lmp
+,ex.maininscl
+from tmpExport ex
+join ovst o on o.vn=ex.vn
+join person_anc a on a.person_anc_id=ex.ancid
+join opitemrece oo on oo.vn=o.vn
+left join opitemrece_noexport no on no.seq=oo.vn and no.icode=oo.icode and no.type=if(oo.item_type='H','H','')
+where oo.icode in (<<us>>) and no.seq is null;
+
+replace into tmpdata (seq,hn,dateopd,billmaud,type,code,qty,rate,maininscl)
+select o.vn seq,o.hn,o.vstdate dateopd
+,'18'
+,'4' type
+,'30001' code
+,1 qty
+,0 rate
+,ex.maininscl
+from tmpExport ex
+join ovst o on o.vn=ex.vn
+join ovstdiag dx on dx.vn=o.vn
+left join (select oo.vn,d.nhso_adp_code projectcode
+	from opitemrece oo
+	join s_drugitems d on d.icode=oo.icode where oo.vn is not null and d.nhso_adp_code='30001'
+) oo on  oo.vn=o.vn
+where dx.icd10='Z515'
+and oo.vn is null;
+
+replace into tmpdata (seq,hn,dateopd,billmaud,type,code,qty,rate,maininscl)
+select o.vn seq,o.hn,o.vstdate dateopd
+,'19'
+,'3' type
+,@code:=case
+when t.pp_special_code in ('1B0044','1B30','1B004N') then '1B004N'
+when t.pp_special_code in ('1B40','1B004P') then '1B004P'
+when t.pp_special_code in ('1B0040','1B0043','1B004_0N') then '1B004_0N'
+when t.pp_special_code in ('1B0041','1B0042','1B0043','1B0045','1B004_0P') then '1B004_0P' end code
+#,'1B004' code
+,1 qty
+,250 rate
+,ex.maininscl
+from tmpExport ex
+join ovst o on o.vn=ex.vn
+left join pp_special pp on o.vn=pp.vn
+left join pp_special_type t on t.pp_special_type_id=pp.pp_special_type_id
+where t.pp_special_code in ('1B0044','1B30','1B40','1B004N','1B004P','1B0040','1B0041','1B0042','1B0043','1B0045','1B004_0N','1B004_0P');
+
+replace into tmpdata (seq,hn,dateopd,billmaud,type,code,qty,rate,maininscl)
+select o.vn seq,o.hn,o.vstdate dateopd
+,'18'
+,'4' type
+#,@code:=case
+#when t.pp_special_code in ('1B0046','1B0046_0') then '1B0046_0'
+#when t.pp_special_code in ('1B0048','1B0049') then '0320277_0'
+#else t.pp_special_code end code
+,@code:=case
+when t.pp_special_code in ('1B0046','1B0046_0') then '1B0046'
+when t.pp_special_code in ('1B0048','1B0049') then '1B005'
+else t.pp_special_code end code
+,1 qty
+,if(@code like '1B0046%',420,250) rate
+,ex.maininscl
+from tmpExport ex
+join ovst o on o.vn=ex.vn
+left join pp_special pp on o.vn=pp.vn
+left join pp_special_type t on t.pp_special_type_id=pp.pp_special_type_id
+where t.pp_special_code regexp '^1B0046|^1B0048|^1B0049|^0320277_0|^0320277_1';
+
+replace into tmpdata (seq,hn,dateopd,billmaud,type,code,qty,rate,maininscl)
+select o.vn seq,o.hn,o.vstdate dateopd
+,'18'
+,'4' type
+,'90005' code
+,1 qty
+,60 rate
+,ex.maininscl
+from tmpExport ex
+join ovst o on o.vn=ex.vn
+left join pp_special pp on o.vn=pp.vn
+left join pp_special_type t on t.pp_special_type_id=pp.pp_special_type_id
+where t.pp_special_code in ('1B006','1B0060','1B0061');
+
+replace into tmpdata (seq,hn,dateopd,billmaud,type,code,qty,rate,cagcode,ca_type,maininscl)
+select o.vn seq,o.hn,o.vstdate dateopd
+,'8' billmaud
+,'7' type
+,case
+when d.nhso_adp_code='49001' then 'RTX101'
+when d.nhso_adp_code='49003' then 'RTX102'
+when d.nhso_adp_code='49002' then 'RTX103'
+when d.nhso_adp_code='49005' then 'RTX104'
+when d.nhso_adp_code='49004' then 'RTX105'
+when d.nhso_adp_code='49601' then 'RTX107'
+when d.nhso_adp_code='49602' then 'RTX108'
+when d.nhso_adp_code='49101' then 'RTX201'
+when d.nhso_adp_code='49202' then 'RTX202'
+when d.nhso_adp_code='49201' then 'RTX203'
+when d.nhso_adp_code='49203' then 'RTX204'
+when d.nhso_adp_code='49306' then 'RTX205'
+when d.nhso_adp_code='49402' then 'RTX207'
+when d.nhso_adp_code='49208' then 'RTX209'
+when d.nhso_adp_code='49302' then 'RTX210'
+when d.nhso_adp_code='49303' then 'RTX211'
+end code
+,oo.qty
+,oo.unitprice rate
+,ca.protocol cagcode,'V'
+,ex.maininscl
+from tmpExport ex
+join ovst o on o.vn=ex.vn
+join vn_stat v on v.vn=o.vn
+left join <<myeclaim>>.l_icd10_ca ca on ca.code=v.pdx
+join opitemrece oo on oo.vn=o.vn
+join s_drugitems d on d.icode=oo.icode
+left join opitemrece_noexport no on no.seq=oo.vn and no.icode=oo.icode and no.type=if(oo.item_type='H','H','')
+where d.nhso_adp_code regexp '^49' and d.nhso_adp_type_id=16 and no.seq is null;
+
+drop temporary table if exists tmpLab;
+create temporary table tmpLab (index (vn))
+select lh.vn,lh.order_date,d.icode,d.name
+,d.nhso_adp_code cscode
+,case
+when lab_order_result regexp 'äÁè¾º|Neg|Not' then '2'
+when lab_order_result regexp '¾º|Pos|Detect' then '1'
+else '2' end result
+from tmpExport ex
+join lab_head lh on lh.vn=ex.vn
+join lab_order lo on lo.lab_order_number=lh.lab_order_number
+join lab_items l on l.lab_items_code=lo.lab_items_code
+join nondrugitems d on d.icode=l.icode
+where d.nhso_adp_code in (select code from covid_items_detail where id in (4,5));
+update tmpData a join tmpLab b on b.vn=a.seq and b.cscode=a.code set a.status1=b.result;
+
+#drop temporary table if exists tmpLab;
+#create temporary table tmpLab (index (vn))
+#select lh.vn,lh.order_date,d.icode,d.name
+#,d.nhso_adp_code cscode
+#,lo.lab_order_result result
+#from tmpExport ex
+#join lab_head lh on lh.vn=ex.vn
+#join lab_order lo on lo.lab_order_number=lh.lab_order_number
+#join lab_items l on l.lab_items_code=lo.lab_items_code
+#join nondrugitems d on d.icode=l.icode
+#where l.provis_labcode='0621201' or d.nhso_adp_code='30104';
+#update tmpData a join tmpLab b on b.vn=a.seq and b.cscode=a.code set a.status1=b.result;
+
+#drop temporary table if exists tmpLab;
+#create temporary table tmpLab (index (vn))
+#select lh.vn,lh.order_date,d.icode,d.name
+#,d.nhso_adp_code cscode
+#,lo.lab_order_result result
+#from tmpExport ex
+#join lab_head lh on lh.vn=ex.vn
+#join lab_order lo on lo.lab_order_number=lh.lab_order_number
+#join lab_items l on l.lab_items_code=lo.lab_items_code
+#join nondrugitems d on d.icode=l.icode
+#where d.nhso_adp_code in ('30101','30102') and l.lab_items_name regexp 'MCV';
+#update tmpData a join tmpLab b on b.vn=a.seq and b.cscode=a.code set a.status1=b.result;
+
+update tmpData set dcip='30' where code='90005';
+drop temporary table if exists tmpPP;
+create temporary table tmpPP (index (vn))
+select ex.vn,'90005' cscode
+,case
+when t.pp_special_code='1B0060' then '29'
+when t.pp_special_code='1B0061' then '28'
+when lo.lab_order_result regexp 'neg' then '29'
+when lo.lab_order_result regexp 'pos' then '28'
+else '30' end result
+from tmpExport ex
+left join pp_special pp on pp.vn=ex.vn
+left join pp_special_type t on t.pp_special_type_id=pp.pp_special_type_id
+left join lab_head lh on lh.vn=ex.vn
+left join lab_order lo on lo.lab_order_number=lh.lab_order_number and lo.lab_items_name_ref regexp 'stool'
+where t.pp_special_code in ('1B0060','1B0061') or lh.vn is not null;
+update tmpData a join tmpPP b on b.vn=a.seq and b.cscode=a.code set a.dcip=b.result;
+
+update tmpData set billmaud='' where billmaud is null;
+update tmpData set bi=null where billmaud<>15;
+delete from tmpData where !(
+(billmaud in (3,4) and (code regexp 'HERB|FP|^14001' or type in (1,3,4)))
+or (billmaud not in (3,4) and code is not null)
+);
+delete from tmpData where ifnull(an,'')<>'' and code regexp '^M';
+delete a.* from tmpdata a join vn_stat b on b.vn=a.seq where a.code='12001' and b.age_y not between 15 and 34;
+delete a.* from tmpdata a join vn_stat b on b.vn=a.seq where a.code='12002' and b.age_y not between 35 and 59;
+delete a.* from tmpdata a join vn_stat b on b.vn=a.seq where a.code='12003' and b.age_y not between 35 and 59;
+delete a.* from tmpdata a join vn_stat b on b.vn=a.seq where a.code='12004' and b.age_y not between 45 and 70;
+delete a.* from tmpdata a join vn_stat b on b.vn=a.seq where a.code='13001' and b.age_y not between 13 and 24;
+delete a.* from tmpdata a join vn_stat b on b.vn=a.seq where a.code='14001' and b.age_y not between 13 and 45;
+delete a.* from tmpdata a join vn_stat b on b.vn=a.seq where a.code='15001' and b.age_y not between 25 and 59;
+
+select t.seq,t.an,t.hn,t.dateopd,t.billmaud,t.chrgitem,t.type,t.code,t.drugname
+,t.qty
+,t.rate
+,t.totcopay
+,t.total
+,t.tmltcode,t.use_status,t.status1,t.gravida,t.ga_week,t.lmp,t.dcip
+,t.sp_item,t.bi
+from tmpData t
+where t.billmaud not in ('17')
+<<icase(nprogram=2,[and t.code in (select code from ktb_items_detail)],[])>>
+order by t.seq,t.an,cast(t.billmaud as signed),code,sp_item desc
+endtext
+
+_has=checkfield('opitemrece','pa_no')
+text to _dru noshow textmerge
+drop temporary table if exists tmpData;
+create temporary table tmpData (seq varchar(30),cid varchar(13),an varchar(9),hn varchar(9),date_serv date,clinic varchar(5),did varchar(13),didname varchar(100),unit varchar(20),amount int(11)
+,drugpric double(15,2),drugcode double(15,2),didstd varchar(24),use_status varchar(2),drugremark varchar(5),pa_no varchar(25),totcopay double(15,2),total double(15,2));
+
+drop temporary table if exists tmpdrug;
+create temporary table tmpdrug
+select o.vn seq,null an,o.hn,pt.cid
+,sp.provis_code clinic
+,oo.rxdate
+,<<icase(myhis$HISData,'d.oldcode','oo.icode')>> did
+,concat_ws(' ',d.name,d.strength) didname,d.units unit
+,oo.qty
+,oo.sum_price
+,oo.unitprice drugpric
+,oo.cost drugcost
+,oo.paidst
+,case
+when ex.maininscl regexp  'NRD|NRH|FWF' and fwf.fwf_item_code is not null  then fwf.fwf_item_code
+else d.did end didstd
+,case
+when oh.opitemrece_home_type_id is not null then oh.opitemrece_home_type_id
+when oo.item_type='H' or oo.income in (<<income_homemed>>) then
+	case
+	when d.drugcategory regexp'DM:|HT:|CKD:|Asthma:|COPD:|IHD:|Cancer:|TB:|Chronic:' then '4'
+	else '2' end
+else '1' end use_status
+,case
+when ifnull(ned.presc_reason,'')<>'' then ned.presc_reason
+when oo.income in (<<income_drug_ned>>) or d.drugaccount='-' or ifnull(d.drugaccount,'')='' then 'EC'
+end drugremark
+,<<icase(_has,'oo.pa_no','null')>> pa_no
+from tmpExport ex
+join ovst o on o.vn=ex.vn
+left join patient pt on pt.hn=o.hn
+left join spclty sp on sp.spclty=o.spclty
+join opitemrece oo on oo.vn=o.vn
+join drugitems d on d.icode=oo.icode
+left join fwf_item fwf on fwf.fwf_item_id=d.fwf_item_id
+left join ovst_presc_ned ned on ned.vn=o.vn and ned.icode=oo.icode
+left join opitemrece_noexport no on no.seq=oo.vn and no.icode=oo.icode and no.type=if(oo.item_type='H' or oo.income in (<<income_homemed>>),'H','')
+left join opitemrece_home oh on oh.opi_guid=oo.hos_guid
+where no.seq is null;
+
+insert into tmpdata select seq,cid,an,hn,max(rxdate) date_serv,clinic,did,didname,unit,sum(qty) amount,drugpric,drugcost,didstd,use_status,drugremark,pa_no,sum(if(paidst in ('03'),sum_price,0)) totcopay,sum(sum_price)
+from tmpdrug
+group by seq,did,use_status
+having sum(sum_price)<>0;
+
+drop temporary table if exists tmpdrug;
+create temporary table tmpdrug
+select i.an seq,i.an,i.hn,pt.cid
+,sp.provis_code clinic
+,oo.rxdate
+,<<icase(myhis$HISData,'d.oldcode','oo.icode')>> did
+,concat_ws(' ',d.name,d.strength) didname,d.units unit
+,oo.qty
+,oo.sum_price
+,oo.unitprice drugpric
+,oo.cost drugcost
+,oo.paidst
+,case
+when ex.maininscl regexp  'NRD|NRH|FWF' and fwf.fwf_item_code is not null  then fwf.fwf_item_code
+else d.did end didstd
+,case
+when oh.opitemrece_home_type_id is not null then oh.opitemrece_home_type_id
+when oo.item_type='H' or oo.income in (<<income_homemed>>) then
+	case
+	when d.drugcategory regexp'DM:|HT:|CKD:|Asthma:|COPD:|IHD:|Cancer:|TB:|Chronic:' then '4'
+	else '2' end
+else '1' end use_status
+,case
+when ifnull(ned.presc_reason_1,'')<>'' then ned.presc_reason_1
+when oo.income in (<<income_drug_ned>>) or d.drugaccount='-' or ifnull(d.drugaccount,'')='' then 'EC'
+end drugremark
+,<<icase(_has,'oo.pa_no','null')>> pa_no
+from tmpExport ex
+join ipt i on i.an=ex.vn
+left join patient pt on pt.hn=i.hn
+left join spclty sp on sp.spclty=i.spclty
+join opitemrece oo on oo.an=i.an
+join drugitems d on d.icode=oo.icode
+left join fwf_item fwf on fwf.fwf_item_id=d.fwf_item_id
+left join ipt_presc_ned ned on ned.an=i.an and ned.icode=oo.icode
+left join opitemrece_noexport no on no.seq=oo.an and no.icode=oo.icode and no.type=if(oo.item_type='H' or oo.income in (<<income_homemed>>),'H','')
+left join opitemrece_home oh on oh.opi_guid=oo.hos_guid
+where no.seq is null;
+
+insert into tmpdata select seq,cid,an,hn,max(rxdate) date_serv,clinic,did,didname,unit,sum(qty) amount,drugpric,drugcost,didstd,use_status,drugremark,pa_no,sum(if(paidst in ('03'),sum_price,0)) totcopay,sum(sum_price)
+from tmpdrug
+group by seq,did,use_status
+having sum(sum_price)<>0;
+
+select t.* from tmpData t
+endtext
+=cliptext(_dru)
+
+text to _aer noshow textmerge
+call modifycolumn('referin','refer_hospcode','varchar(5)',null);
+call modifycolumn('referout','refer_hospcode','varchar(5)',null);
+
+drop temporary table if exists tmpData;
+create temporary table tmpData (seq varchar(30),an varchar(9),hn varchar(9),dateopd date,authae varchar(15),aedate date,aetime varchar(8),aetype varchar(1),ucae varchar(1),emtype varchar(1),refer_no varchar(20),refmaini varchar(5),ireftype varchar(4),refmaino varchar(5),oreftype varchar(4));
+
+#insert into tmpData (seq,hn,dateopd,aedate,aetime,aetype)
+#select o.vn seq,o.hn,o.vstdate dateopd,date(d.arrive_time) aedate,formattime(d.arrive_time) aetime,'' aetype
+#from tmpExport ex
+#join ovst o on o.vn=ex.vn
+#join er_nursing_detail d on d.vn=o.vn
+#where d.er_accident_type_id between 1 and 19;
+
+insert into tmpData (seq,hn,dateopd,ucae,emtype,refmaini,ireftype,refmaino,oreftype,refer_no)
+select o.vn seq,o.hn,o.vstdate dateopd
+,case
+when demand='Normal' then 'N'
+when demand='Accident' then 'A'
+when demand='Emergency' then 'E'
+when demand='OP Refer ¢éÒÁ¨Ñ§ËÇÑ´' then '<<icase(myzone=[13],[R],myzone>=[01],[R],[O])>>'
+when demand='OP Refer ã¹¨Ñ§ËÇÑ´' then '<<icase(myzone=[13],[P],myzone>=[01],[P],[I])>>'
+when demand='ÂéÒÂË¹èÇÂà¡Ô´ÊÔ·¸Ô·Ñ¹·Õ' then 'C'
+when demand='ºÃÔ¡ÒÃàªÔ§ÃØ¡' then 'Z'
+#when ifnull(tt.ucae,'')<>'' then tt.ucae
+else '' end ucae
+,'' emtype
+,if(ri.vn is not null,ri.refer_hospcode,'')
+,if(ri.vn is not null,'1100','')
+,if(ro.vn is not null,ro.refer_hospcode,'')
+,if(ro.vn is not null,'1100','')
+,concat_ws(',',concat('In:',ri.docno),concat('Out:',ro.refer_number))
+from tmpExport ex
+join ovst o on o.vn=ex.vn
+left join referin ri on ri.vn=o.vn
+left join referout ro on ro.vn=o.vn
+left join er_regist er on er.vn=o.vn
+left join er_pt_type tt on tt.er_pt_type=er.er_pt_type
+where ifnull(ex.demand,'')<>'' or ri.vn is not null or ro.vn is not null;
+
+insert into tmpData (seq,an,hn,dateopd,authae,aedate,aetime,aetype,refmaini,ireftype,refmaino,oreftype,refer_no,ucae,emtype)
+select i.an seq,i.an,i.hn
+,i.regdate
+,ac.claim_code,ac.ac_date,formattime(ac.ac_time),ac.ac_type
+,case
+when ri.vn is not null then ri.refer_hospcode
+when ist.export_code=3 then i.rfrilct end
+,case
+when ri.vn is not null then '1100'
+when ist.export_code=3  then i.iref_type end
+,case
+when ro.vn is not null then ro.refer_hospcode
+when dchtype.nhso_dchtype=4 then i.rfrolct end
+,if(ro.vn is not null or dchtype.nhso_dchtype=4,'1100','')
+,concat_ws(',',concat('In:',ri.docno),concat('Out:',ro.refer_number))
+,case
+when demand='Normal' then 'N'
+when demand='Accident' then 'A'
+when demand='Emergency' then 'E'
+when demand='OP Refer ¢éÒÁ¨Ñ§ËÇÑ´' then '<<icase(myzone=[13],[R],myzone>=[01],[R],[O])>>'
+when demand='OP Refer ã¹¨Ñ§ËÇÑ´' then '<<icase(myzone=[13],[P],myzone>=[01],[P],[I])>>'
+when demand='ÂéÒÂË¹èÇÂà¡Ô´ÊÔ·¸Ô·Ñ¹·Õ' then 'C'
+when demand='ºÃÔ¡ÒÃàªÔ§ÃØ¡' then 'Z'
+#when ifnull(ac.ac_ae,'')<>'' then ac.ac_ae
+else '' end ucae
+,ac.ac_emtype
+from tmpExport ex
+join ipt i on i.an=ex.vn
+left join ipt_accident ac on ac.an=i.an
+left join ovstist ist on ist.ovstist=i.ivstist
+left join dchtype on dchtype.dchtype=i.dchtype
+left join referin ri on ri.vn=i.vn
+left join referout ro on ro.vn=i.an
+where ifnull(ex.demand,'')<>'' or ist.export_code=3 or dchtype.nhso_dchtype=4 or ri.vn is not null or ro.vn is not null;
+
+select t.* from tmpData t
+endtext
+
+text to _lab noshow textmerge
+call modifycolumn('lab_items','labtest','varchar(2)',null);
+call modifycolumn('lab_items','provis_labcode','varchar(7)',null);
+
+drop temporary table if exists tmpData;
+create temporary table tmpData (HCode varchar(5),HN varchar(9),Person_ID varchar(13),DateServ date,Seq varchar(15),LabTest varchar(7),LabResult double(7,2)
+,primary key (seq,labtest)) engine=MyISAM default charset=tis620;
+
+replace into tmpData
+select ?myhospcode,lh.hn,pt.cid,lh.order_date,lh.vn,l.labtest,lo.lab_order_result
+from tmpExport ex
+join lab_head lh on lh.vn=ex.vn
+join clinic_visit cv on cv.vn=ex.vn
+left join patient pt on pt.hn=lh.hn
+join lab_order lo on lo.lab_order_number=lh.lab_order_number
+join lab_items l on l.lab_items_code=lo.lab_items_code
+where ifnull(l.labtest,'')<>'';
+
+select t.* from tmpData t where labresult>0
+endtext
+
+text to _code noshow textmerge
+,case
+when ifnull(d.income_phdb_code,'')<>'' then d.income_phdb_code
+when d.nhso_adp_code regexp '^XXXX' then lpad(inc.drg_chrgitem_id,5,'X')
+when d.nhso_adp_code in ('21301') then if(ex.maininscl regexp 'SSS',lpad(inc.drg_chrgitem_id,5,'X'),d.nhso_adp_code)
+when inc.drg_chrgitem_id in (3,4) then if(ifnull(d.sks_drug_code,'')='',lpad(inc.drg_chrgitem_id,5,'X'),d.sks_drug_code)
+when inc.drg_chrgitem_id in (6,7) then if(ifnull(d.tmlt_code,'')='',lpad(inc.drg_chrgitem_id,5,'X'),d.tmlt_code)
+when inc.drg_chrgitem_id=14 and ex.maininscl regexp '<<myOFC>>' and oo.rxdate>='2024-05-31' then 'XXX14'
+when ifnull(d.nhso_adp_code,'')<>'' then d.nhso_adp_code
+else lpad(inc.drg_chrgitem_id,5,'X') end code
+endtext
+
+text to _phdb noshow textmerge
+drop temporary table if exists tmpData;
+create temporary table tmpData (hn varchar(15),code varchar(20),name varchar(100),qty int(5),price double(12,2),an varchar(15),seq varchar(15),inscl varchar(3)
+) engine=MyISAM default charset=tis620;
+
+insert into tmpdata
+select oo.hn
+<<_code>>
+,concat_ws(' ',d.name,d.strength) name
+,oo.qty
+,oo.sum_price price
+,null an
+,oo.vn seq
+,ex.maininscl inscl
+from tmpExport ex
+join opitemrece oo on oo.vn=ex.vn
+join s_drugitems d on d.icode=oo.icode
+left join income inc on inc.income=oo.income
+left join drg_chrgitem drg on drg.drg_chrgitem_id=inc.drg_chrgitem_id
+left join nhso_adp_code adp on adp.nhso_adp_code=d.nhso_adp_code and zero(adp.drg_chrgitem_id)=zero(d.drg_chrgitem_id)
+left join opitemrece_noexport no on no.seq=oo.vn and no.icode=oo.icode and no.type=if(oo.item_type='H','H','')
+where oo.sum_price<>0
+and no.seq is null ;
+
+insert into tmpdata
+select oo.hn
+<<_code>>
+,concat_ws(' ',d.name,d.strength) name
+,oo.qty
+,oo.sum_price price
+,oo.an
+,oo.an seq
+,ex.maininscl inscl
+from tmpExport ex
+join opitemrece oo on oo.an=ex.vn
+join s_drugitems d on d.icode=oo.icode
+left join income inc on inc.income=oo.income
+left join drg_chrgitem drg on drg.drg_chrgitem_id=inc.drg_chrgitem_id
+left join nhso_adp_code adp on adp.nhso_adp_code=d.nhso_adp_code and zero(adp.drg_chrgitem_id)=zero(d.drg_chrgitem_id)
+left join opitemrece_noexport no on no.seq=oo.vn and no.icode=oo.icode and no.type=if(oo.item_type='H','H','')
+where oo.sum_price<>0
+and no.seq is null ;
+
+select seq,an,hn,inscl,code,name fname,sum(qty) qty,sum(price) price
+from tmpData t
+group by seq,code
+endtext
+
+_ret='_'+_file
+_ret=icase(type(_ret)#'U',eval(_ret),'')
+retu _ret
+
+Proc CreateCursor
+para _file
+priv _ret
+_ret=.T.
+_cursor=ntoc(_file)
+_cursor=juststem(_cursor)
+*_str='INS,PAT,OPD,ORF,ODX,OOP,IPD,IRF,IDX,IOP,CHT,CHA,AER,ADP,LVD,DRU'
+*create cursor tmpINS (hn C(15) null,inscl C(3) null,subtype C(2) null,cid C(16) null,datein D(8) null,dateexp D(8) null,hospmain C(5) null,hospsub C(5) null,govcode C(6) null,govname C(250) null,permitno C(30) null,docno C(30) null,ownrpid C(13) null,ownname C(250) null,an C(15) null,seq C(15) null,subinscl C(2) null,relinscl C(2) null,htype C(1) null)
+*create cursor tmpPAT (hcode C(5) null,hn C(15) null,changwat C(2) null,amphur C(2) null,dob D(8) null,sex C(1) null,marriage C(1) null,occupa C(3) null,nation C(3) null,person_id C(13) null,namepat C(36) null,title C(30) null,fname C(40) null,lname C(40) null,idtype C(1) null)
+*create cursor tmpOPD (hn C(15) null,clinic C(5) null,dateopd D(8) null,timeopd C(4) null,seq C(15) null,uuc C(1) null)
+*create cursor tmpORF (hn C(15) null,dateopd D(8) null,clinic C(5) null,refer C(5) null,refertype C(1) null,seq C(15) null)
+*create cursor tmpODX (hn C(15) null,datedx D(8) null,clinic C(5) null,diag C(9) null,dxtype C(1) null,drdx C(15) null,person_id C(13) null,seq C(15) null)
+*create cursor tmpOOP (hn C(15) null,dateopd D(8) null,clinic C(5) null,oper C(10) null,dropid C(6) null,person_id C(13) null,seq C(15) null)
+*create cursor tmpIPD (hn C(15) null,an C(15) null,dateadm D(8) null,timeadm C(4) null,datedsc D(8) null,timedsc C(4) null,dischs C(1) null,discht C(1) null,warddsc C(4) null,dept C(2) null,adm_w N(7,3) null,uuc C(1) null,svctype C(1) null)
+*create cursor tmpIRF (an C(15) null,refer C(5) null,refertype C(1) null)
+*create cursor tmpIDX (an C(15) null,diag C(9) null,dxtype C(1) null,drdx C(6) null)
+*create cursor tmpIOP (an C(15) null,oper C(10) null,optype C(1) null,dropid C(6) null,datein D(8) null,timein C(4) null,dateout D(8) null,timeout C(4) null)
+*create cursor tmpCHT (hn C(15) null,an C(15) null,date D(8) null,total N(12,2) null,paid N(12,2) null,pttype C(2) null,person_id C(13) null,seq C(15) null)
+*create cursor tmpCHA (hn C(15) null,an C(15) null,date D(8) null,chrgitem C(2) null,amount N(12,2) null,person_id C(13) null,seq C(15) null)
+*create cursor tmpAER (hn C(15) null,an C(15) null,dateopd D(8) null,authae C(12) null,aedate D(8) null,aetime C(4) null,aetype C(1) null,refer_no C(20) null,refmaini C(5) null,ireftype C(4) null,refmaino C(5) null,oreftype C(4) null,ucae C(1) null,emtype C(1) null,seq C(15) null,aestatus C(1) null,dalert D(8) null,talert C(4) null)
+*create cursor tmpADP (hn C(15) null,an C(15) null,dateopd D(8) null,type C(2) null,code C(20) null,qty N(4) null,rate N(12,2) null,seq C(15) null,cagcode C(10) null,dose C(10) null,ca_type C(1) null,serialno C(24) null,totcopay N(12,2) null,use_status C(1) null,total N(12,2) null,qtyday N(3) null,tmltcode C(20) null)
+*create cursor tmpLVD (seqlvd C(3) null,an C(15) null,dateout D(8) null,timeout C(4) null,datein D(8) null,timein C(4) null,qtyday C(3) null)
+*create cursor tmpDRU (hcode C(5) null,hn C(15) null,an C(15) null,clinic C(5) null,person_id C(13) null,date_serv D(8) null,did C(30) null,didname C(250) null,amount N(7) null,drugpric N(12,2) null,drugcost n(12,2) null,didstd C(24) null,unit C(20) null,unit_pack C(20) null,seq C(15) null,drugtype C(2) null,drugremark C(2) null,pa_no C(9) null,totcopay N(12,2) null,use_status C(1) null,total N(12,2) null)
+do case
+	case _cursor='ADP'
+		create cursor (_cursor) (HN C (15) NULL,AN C (15) NULL,DATEOPD D  NULL,TYPE C (2) NULL,CODE C (20) NULL,QTY N (4,0) NULL,RATE N (12,2) NULL,SEQ C (25) NULL,CAGCODE C (10) NULL,DOSE C (10) NULL,CA_TYPE C (1) NULL,SERIALNO C (24) NULL,TOTCOPAY N (12,2) NULL,USE_STATUS C (1) NULL,TOTAL N (12,2) NULL,QTYDAY N (3,0) NULL,TMLTCODE C (20) NULL,STATUS1 C(20) NULL,BI n(3) NULL,GRAVIDA C(2) NULL,GA_WEEK C(2) NULL,DCIP C(2) NULL,LMP D NULL,SP_ITEM C(2) NULL)
+	case _cursor='AER'
+		create cursor (_cursor) (HN C (15) NULL,AN C (15) NULL,DATEOPD D  NULL,AUTHAE C (12) NULL,AEDATE D  NULL,AETIME C (4) NULL,AETYPE C (1) NULL,REFER_NO C (20) NULL,REFMAINI C (5) NULL,IREFTYPE C (4) NULL,REFMAINO C (5) NULL,OREFTYPE C (4) NULL,UCAE C (1) NULL,EMTYPE C (1) NULL,SEQ C (25) NULL,AESTATUS C (1) NULL,DALERT D  NULL,TALERT C (4) NULL)
+	case _cursor='CHA'
+		create cursor (_cursor) (HN C (15) NULL,AN C (15) NULL,DATE D  NULL,CHRGITEM C (2) NULL,AMOUNT N (12,2) NULL,PERSON_ID C (13) NULL,SEQ C (25) NULL)
+	case _cursor='CHT'
+		create cursor (_cursor) (HN C (15) NULL,AN C (15) NULL,DATE D  NULL,TOTAL N (12,2) NULL,PAID N (12,2) NULL,PTTYPE C (2) NULL,PERSON_ID C (13) NULL,SEQ C (25) NULL)
+	case _cursor='DRU'
+		create cursor (_cursor) (HCODE C (5) NULL,HN C (15) NULL,AN C (15) NULL,CLINIC C (5) NULL,PERSON_ID C (13) NULL,DATE_SERV D  NULL,DID C (30) NULL,DIDNAME C (250) NULL,AMOUNT C (12) NULL,DRUGPRIC C (14) NULL,DRUGCOST C (14) NULL,DIDSTD C (24) NULL,UNIT C (20) NULL,UNIT_PACK C (20) NULL,SEQ C (25) NULL,DRUGTYPE C (2) NULL,DRUGREMARK C (2) NULL,PA_NO C (9) NULL,TOTCOPAY N (12,2) NULL,USE_STATUS C (1) NULL,TOTAL N (12,2) NULL)
+	case _cursor='IDX'
+		create cursor (_cursor) (AN C (15) NULL,DIAG C (9) NULL,DXTYPE C (1) NULL,DRDX C (20) NULL)
+	case _cursor='INS'
+		*create cursor (_cursor) (HN C (15) NULL,INSCL C (3) NULL,SUBTYPE C (2) NULL,CID C (16) NULL,DATEIN D  NULL,DATEEXP D  NULL,HOSPMAIN C (5) NULL,HOSPSUB C (5) NULL,GOVCODE C (6) NULL,GOVNAME C (250) NULL,PERMITNO C (30) NULL,DOCNO C (30) NULL,OWNRPID C (13) NULL,OWNNAME C (250) NULL,AN C (15) NULL,SEQ C (25) NULL,SUBINSCL C (2) NULL,RELINSCL C (2) NULL,HTYPE C (1) NULL)
+		create cursor (_cursor) (HN C (15) NULL,INSCL C (3) NULL,SUBTYPE C (2) NULL,CID C (16) NULL,HCODE C(5) NULL,DATEEXP D  NULL,HOSPMAIN C (5) NULL,HOSPSUB C (5) NULL,GOVCODE C (6) NULL,GOVNAME C (250) NULL,PERMITNO C (30) NULL,DOCNO C (30) NULL,OWNRPID C (13) NULL,OWNNAME C (250) NULL,AN C (15) NULL,SEQ C (25) NULL,SUBINSCL C (2) NULL,RELINSCL C (2) NULL,HTYPE C (1) NULL)
+	case _cursor='IOP'
+		create cursor (_cursor) (AN C (15) NULL,OPER C (10) NULL,OPTYPE C (1) NULL,DROPID C (20) NULL,DATEIN D  NULL,TIMEIN C (4) NULL,DATEOUT D  NULL,TIMEOUT C (4) NULL)
+	case _cursor='IPD'
+		create cursor (_cursor) (HN C (15) NULL,AN C (15) NULL,DATEADM D  NULL,TIMEADM C (4) NULL,DATEDSC D  NULL,TIMEDSC C (4) NULL,DISCHS C (1) NULL,DISCHT C (1) NULL,WARDDSC C (4) NULL,DEPT C (2) NULL,ADM_W N (7,3) NULL,UUC C (1) NULL,SVCTYPE C (1) NULL)
+	case _cursor='IRF'
+		create cursor (_cursor) (AN C (15) NULL,REFER C (5) NULL,REFERTYPE C (1) NULL)
+	case _cursor='LAB'
+		create cursor (_cursor) (HCODE C(5) NULL,HN C(15) NULL,PERSON_ID C(13) NULL,DATESERV D NULL,SEQ C(25) NULL,LABTEST C(7) NULL,LABRESULT N(12,5) NULL)
+	case _cursor='LVD'
+		create cursor (_cursor) (SEQLVD C (25) NULL,AN C (15) NULL,DATEOUT D  NULL,TIMEOUT C (4) NULL,DATEIN D  NULL,TIMEIN C (4) NULL,QTYDAY C (3) NULL)
+	case _cursor='ODX'
+		create cursor (_cursor) (HN C (15) NULL,DATEDX D  NULL,CLINIC C (5) NULL,DIAG C (9) NULL,DXTYPE C (1) NULL,DRDX C (20) NULL,PERSON_ID C (13) NULL,SEQ C (25) NULL)
+	case _cursor='OOP'
+		create cursor (_cursor) (HN C (15) NULL,DATEOPD D  NULL,CLINIC C (5) NULL,OPER C (10) NULL,DROPID C (20) NULL,PERSON_ID C (13) NULL,SEQ C (25) NULL)
+	case _cursor='OPD'
+		create cursor (_cursor) (HN C (15) NULL,CLINIC C (5) NULL,DATEOPD D  NULL,TIMEOPD C (4) NULL,SEQ C (25) NULL,UUC C (1) NULL)
+	case _cursor='ORF'
+		create cursor (_cursor) (HN C (15) NULL,DATEOPD D  NULL,CLINIC C (5) NULL,REFER C (5) NULL,REFERTYPE C (1) NULL,SEQ C (25) NULL)
+	case _cursor='PAT'
+		create cursor (_cursor) (HCODE C (5) NULL,HN C (15) NULL,CHANGWAT C (2) NULL,AMPHUR C (2) NULL,DOB D  NULL,SEX C (1) NULL,MARRIAGE C (1) NULL,OCCUPA C (3) NULL,NATION C (3) NULL,PERSON_ID C (13) NULL,NAMEPAT C (36) NULL,TITLE C (30) NULL,FNAME C (40) NULL,LNAME C (40) NULL,IDTYPE N (1) NULL)
+	other
+		_ret=.F.
+endcase
+retu _ret
+
+Proc CreateTempFile
+text to _sql noshow textmerge
+drop temporary table if exists Export4PHDB;
+create temporary table if not exists Export4PHDB (HN Char(15), CODE Char(20),Name Char(100), QTY Int(5), PRICE Decimal(10,2), AN Char(15), SEQ Char(25), INSCL Char(3)
+,primary key (seq,code)) engine=MyISAM default charset=tis620;
+
+drop temporary table if exists Export4ADP;
+create temporary table if not exists Export4ADP (HN Char(15), AN Char(15), DATEOPD Date, BillMaud Char(2), TYPE Char(2), CODE Char(20), QTY Int(4), RATE Decimal(10,2), SEQ Char(25), CAGCODE Char(10), DOSE Char(10), CA_TYPE Char(1), SERIALNO Char(24), TOTCOPAY Decimal(10,2), USE_STATUS Char(1), TOTAL Decimal(10,2), QTYDAY Int(3), TMLTCODE Char(20), STATUS1 Char(20), BI Char(3),GRAVIDA char(2), GA_WEEK char(2), DCIP Char(2), LMP Date, SP_ITEM Char(2)
+,primary key (seq,type,code,rate,sp_item)) engine=MyISAM default charset=tis620;
+
+drop temporary table if exists Export4AER;
+create temporary table if not exists Export4AER (HN Char(15), AN Char(15), DATEOPD Date, AUTHAE Char(12), AEDATE Date, AETIME Char(4), AETYPE Char(1), REFER_NO Char(20), REFMAINI Char(5), IREFTYPE Char(4), REFMAINO Char(5), OREFTYPE Char(4), UCAE Char(1), EMTYPE Char(1), SEQ Char(25), AESTATUS Char(1), DALERT Date, TALERT Char(4)
+,primary key (seq)) engine=MyISAM default charset=tis620;
+
+drop temporary table if exists Export4CHA;
+create temporary table if not exists Export4CHA (HN Char(15), AN Char(15), DATE Date,CHRGITEM Char(2), AMOUNT Decimal(10,2), PERSON_ID Char(13), SEQ Char(25)
+,primary key (seq,chrgitem)) engine=MyISAM default charset=tis620;
+
+drop temporary table if exists Export4CHT;
+create temporary table if not exists Export4CHT (HN Char(15), AN Char(15), DATE Date, TOTAL Decimal(10,2), PAID Decimal(10,2), PTTYPE Char(2), PERSON_ID Char(13), SEQ Char(25)
+,primary key (seq)) engine=MyISAM default charset=tis620;
+
+drop temporary table if exists Export4DRU;
+create temporary table if not exists Export4DRU (HCODE Char(5), HN Char(15), AN Char(15), CLINIC Char(5), PERSON_ID Char(13), DATE_SERV Date, DID Char(30), DIDNAME Char(250), AMOUNT Char(12), DRUGPRIC Char(14), DRUGCOST Char(14), DIDSTD Char(24), UNIT Char(20), UNIT_PACK Char(20), SEQ Char(25), DRUGTYPE Char(2), DRUGREMARK Char(2), PA_NO Char(25), TOTCOPAY Decimal(10,2), USE_STATUS Char(1), TOTAL Decimal(10,2)
+,primary key (seq,did,date_serv,use_status)) engine=MyISAM default charset=tis620;
+
+drop temporary table if exists Export4IDX;
+create temporary table if not exists Export4IDX (AN Char(15), DIAG Char(9), DXTYPE Char(1), DRDX Char(20)
+,primary key (an,diag)) engine=MyISAM default charset=tis620;
+
+drop temporary table if exists Export4INS;
+create temporary table if not exists Export4INS (HN Char(15), INSCL Char(3), SUBTYPE Char(2), CID Char(16), HCODE Char(5), DATEEXP Date, HOSPMAIN Char(5), HOSPSUB Char(5), GOVCODE Char(6), GOVNAME Char(250), PERMITNO Char(30), DOCNO Char(30), OWNRPID Char(13), OWNNAME Char(250), AN Char(15), SEQ Char(25), SUBINSCL Char(2), RELINSCL Char(2), HTYPE Char(1)
+,primary key (seq)) engine=MyISAM default charset=tis620;
+
+drop temporary table if exists Export4IOP;
+create temporary table if not exists Export4IOP (AN Char(15), OPER Char(10), OPTYPE Char(1), DROPID Char(20), DATEIN Date, TIMEIN Char(4), DATEOUT Date, TIMEOUT Char(4)
+,primary key (an,oper)) engine=MyISAM default charset=tis620;
+
+drop temporary table if exists Export4IPD;
+create temporary table if not exists Export4IPD (HN Char(15), AN Char(15), DATEADM Date, TIMEADM Char(4), DATEDSC Date, TIMEDSC Char(4), DISCHS Char(1), DISCHT Char(1), WARDDSC Char(4), DEPT Char(2), ADM_W Decimal(7,3), UUC Char(1), SVCTYPE Char(1)
+,primary key (an)) engine=MyISAM default charset=tis620;
+
+drop temporary table if exists Export4IRF;
+create temporary table if not exists Export4IRF (AN Char(15), REFER Char(5), REFERTYPE Char(1)
+,primary key (an,refer,refertype)) engine=MyISAM default charset=tis620;
+
+drop temporary table if exists Export4LAB;
+create temporary table if not exists Export4LAB (HCODE Char(5), HN Char(15), PERSON_ID Char(13), DATESERV Date, SEQ Char(25), LABTEST Char(7), LABRESULT Decimal(7,2)
+,primary key (seq,labtest)) engine=MyISAM default charset=tis620;
+
+drop temporary table if exists Export4LVD;
+create temporary table if not exists Export4LVD (SEQLVD Char(3), AN Char(15), DATEOUT Date, TIMEOUT Char(4), DATEIN Date, TIMEIN Char(4), QTYDAY Char(3)
+,primary key (seqlvd)) engine=MyISAM default charset=tis620;
+
+drop temporary table if exists Export4ODX;
+create temporary table if not exists Export4ODX (HN Char(15), DATEDX Date, CLINIC Char(5), DIAG Char(9), DXTYPE Char(1), DRDX Char(20), PERSON_ID Char(13), SEQ Char(25)
+,primary key (seq,diag)) engine=MyISAM default charset=tis620;
+
+drop temporary table if exists Export4OOP;
+create temporary table if not exists Export4OOP (HN Char(15), DATEOPD Date, CLINIC Char(5), OPER Char(10), DROPID Char(20), PERSON_ID Char(13), SEQ Char(25)
+,primary key (seq,oper)) engine=MyISAM default charset=tis620;
+
+drop temporary table if exists Export4OPD;
+create temporary table if not exists Export4OPD (HN Char(15), CLINIC Char(5), DATEOPD Date, TIMEOPD Char(4), SEQ Char(25), UUC Char(1),Detail Char(200),BTemp Decimal(3,1),SBP Decimal(3,0),DBP Decimal(3,0),PR Decimal(3,0),RR Decimal(3,0),OPType Char(2),TypeIn Char(1),TypeOut Char(1)
+,primary key (seq)) engine=MyISAM default charset=tis620;
+
+drop temporary table if exists Export4ORF;
+create temporary table if not exists Export4ORF (HN Char(15), DATEOPD Date, CLINIC Char(5), REFER Char(5), REFERTYPE Char(1), SEQ Char(25)
+,primary key (seq,refer,refertype)) engine=MyISAM default charset=tis620;
+
+drop temporary table if exists Export4PAT;
+create temporary table if not exists Export4PAT (HCODE Char(5), HN Char(15), CHANGWAT Char(2), AMPHUR Char(2), DOB Date, SEX Char(1), MARRIAGE Char(1), OCCUPA Char(3), NATION Char(3), PERSON_ID Char(13), NAMEPAT Char(36), TITLE Char(30), FNAME Char(40), LNAME Char(40), IDTYPE int(1)
+,primary key (hn)) engine=MyISAM default charset=tis620;
+endtext
+=runsql(_sql,.T.)
+
+Proc SaveNoExport
+acti scree
+m.seq=ntoc(eval('m.'+cfield))
+if empty(m.seq)
+	retu .F.
+endif
+if !used('temp')
+	retu .F.
+endif
+if !checktable('opitemrece_noexport',_handle,'MySQL','tmpexport')
+	retu .F.
+endif
+=sqlexec(_handle,[delete from opitemrece_noexport where seq=?m.seq])
+sele temp
+if fieldpos('no_export')=0
+	retu .F.
+endif
+scan
+	scatt memv memo
+	m.icode=ntoc(m.icode,0)
+	m.income=ntoc(m.income)
+	m.type=ntoc(m.itemtype)
+	m.type=icase(m.income$income_homemed,'H',m.type)
+	m.no_export=checkyes(m.no_export)
+	if m.no_export='Y'
+		=savemysqldata('opitemrece_noexport','tmpexport')
+	endif
+ends
+
+Proc CheckUpData
+priv i,ii,_sql,_opd,_ipd,_caption,_title,_format,_width,_position,_color,_risk,reportname,reportfield,setcolumn,lockcolumns,maxform,formwidth,formheight,formtop,formleft,gridtop,gridleft,lsubheader,setcaption,lno
+sele tmpreport
+scatt memv memo
+myHN=ntoc(m.hn)
+m.an=ntoc(m.an)
+m.vn=ntoc(m.vn)
+cfield=icase(empty(m.an),'vn','an')
+m.maininscl=ntoc(m.maininscl)
+if empty(m.an) and empty(m.vn)
+	retu .F.
+endif
+store '' to _sql,_opd,_ipd
+text to _sql noshow textmerge
+drop temporary table if exists tmpIncome;
+create temporary table tmpIncome
+select <<icase(lnot,'onestring(no.no_export) no_export,','')>>
+oo.hn,oo.icode,concat_ws(' ',d.name,d.strength) drugname
+,ifnull(d.tpu_code_list,space(10)) TMT_HOSxP
+,ifnull(dd.tmtid,space(10)) TMT_EClaim
+,<<icase(cfield='an','presc_reason_1','presc_reason')>> reason
+,onestring(if(oo.item_type='H','H','')) itemtype
+,oo.paidst
+,sum(oo.qty) qty
+,oo.unitprice
+,oo.cost unitcost
+,sum(oo.sum_price) price
+#,sum(oo.qty*oo.unitprice) total
+,asnumbers(0.00) total
+,inc.name income
+,if(d.nhso_adp_code in (select code from covid_items_detail),'Y',' ') covid
+,inc.drg_chrgitem_id billmaud
+,drg_chrgitem_name billname
+,d.nhso_adp_type_id id
+,case
+when inc.drg_chrgitem_id=14 and ?m.maininscl regexp '<<myOFC>>' and oo.rxdate>='2024-05-31' then 'XXX14'
+else ifnull(d.nhso_adp_code,'') end cscode
+,adp.nhso_adp_code_name csname
+,ifnull(ll.tmlt_code,'') tmlt
+,if(dd.hospdrugcode is null,'','Y') drug
+from opitemrece oo
+left join s_drugitems d on d.icode=oo.icode
+left join income inc on inc.income=if(oo.item_type='H' ,<<icase(empty(homemed),[oo.income],homemed)>>,oo.income)
+left join drg_chrgitem g on g.drg_chrgitem_id=inc.drg_chrgitem_id
+left join nhso_adp_code adp on adp.nhso_adp_code=d.nhso_adp_code and zero(adp.drg_chrgitem_id)=zero(d.drg_chrgitem_id)
+left join <<myrcm>>.labitem ll on ll.icode=oo.icode and (chi=1 or eclaim=1)
+left join <<myrcm>>.eclaim_drugcatalog dd on dd.hospdrugcode=<<icase(myhis$HISData,'d.oldcode','oo.icode')>> and inc.drg_chrgitem_id in (3,4)
+left join opitemrece_noexport no on no.seq=oo.<<cfield>> and no.icode=oo.icode and no.type=if(oo.item_type='H','H','')
+left join <<icase(cfield='an','ipt','ovst')>>_presc_ned ned on ned.<<cfield>>=oo.<<cfield>> and ned.icode=oo.icode
+where oo.<<cfield>>=?m.<<cfield>>
+group by oo.icode,billmaud,oo.paidst
+#having price<>0
+order by billmaud,icode,itemtype,cscode;
+
+update tmpincome  set total=qty*unitprice;
+
+set @no=0;
+select @no:=asnumber(@no)+1 no,t.*
+from tmpincome t
+#where drugname not regexp 'ÂÒ\\.|ÂÒà´ÔÁ' or price<>0
+endtext
+_caption='ÃÒÂÅÐàÍÕÂ´ '+icase(empty(m.an),'VN:','AN:')+icase(empty(m.an),m.vn,m.an)
+if !runsql(_sql,.T.)
+	retu .F.
+endif
+*if fieldpos('no_export')>0
+*	repl no_export with 'Y' for drugname='ÂÒ.' or drugname='ÂÒà´ÔÁ'
+*endif
+store '' to _title,_format,_width,_position
+for ii=1 to fcount()
+	_field=field(ii)
+	_title=_title+icase(ii=1,'','|')+icase(_field='TMT',programname(strtran(_field,'TMT_','')),_field='TOTAL','¨Ò¡¤Ó¹Ç³',_field='INCOME','ª×èÍ¡ÅØèÁ¤èÒãªé¨èÒÂ',_field='PRICE','¨Ó¹Ç¹à§Ô¹',_field$'BILLMAUD,ID','ÃËÑÊ';
+	,_field$'BILLNAME,CSNAME','ª×èÍ',_field='CSCODE','CSCode',_field='TMLT','TMLT',_field='ITEMTYPE','»ÃÐàÀ·',_field='COVID','Covid',_field='REASON','àËµØ¼Å','x')
+	_format=_format+icase(ii=1,'','|')+icase(_field$'TOTAL,PRICE,UNITPRICE',formatmoney,'x')
+	_width=_width+icase(ii=1,'','|')+icase(_field=='NO','40','DATE'$_field,'70',_field='PTNAME','200',_field='BILLMAUD','40',_field='BILLNAME','300',_field$'CSCODE,TMLT','80',_field$'INCOME,CSNAME','300';
+	,_field='TOTAL','80',_field=='DRUG','30',_field='TMT','50',_field='REASON','40','x')
+	_position=_position+icase(ii=1,'','|')+icase(_field='OK' or _field='ITEMTYPE' or _field=='DRUG' or _field='COVID','2','x')
+	if _field='PRICE' or _field='TOTAL'
+		sum (&_field) to m.&_field
+	endif
+next
+store .null. to m.no,m.qty,m.unitprice,m.unitcost,m.id,m.billmaud,m.hn
+m.drugname='ÃÇÁ'
+if recco()>0
+	insert into temp from memv
+endif
+go top
+_risk='All|BillMaud:color1|ItemType:color1|Drug:color3|TMT_HOSxP:color4|Total:color5|HN:color6'
+_color=[icase(drugname='ÃÇÁ',rgb(128,255,0),inlist(billmaud,1,2,5,6,7,8,9,10,11,12,13,14,15,19) and empty(cscode),color('red'),inlist(billmaud,6,7) and empty(tmlt),iif(m.maininscl='OFC',color('red'),color('orange'))]+;
+[,isnull(billmaud),color('lightred'),price=0,color('lightpink'),color('white'))]
+color1=[icase(drugname='ÃÇÁ',rgb(128,255,0),(id=10 and billmaud#1) or (id=2 and billmaud#2) or (id=11 and billmaud#5) or (id=14 and billmaud#6) or (id=15 and billmaud#7) or (id=16 and billmaud#8)]+;
+[ or (id=9 and billmaud#9) or (id=18 and billmaud#10)  or (id=19 and billmaud#11) or (id=17 and billmaud#12) or (id=12 and billmaud#13) or (id=20 and billmaud#14) or (id=13 and billmaud#15) or (id=3 and !inlist(billmaud,3,4,19))]+;
+[,rgb(255,0,255),inlist(billmaud,1,2,5,6,7,8,9,10,11,12,13,14,15,19) and empty(cscode),color('red'),inlist(billmaud,6,7) and empty(tmlt),iif(m.maininscl='OFC',color('red'),color('orange'))]+;
+[,isnull(billmaud),color('lightred'),price=0,color('lightpink'),color('white'))]
+color2=[icase(drugname='ÃÇÁ',rgb(128,255,0),itemtype='H' and billmaud#4,rgb(255,0,255),inlist(billmaud,1,2,5,6,7,8,9,10,11,12,13,14,15,19) and empty(cscode),color('red'),inlist(billmaud,6,7) and empty(tmlt),iif(m.maininscl='OFC',color('red'),color('orange'))]+;
+[,isnull(billmaud),color('lightred'),price=0,color('lightpink'),color('white'))]
+color3=[icase(drugname='ÃÇÁ',rgb(128,255,0),empty(drug) and inlist(billmaud,3,4),rgb(255,0,255),inlist(billmaud,1,2,5,6,7,8,9,10,11,12,13,14,15,19) and empty(cscode),color('red'),inlist(billmaud,6,7) and empty(tmlt)]+;
+[,iif(m.maininscl='OFC',color('red'),color('orange'))[,isnull(billmaud),color('lightred'),price=0,color('lightpink'),color('white'))]
+color4=[icase(drugname='ÃÇÁ',rgb(128,255,0),tmt_hosxp#tmt_eclaim,rgb(255,0,0),inlist(billmaud,1,2,5,6,7,8,9,10,11,12,13,14,15,19) and empty(cscode),color('red'),inlist(billmaud,6,7) and empty(tmlt),iif(m.maininscl='OFC',color('red'),color('orange'))]+;
+[,isnull(billmaud),color('lightred'),price=0,color('lightpink'),color('white'))]
+color5=[icase(drugname='ÃÇÁ',rgb(128,255,0),price#total,rgb(255,0,255),inlist(billmaud,1,2,5,6,7,8,9,10,11,12,13,14,15,19) and empty(cscode),color('red'),inlist(billmaud,6,7) and empty(tmlt),iif(m.maininscl='OFC',color('red'),color('orange'))]+;
+[,isnull(billmaud),color('lightred'),price=0,color('lightpink'),color('white'))]
+color6=[icase(drugname='ÃÇÁ',rgb(128,255,0),hn#myhn,rgb(255,0,0),inlist(billmaud,1,2,5,6,7,8,9,10,11,12,13,14,15,19) and empty(cscode),color('red'),inlist(billmaud,6,7) and empty(tmlt),iif(m.maininscl='OFC',color('red'),color('orange'))]+;
+[,isnull(billmaud),color('lightred'),price=0,color('lightpink'),color('white'))]
+setcolumn=fieldpos('drugname')
+lockcolumns=setcolumn
+reportname='checkgroupdata'
+clear class myGroup
+oIncome=create('myGroup')
+oIncome.show
+=savenoexport()
+
+defi class myGroup as myShows
+	Proc SetMergeHeader
+		.MergeHeader(fieldpos('UnitPrice'),fieldpos('UnitCost'),'ÃÒ¤Ò')
+		.MergeHeader(fieldpos('Price'),fieldpos('Total'),'¤èÒãªé¨èÒÂ')
+		.MergeHeader(fieldpos('REIMB_MONEY'),fieldpos('TOTAL_MONEY'),'¤èÒãªé¨èÒÂ HOSxP')
+		.MergeHeader(fieldpos('REIMB_MONEYs'),fieldpos('TOTAL_MONEYs'),'¨Ò¡¡ÒÃ¤Ó¹Ç³')
+		.MergeHeader(fieldpos('TMT_HOSxP'),fieldpos('TMT_EClaim'),'TMT')
+		.MergeHeader(fieldpos('BillMaud'),fieldpos('BillName'),'ËÁÇ´¤èÒãªé¨èÒÂ')
+		.MergeHeader(fieldpos('ID'),fieldpos('CSName'),'ADP Code')
+		.HeaderColor('no_export',color('red'))
+	Proc ToClick
+		sele temp
+		nrec=recno()
+		if recco()=0
+			retu .F.
+		endif
+		do case
+			case myname='NO_EXPORT'
+				repl no_export with 'Y' for !isnull(no)
+		endcase
+		go (nrec)
+		thisform.setfocus
+	Proc ToRightClick
+		sele temp
+		nrec=recno()
+		if recco()=0
+			retu .F.
+		endif
+		do case
+			case myname='NO_EXPORT'
+				repl no_export with '' all
+		endcase
+		go (nrec)
+		thisform.setfocus
+	Proc grdData.Keypress
+		lpara _key,_other
+		do case
+			case _key=27
+				thisform.destroy
+			case _key=32
+				myname='NO_EXPORT'
+				this.click
+			case _key=-4
+				=checkgroupdata()
+			case _key=-6
+				this.QuickExcel
+			case _key=-7
+				this.ExportTextFile
+			case _key=-8
+				this.ExportExcel
+		endcase
+	Proc grdData.Click
+		local _value
+		if myname='NO_EXPORT' and !isnull(no)
+			_value=icase(checkyes(no_export)='Y','','Y')
+			repl no_export with _value
+		endif
+		this.refresh
+enddefi
+
+Proc CheckGroupData
+priv _ret,i,ii,_sql,_opd,_ipd,_caption,_title,_format,_width,_position,_color,_risk,reportname,reportfield,setcolumn,lockcolumns,maxform,formwidth,formheight,formtop,formleft,gridtop,gridleft,lsubheader,setcaption,mypath
+store '' to _sql,_opd,_ipd
+text to _sql noshow textmerge
+select billmaud id
+,billname name
+,sum(if(paidst not in ('03'),price,0)) REIMB_MONEY
+,sum(if(paidst in ('03'),price,0)) NREIMB_MONEY
+,sum(price) Total_money
+,sum(if(paidst not in ('03'),total,0)) REIMB_MONEYs
+,sum(if(paidst in ('03'),total,0)) NREIMB_MONEYs
+,sum(total) Total_moneys
+from tmpincome
+group by 1
+endtext
+=runsql(_sql,.T.,'tmpdata')
+store '' to _title,_format,_width,_position
+for ii=1 to fcount()
+	_field=field(ii)
+	_title=_title+icase(ii=1,'','|')+icase(_field='ID','ÃËÑÊ',_field='NAME','ª×èÍËÁÇ´',_field='REIMB','àºÔ¡ä´é',_field='NREIMB','àºÔ¡äÁèä´é',_field='TOTAL','ÃÇÁ','x')
+	_format=_format+icase(ii=1,'','|')+icase('MONEY'$_field,formatmoney,'x')
+	_width=_width+icase(ii=1,'','|')+icase(_field=='NO','40','DATE'$_field,'70',_field='PTNAME','200','MONEY'$_field,'80','x')
+	_position=_position+icase(ii=1,'','|')+icase(_field='OK','2','x')
+	if type(_field)$'NIB' and _field#'NO'
+		sum (&_field) to m.&_field
+	endif
+next
+store .null. to m.id
+m.name='ÃÇÁ'
+if recco()>0
+	insert into tmpdata from memv
+endif
+go top
+_risk='All|Total_Money:color1|Total_Moneys:color2'
+_color=[icase(name='ÃÇÁ',rgb(128,255,0),rgb(255,255,255))]
+color1=[icase(name='ÃÇÁ',rgb(128,255,0),total_money#total_moneys,rgb(0,255,0),rgb(255,255,255))]
+color2=[icase(name='ÃÇÁ',rgb(128,255,0),total_money#total_moneys,rgb(255,0,255),rgb(255,255,255))]
+setcolumn=fieldpos('name')
+lockcolumns=setcolumn
+formwidth=800
+clear class myGroupData
+oGroup=create('myGroupData')
+oGroup.show
+defi class myGroupData as myShows
+	Proc SetMergeHeader
+		.MergeHeader(fieldpos('REIMB_MONEY'),fieldpos('TOTAL_MONEY'),'¤èÒãªé¨èÒÂ HOSxP')
+		.MergeHeader(fieldpos('REIMB_MONEYs'),fieldpos('TOTAL_MONEYs'),'¨Ò¡¡ÒÃ¤Ó¹Ç³')
+		.MergeHeader(fieldpos('TMT_HOSxP'),fieldpos('TMT_EClaim'),'TMT')
+enddefi
+
+Proc SendAPI
+=writeerror('´Óà¹Ô¹¡ÒÃÊè§ API',oerr,.T.)
+lTestZone=.F.
+cFolderExport=calfolder(cfolder)
+cURLToken=icase(ltestzone,'https://tnhsoapi.nhso.go.th/ecimp/v1/auth','https://nhsoapi.nhso.go.th/FMU/ecimp/v1/auth')
+cURLSend=icase(ltestzone,'https://tnhsoapi.nhso.go.th/ecimp/v1/send','https://nhsoapi.nhso.go.th/FMU/ecimp/v1/send')
+cUser=ntoc(readsysvar('API_16File_User'),0)
+cPsw=ntoc(readsysvar('API_16File_Password'),0)
+cType='txt'
+cPttype=''
+lOver=.F.
+if empty(cuser) or empty(cpsw)
+	=writeas('¡ÃØ³ÒµÃÇ¨ÊÍº User ËÃ×Í Password',oerr,.T.)
+	retu .F.
+endif
+checkfile=sys(2000,textmerge([<<cfolderexport>>ins*.<<ctype>>]))
+checkfile=icase(empty(checkfile),'',cfolderexport+checkfile)
+if !file(checkfile)
+	=writeas('äÁè¾ºä¿ÅìÊÓËÃÑºÊè§ API',oerr,.T.)
+	retu .F.
+endif
+_data=readurl(cURLToken,textmerge('{ "username": "<<cUser>>", "password": "<<cPsw>>"}'),'POST')
+oJson=nfJSonRead(_data)
+mytoken=ntoc(returndata('oJSon.Token'),0)
+if empty(mytoken)
+	=writeas('äÁèÊÒÁÒÃ¶ËÒ Token ä´é',oerr,.T.)
+	retu .F.
+endif
+=writeas('´Óà¹Ô¹¡ÒÃÊè§ÍÍ¡...',oerr,.T.)
+_send=readdata()
+=strtofile(_send,'C:\Temp\SendEClaim.JSON')
+_data=readurl(cURLSend,_send,'POST',.T.)
+oJson=nfJSonRead(_data)
+_status=tonum(returndata('oJson.Status'))
+_message=returndata('oJson.Message')
+=writeas(icase(_status=200,'Êè§ New-EClaim àÃÕÂºÃéÍÂ',_message),oerr)
+
+Proc ReadData
+local _data
+_data=''
+set textmerge to memv _data noshow
+set textmerge on
+\{
+\	"fileType": "<<ctype>>"
+\	, "maininscl": <<icase(empty(cpttype),[null],["]+cpttype+["])>>
+\	, "importDup": <<icase(lover,'true','false')>>
+\	, "assignToMe": false
+\	, "dataTypes": [ "IP", "OP" ]
+\	, "opRefer": false
+\	, "file": {
+_str='ins|pat|opd|orf|odx|oop|ipd|irf|idx|iop|cht|cha|aer|adp|lvd|dru'
+for ii=1 to getwordcount(_str,'|')
+		_name=getwordnum(_str,ii,'|')
+		_file=textmerge([<<cFolderExport>><<upper(_name)>>*.<<ctype>>])
+		_file=sys(2000,_file)
+		_file=icase(empty(_file),'',cfolderexport+_file)
+		_size=filesize(_file)
+\		<<icase(ii=1,'',',')>>"<<_name>>":{
+\			"blobName": "<<upper(_name)>>.<<ctype>>"
+\			, "blobType": "text/plain"
+\			, "blob": "<<strconv(icase(file(_file),filetostr(_file),''),13)>>"
+\			, "size": <<_size>>
+\			, "encoding": "MS874"
+\		}
+next
+\		, "lab": null
+\	}
+\}
+set textmerge off
+set textmerge to
+retu _data
+
+Proc SendReservation
+acti scree
+lTestZone=.T.
+if ltestzone
+	if mychoice('Confirm','ÃÐºº¨Í§à¤ÅÁ ÂÑ§à»ç¹ {color=red|bold=Y}TestZone{}<<CRLF>>µéÍ§¡ÒÃ·Ó§Ò¹µèÍËÃ×ÍäÁè?',2,,,,,60000,2)#1
+		retu .F.
+	endif
+endif
+store '' to myToken,msgError
+if !checktoken('fdh','API_FDH')
+	=mychoice('Error',msgError,2,.T.)
+	retu .F.
+endif
+UAT=[https://uat-fdh.inet.co.th]
+PROD=[https://fdh.moph.go.th]
+cURL=icase(lTestZone,UAT,PROD)
+if empty(cURL)
+	=mychoice('Error','Not has API URL',2,.T.)
+	retu .F.
+endif
+cURL=checkhttp(cURL+[/api/v1/reservation],.T.)
+sele tmpReport
+nrec=recno()
+lError=.F.
+scan
+	scatt memv memo
+	m.vn=m.ntoc(m.vn)
+	m.cid=ntoc(m.cid)
+	m.invno=getsqldata([select debt_id_list from vn_stat where vn=?m.vn])
+	m.invno=ntoc(m.invno)
+	m.invno=ntoc(getwordnum(m.invno,1,'#'))
+	m.invno=chrtran(m.invno,['"],[])
+	m.selected=tologic(m.selected)
+	if m.selected and !empty(m.vn)
+		=writeerror(m.vn,oerr)
+		_data=''
+		set textmerge to memv _data noshow
+		set textmerge on
+		\{
+		\	"service_date_time": "<<ce2dmy('eeee-mm-dd hh:ii',m.date,m.time)>>",
+		\	"cid": "<<m.cid>>",
+		\	"hcode": "<<myhospcode>>",
+		\	"total_amout": "<<tonum(m.money_hosxp,2)>>",
+		\	"invoice_number":"<<m.invno>>",
+		\	"vn":"<<m.vn>>"
+		\}
+		set textmerge off
+		set textmerge to
+		_ret=readurl(cURL,_data,'post')
+		oJson=nfJsonRead(_ret)
+		StatusNo=tonum(returndata('ojson.code|ojson.status|ojson.messagecode'))
+		msgError=ntoc(returndata('ojson.message_th|ojson.message'),0)
+		StatusNo=icase(msgError='¾º¢éÍÁÙÅ',200,StatusNo)
+		=writeas(msgError,oerr,2)
+		if statusno=200
+		endif
+	endif
+ends
+if recco()>0
+	go (nrec)
+endif
+=writeerror(icase(lError,'Cancel','OK'),oerr)

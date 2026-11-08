@@ -52,6 +52,16 @@ CREATE TABLE IF NOT EXISTS login_log (
   method TEXT NOT NULL, ok INTEGER NOT NULL, reason TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS login_log_user ON login_log(user_id, at);
+CREATE TABLE IF NOT EXISTS nhso18_exports (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, created_at TEXT NOT NULL, zip_path TEXT NOT NULL,
+  visit_count INTEGER NOT NULL, created_by TEXT NOT NULL DEFAULT ''
+);
+CREATE TABLE IF NOT EXISTS nhso18_export_keys (
+  export_id INTEGER NOT NULL REFERENCES nhso18_exports(id), seq TEXT NOT NULL, PRIMARY KEY (export_id, seq)
+);
+CREATE TABLE IF NOT EXISTS nhso18_items (
+  seq TEXT NOT NULL, icode TEXT NOT NULL, PRIMARY KEY (seq, icode)
+);
 CREATE TABLE IF NOT EXISTS z_codes (
   code TEXT PRIMARY KEY, description TEXT
 );
@@ -298,3 +308,38 @@ class Store:
                 (user_id, since, user_id),
             ).fetchone()
         return int(row["n"])
+
+    # ----------------------------------------------------------- 18 files
+    def nhso18_excluded(self, seqs: Iterable[str]) -> set[tuple[str, str]]:
+        wanted = set(seqs)
+        with self._db() as db:
+            return {(r["seq"], r["icode"]) for r in db.execute("SELECT seq, icode FROM nhso18_items") if r["seq"] in wanted}
+
+    def set_nhso18_item(self, seq: str, icode: str, excluded: bool) -> None:
+        with self._db() as db:
+            db.execute("DELETE FROM nhso18_items WHERE seq=? AND icode=?", (seq, icode))
+            if excluded:
+                db.execute("INSERT INTO nhso18_items (seq, icode) VALUES (?,?)", (seq, icode))
+
+    def nhso18_sent(self, seqs: Iterable[str]) -> set[str]:
+        wanted = set(seqs)
+        with self._db() as db:
+            return {r["seq"] for r in db.execute("SELECT DISTINCT seq FROM nhso18_export_keys") if r["seq"] in wanted}
+
+    def record_nhso18_export(self, zip_path: Path, seqs: Iterable[str], created_by: str = "", now: datetime | None = None) -> int:
+        seqs = list(seqs)
+        with self._db() as db:
+            cur = db.execute("INSERT INTO nhso18_exports (created_at, zip_path, visit_count, created_by) VALUES (?,?,?,?)",
+                             ((now or datetime.now()).isoformat(timespec="seconds"), str(zip_path), len(seqs), created_by))
+            db.executemany("INSERT INTO nhso18_export_keys (export_id, seq) VALUES (?,?)", [(cur.lastrowid, s) for s in seqs])
+            return cur.lastrowid
+
+    def nhso18_history(self, limit: int = 50) -> list[dict]:
+        with self._db() as db:
+            return [dict(r) for r in db.execute(
+                "SELECT id, created_at, zip_path, visit_count, created_by FROM nhso18_exports ORDER BY id DESC LIMIT ?", (limit,))]
+
+    def nhso18_path(self, export_id: int) -> Path | None:
+        with self._db() as db:
+            row = db.execute("SELECT zip_path FROM nhso18_exports WHERE id=?", (export_id,)).fetchone()
+        return Path(row["zip_path"]) if row else None

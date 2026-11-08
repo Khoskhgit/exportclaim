@@ -17,7 +17,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
-from . import aipn_routes, auth
+from . import aipn_routes, auth, nhso18_routes
 from .aipn_db import AipnDb
 from .config import Settings, load_settings
 from .export import ExportError, build_export, normalise_station, is_excluded, item_name, send_amounts, usage_fields
@@ -118,6 +118,7 @@ def create_app(settings: Settings | None = None, hosxp: Any = None, store: Store
 
     auth.register(app, settings, db, local, templates, **({"moph_fetch": moph_fetch} if moph_fetch else {}))
     aipn_routes.register(app, settings, aipn_db or AipnDb(db), local, templates)
+    nhso18_routes.register(app, settings, db, local, templates)
 
     @app.get("/", response_class=HTMLResponse)
     def index(request: Request):
