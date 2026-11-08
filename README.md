@@ -25,6 +25,29 @@ cp .env.example .env
 
 แล้วเข้าที่ https://localhost:5180 โปรแกรมเปิดให้ใช้เฉพาะเครื่องนี้ ถ้าจะใช้ร่วมหลายเครื่องต้องเพิ่ม login และ HTTPS ก่อน
 
+## ติดตั้งบน server ให้เครื่องอื่นเข้าได้
+
+ตัวอย่าง server 192.168.80.88 ใส่ใน `.env` ของ server:
+
+```
+HOST=0.0.0.0
+ALLOWED_HOSTS=192.168.80.88
+PORT=5180
+HEALTHID_REDIRECT_URI=https://192.168.80.88:5180/auth/healthid/callback
+```
+
+แล้วสร้าง certificate ตาม IP ของ server และเปิดโปรแกรม:
+
+```bash
+.venv/bin/python make_cert.py
+```
+
+```bash
+.venv/bin/python run.py
+```
+
+ถ้าเปิด HOST ให้เครื่องอื่นเข้า โปรแกรมจะไม่ยอมเปิดแบบ HTTP ต้องเปิด port 5180 ใน firewall ของ server และต้องลงทะเบียน redirect URL ใหม่กับ MOPH ID ถ้าระบบไม่รับ
+
 ## เข้าสู่ระบบ
 
 ทุกหน้าต้องเข้าสู่ระบบก่อน มี 2 วิธี:

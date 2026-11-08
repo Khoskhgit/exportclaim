@@ -76,7 +76,7 @@ def create_app(settings: Settings | None = None, hosxp: Any = None, store: Store
 
     app = FastAPI(title="SSOP Export", docs_url=None, redoc_url=None, openapi_url=None)
     # Stops other websites reaching this local app through DNS rebinding.
-    app.add_middleware(TrustedHostMiddleware, allowed_hosts=["127.0.0.1", "localhost", "testserver"])
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=[*settings.allowed_hosts, "testserver"])
     app.mount("/static", StaticFiles(directory=str(HERE / "static")), name="static")
 
     @app.exception_handler(HosxpError)

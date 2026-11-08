@@ -59,6 +59,8 @@ class Settings:
     moph_provider_id_client: str = ""
     moph_provider_id_secret: str = field(default="", repr=False)
     port: int = 5180
+    host: str = "127.0.0.1"
+    extra_hosts: tuple[str, ...] = ()
     moph_redirect_uri: str = "http://localhost:5180/auth/moph/callback"
     moph_allowed_hcodes: tuple[str, ...] = ()
     health_id_base_url: str = "https://moph.id.th"
@@ -66,6 +68,18 @@ class Settings:
     moph_user_agent: str = "EMR"
     ssl_certfile: str = ""
     ssl_keyfile: str = ""
+
+    @property
+    def allowed_hosts(self) -> list[str]:
+        """Host names the browser may use: this machine, HOST, ALLOWED_HOSTS and the MOPH redirect host."""
+        from urllib.parse import urlsplit
+        names = ["127.0.0.1", "localhost", *self.extra_hosts]
+        if self.host not in {"0.0.0.0", "::", ""}:
+            names.append(self.host)
+        redirect = urlsplit(self.moph_redirect_uri).hostname
+        if redirect:
+            names.append(redirect)
+        return list(dict.fromkeys(n.strip() for n in names if n.strip()))
 
     @property
     def moph_ready(self) -> bool:
@@ -118,6 +132,8 @@ def load_settings(env_file: Path | None = None) -> Settings:
         export_dir=Path(get("EXPORT_DIR", str(BASE_DIR / "exports"))),
         data_dir=Path(get("DATA_DIR", str(BASE_DIR / "data"))),
         port=int(get("PORT") or 5180),
+        host=(get("HOST") or "127.0.0.1").strip(),
+        extra_hosts=_csv(get("ALLOWED_HOSTS")),
         login_required=_bool(get("LOGIN_REQUIRED"), True),
         session_hours=int(get("SESSION_HOURS", "8") or 8),
         login_groups=_csv(get("LOGIN_GROUPS")),

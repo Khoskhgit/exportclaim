@@ -213,3 +213,13 @@ def test_station_entered_on_screen_is_used(client):
 def test_bad_station_is_rejected(client, station):
     response = export(client, [OK], station=station)
     assert response.status_code == 400 and "Station" in response.json()["detail"]
+
+
+def test_allowed_hosts_follow_settings(tmp_path):
+    config = replace(settings(), export_dir=tmp_path / "e", host="0.0.0.0", extra_hosts=("192.168.80.88",),
+                     moph_redirect_uri="https://exportclaim.local:5180/auth/healthid/callback")
+    assert config.allowed_hosts == ["127.0.0.1", "localhost", "192.168.80.88", "exportclaim.local"]
+    client = TestClient(create_app(config, FakeHosxp(), Store(tmp_path / "s.sqlite3")), base_url="http://192.168.80.88")
+    assert client.get("/").status_code == 200
+    other = TestClient(create_app(config, FakeHosxp(), Store(tmp_path / "s2.sqlite3")), base_url="http://evil.example")
+    assert other.get("/").status_code == 400
