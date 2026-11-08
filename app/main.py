@@ -1,6 +1,7 @@
 """Web app: search visits, review them, choose people, and build the SSOP ZIP."""
 from __future__ import annotations
 
+import hashlib
 import io
 import logging
 from collections import defaultdict
@@ -67,12 +68,21 @@ def read_z_excel(data: bytes) -> list[tuple[str, str]]:
     return list(found.items())
 
 
+def asset_version() -> str:
+    digest = hashlib.sha256()
+    for path in sorted((HERE / "static").glob("*.*")):
+        digest.update(path.read_bytes())
+    return digest.hexdigest()[:10]
+
+
 def create_app(settings: Settings | None = None, hosxp: Any = None, store: Store | None = None,
                aipn_db: Any = None, moph_fetch: Any = None) -> FastAPI:
     settings = settings or load_settings()
     db = hosxp or Hosxp(settings)
     local = store or Store(settings.data_dir / "ssop.sqlite3")
     templates = Jinja2Templates(directory=str(HERE / "templates"))
+    # Added to CSS/JS links so browsers fetch new files after an update instead of a cached copy.
+    templates.env.globals["v"] = asset_version()
 
     app = FastAPI(title="SSOP Export", docs_url=None, redoc_url=None, openapi_url=None)
     # Stops other websites reaching this local app through DNS rebinding.

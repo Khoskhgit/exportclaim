@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>AIPN · Export Claim</title>
-<link rel="stylesheet" href="/static/app.css">
+<link rel="stylesheet" href="/static/app.css?v={{ v }}">
 </head>
 <body>
 {% set active = "aipn" %}{% include "_top.html" %}
@@ -78,7 +78,7 @@
     <button type="button" id="confirm-ok" class="primary">ยืนยัน</button>
   </div>
 </dialog>
-<script src="/static/common.js"></script>
-<script src="/static/aipn.js"></script>
+<script src="/static/common.js?v={{ v }}"></script>
+<script src="/static/aipn.js?v={{ v }}"></script>
 </body>
 </html>

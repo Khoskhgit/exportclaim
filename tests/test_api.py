@@ -1,3 +1,4 @@
+import re
 import io
 import zipfile
 from dataclasses import replace
@@ -223,3 +224,8 @@ def test_allowed_hosts_follow_settings(tmp_path):
     assert client.get("/").status_code == 200
     other = TestClient(create_app(config, FakeHosxp(), Store(tmp_path / "s2.sqlite3")), base_url="http://evil.example")
     assert other.get("/").status_code == 400
+
+
+def test_static_links_carry_a_version(client):
+    page = client.get("/").text
+    assert re.search(r'/static/app\.css\?v=[0-9a-f]{10}"', page) and re.search(r'/static/app\.js\?v=[0-9a-f]{10}"', page)

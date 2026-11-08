@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SSOP · Export Claim</title>
-<link rel="stylesheet" href="/static/app.css">
+<link rel="stylesheet" href="/static/app.css?v={{ v }}">
 </head>
 <body>
 {% set active = "ssop" %}{% include "_top.html" %}
@@ -86,7 +86,7 @@
     <button type="button" id="confirm-ok" class="primary">ยืนยัน</button>
   </div>
 </dialog>
-<script src="/static/common.js"></script>
-<script src="/static/app.js"></script>
+<script src="/static/common.js?v={{ v }}"></script>
+<script src="/static/app.js?v={{ v }}"></script>
 </body>
 </html>
