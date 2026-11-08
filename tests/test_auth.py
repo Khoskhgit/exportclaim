@@ -152,9 +152,9 @@ def test_moph_off_and_host_redirect(tmp_path):
     off = make(tmp_path, moph_health_id_client="")
     assert off.get("/auth/moph/start", follow_redirects=False).headers["location"] == "/login?error=moph_off"
     assert "ยังไม่ได้ตั้งค่า MOPH ID" in off.get("/login").text
-    elsewhere = make(tmp_path / "c", moph_redirect_uri="http://localhost:8765/auth/moph/callback")
+    elsewhere = make(tmp_path / "c", moph_redirect_uri="http://localhost:5180/auth/moph/callback")
     r = elsewhere.get("/auth/moph/start", follow_redirects=False)
-    assert r.headers["location"] == "http://localhost:8765/auth/moph/start"
+    assert r.headers["location"] == "http://localhost:5180/auth/moph/start"
 
 
 def test_export_records_who_made_it(tmp_path):
@@ -185,7 +185,7 @@ def test_key_sheet_names_are_read(tmp_path, monkeypatch):
     env = tmp_path / ".env"
     env.write_text(
         "HCODE=11111\nHEALTHID_CLIENT_ID=hid\nHEALTHID_CLIENT_SECRET=hsec\nHEALTHID_BASE_URL=https://moph.id.th/\n"
-        "HEALTHID_REDIRECT_URI=https://localhost:8765/auth/healthid/callback\nPROVIDERID_CLIENT_ID=pid\n"
+        "HEALTHID_REDIRECT_URI=https://localhost:5180/auth/healthid/callback\nPROVIDERID_CLIENT_ID=pid\n"
         "PROVIDERID_CLIENT_SECRET=psec\nPROVIDERID_API_URL=https://provider.id.th\nHOSPITAL_CODE=10866\n", encoding="utf-8")
     for name in ("HCODE", "HEALTHID_CLIENT_ID", "HEALTHID_CLIENT_SECRET", "HEALTHID_BASE_URL", "HEALTHID_REDIRECT_URI",
                  "PROVIDERID_CLIENT_ID", "PROVIDERID_CLIENT_SECRET", "PROVIDERID_API_URL", "HOSPITAL_CODE",
@@ -194,7 +194,7 @@ def test_key_sheet_names_are_read(tmp_path, monkeypatch):
         monkeypatch.delenv(name, raising=False)
     s = load_settings(env)
     assert s.moph_ready and s.moph_hcodes == ("10866",)
-    assert s.moph_redirect_uri == "https://localhost:8765/auth/healthid/callback"
+    assert s.moph_redirect_uri == "https://localhost:5180/auth/healthid/callback"
     assert auth.moph_authorize_url(s, "X").startswith("https://moph.id.th/oauth/redirect?client_id=hid")
 
 

@@ -8,5 +8,5 @@ if __name__ == "__main__":
     tls = {}
     if settings.ssl_certfile and settings.ssl_keyfile:
         tls = {"ssl_certfile": settings.ssl_certfile, "ssl_keyfile": settings.ssl_keyfile}
-    print(f"เปิดที่ {'https://localhost' if tls else 'http://127.0.0.1'}:8765")
-    uvicorn.run("app.main:get_app", factory=True, host="127.0.0.1", port=8765, access_log=False, **tls)
+    print(f"เปิดที่ {'https://localhost' if tls else 'http://127.0.0.1'}:{settings.port}")
+    uvicorn.run("app.main:get_app", factory=True, host="127.0.0.1", port=settings.port, access_log=False, **tls)

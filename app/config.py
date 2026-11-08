@@ -58,7 +58,8 @@ class Settings:
     moph_health_id_secret: str = field(default="", repr=False)
     moph_provider_id_client: str = ""
     moph_provider_id_secret: str = field(default="", repr=False)
-    moph_redirect_uri: str = "http://localhost:8765/auth/moph/callback"
+    port: int = 5180
+    moph_redirect_uri: str = "http://localhost:5180/auth/moph/callback"
     moph_allowed_hcodes: tuple[str, ...] = ()
     health_id_base_url: str = "https://moph.id.th"
     provider_id_base_url: str = "https://provider.id.th"
@@ -116,6 +117,7 @@ def load_settings(env_file: Path | None = None) -> Settings:
         pdx_only=_bool(get("PDX_ONLY"), False),
         export_dir=Path(get("EXPORT_DIR", str(BASE_DIR / "exports"))),
         data_dir=Path(get("DATA_DIR", str(BASE_DIR / "data"))),
+        port=int(get("PORT") or 5180),
         login_required=_bool(get("LOGIN_REQUIRED"), True),
         session_hours=int(get("SESSION_HOURS", "8") or 8),
         login_groups=_csv(get("LOGIN_GROUPS")),
@@ -125,7 +127,7 @@ def load_settings(env_file: Path | None = None) -> Settings:
         moph_provider_id_client=(get("MOPH_PROVIDER_ID_CLIENT") or get("PROVIDERID_CLIENT_ID") or "").strip(),
         moph_provider_id_secret=(get("MOPH_PROVIDER_ID_SECRET") or get("PROVIDERID_CLIENT_SECRET") or "").strip(),
         moph_redirect_uri=(get("MOPH_REDIRECT_URI") or get("HEALTHID_REDIRECT_URI")
-                           or "http://localhost:8765/auth/moph/callback").strip(),
+                           or f"http://localhost:{int(get('PORT') or 5180)}/auth/moph/callback").strip(),
         moph_allowed_hcodes=_csv(get("MOPH_ALLOWED_HCODES") or get("HOSPITAL_CODE")),
         health_id_base_url=(get("HEALTHID_BASE_URL") or "https://moph.id.th").strip().rstrip("/"),
         provider_id_base_url=(get("PROVIDERID_API_URL") or "https://provider.id.th").strip().rstrip("/"),

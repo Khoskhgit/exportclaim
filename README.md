@@ -23,7 +23,7 @@ cp .env.example .env
 .venv/bin/python run.py
 ```
 
-แล้วเข้าที่ http://127.0.0.1:8765 โปรแกรมเปิดให้ใช้เฉพาะเครื่องนี้ ถ้าจะใช้ร่วมหลายเครื่องต้องเพิ่ม login และ HTTPS ก่อน
+แล้วเข้าที่ https://localhost:5180 โปรแกรมเปิดให้ใช้เฉพาะเครื่องนี้ ถ้าจะใช้ร่วมหลายเครื่องต้องเพิ่ม login และ HTTPS ก่อน
 
 ## เข้าสู่ระบบ
 
@@ -36,7 +36,7 @@ cp .env.example .env
 
 Cloudflare ของ provider.id.th บล็อกคำขอที่ส่งชื่อโปรแกรมเป็น `Python-urllib` (Error 1010) โปรแกรมจึงส่ง `User-Agent: EMR` แทน เปลี่ยนชื่อได้ด้วย `MOPH_USER_AGENT` ทดสอบ login ด้วย MOPH ID ผ่านแล้วเมื่อ 2026-11-08
 
-redirect URL ที่ลงทะเบียนไว้เป็น `https://localhost:8765/auth/healthid/callback` โปรแกรมจึงเปิดแบบ HTTPS ด้วย certificate ที่สร้างเองใน `data/tls/` ให้เข้าที่ https://localhost:8765 เบราว์เซอร์จะเตือนครั้งแรกว่า certificate ไม่น่าเชื่อถือ ถ้าจะไม่ให้เตือน ให้เพิ่ม `data/tls/localhost.pem` ใน Keychain แล้วตั้งเป็น Always Trust
+redirect URL ที่ลงทะเบียนไว้เป็น `https://localhost:5180/auth/healthid/callback` โปรแกรมจึงเปิดแบบ HTTPS ด้วย certificate ที่สร้างเองใน `data/tls/` ให้เข้าที่ https://localhost:5180 เบราว์เซอร์จะเตือนครั้งแรกว่า certificate ไม่น่าเชื่อถือ ถ้าจะไม่ให้เตือน ให้เพิ่ม `data/tls/localhost.pem` ใน Keychain แล้วตั้งเป็น Always Trust
 
 session อยู่ได้ `SESSION_HOURS` ชั่วโมง (ค่าเริ่มต้น 8) ประวัติการส่งออกบันทึกชื่อผู้สร้าง ZIP และบันทึกการเข้าสู่ระบบไว้ในตาราง `login_log` ของ SQLite
 
@@ -80,7 +80,7 @@ session อยู่ได้ `SESSION_HOURS` ชั่วโมง (ค่า�
 
 ## เมนู AIPN (ผู้ป่วยใน)
 
-เปิดที่ http://127.0.0.1:8765/aipn หรือกดเมนู "AIPN ผู้ป่วยใน" ค้นตามวันที่จำหน่าย สิทธิ หรือ AN แล้วสร้าง `<HCODE>AIPN<Session>.ZIP` ที่มี XML 1 ไฟล์ต่อ 1 AN ตามรูปแบบใน `aipn.txt`
+เปิดที่ https://localhost:5180/aipn หรือกดเมนู "AIPN ผู้ป่วยใน" ค้นตามวันที่จำหน่าย สิทธิ หรือ AN แล้วสร้าง `<HCODE>AIPN<Session>.ZIP` ที่มี XML 1 ไฟล์ต่อ 1 AN ตามรูปแบบใน `aipn.txt`
 
 - Session No เป็นตัวเลข 5 หลัก (10000-99999) โปรแกรมเสนอเลขถัดจากครั้งล่าสุดที่ส่งจากโปรแกรมนี้
 - ประเภทการส่ง: ปกติ, ADJ, ADD, AUD
