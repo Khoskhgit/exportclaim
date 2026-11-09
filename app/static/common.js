@@ -140,6 +140,49 @@ function setupPresets(form) {
     };
   });
 }
+// A native date box shows the browser's own order (mm/dd/yyyy on an English Windows), so each one gets a dd/mm/yyyy
+// text box. The date input stays in the form (hidden) with the ISO value the pages read and write, and opens the calendar.
+function parseDmy(textValue) {
+  const m = String(textValue).trim().match(/^(\d{1,2})\s*[\/.\-]\s*(\d{1,2})\s*[\/.\-]\s*(\d{4})$/) || String(textValue).trim().match(/^(\d{2})(\d{2})(\d{4})$/);
+  if (!m) return null;
+  let [d, mo, y] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  if (y > 2400) y -= 543;  // Buddhist year
+  const date = new Date(y, mo - 1, d);
+  return date.getFullYear() === y && date.getMonth() === mo - 1 && date.getDate() === d ? isoDate(date) : null;
+}
+function toDmy(iso) {
+  const m = String(iso || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : "";
+}
+function setupDateInputs(root = document) {
+  const native = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value");
+  root.querySelectorAll('input[type="date"]:not(.dmy-native)').forEach((input) => {
+    const box = el("input", { type: "text", class: "dmy-text", inputMode: "numeric", autocomplete: "off", placeholder: "วว/ดด/ปปปป", title: "วัน/เดือน/ปี ค.ศ. (พิมพ์ปี พ.ศ. ได้)" });
+    const pick = el("button", { type: "button", class: "dmy-pick", "aria-label": "เลือกจากปฏิทิน", title: "เลือกจากปฏิทิน" });
+    const wrap = el("span", { class: "dmy" });
+    input.replaceWith(wrap);
+    input.classList.add("dmy-native");
+    input.tabIndex = -1;
+    input.setAttribute("aria-hidden", "true");
+    wrap.append(box, pick, input);
+    const show = () => { box.value = toDmy(native.get.call(input)); box.setCustomValidity(""); };
+    // Pages set .value directly (presets, defaults); keep the text box in step.
+    Object.defineProperty(input, "value", { configurable: true, get() { return native.get.call(this); }, set(v) { native.set.call(this, v); show(); } });
+    input.addEventListener("change", show);
+    box.addEventListener("input", () => {
+      const iso = box.value.trim() ? parseDmy(box.value) : "";
+      if (iso === null) { box.setCustomValidity("วันที่ไม่ถูกต้อง ใช้รูปแบบ วว/ดด/ปปปป"); return; }
+      box.setCustomValidity("");
+      native.set.call(input, iso);
+    });
+    box.addEventListener("change", () => { if (!box.validationMessage) show(); });
+    pick.onclick = () => {
+      try { input.showPicker(); } catch (err) { box.focus(); }
+    };
+    show();
+  });
+}
+
 function updatePttypeLabel() {
   // Show which rights are picked (code: name), not just how many; the full list is in the tooltip.
   const boxes = [...document.querySelectorAll("#pttype-list input.one")];
@@ -188,4 +231,5 @@ async function showUser() {
       } }, "ออกจากระบบ")));
   } catch (err) { /* the page shows its own errors */ }
 }
+setupDateInputs();
 showUser();

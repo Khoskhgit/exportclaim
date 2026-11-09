@@ -264,3 +264,12 @@ dl.sum dt{color:var(--muted)}dl.sum dd{margin:0;font-weight:600;font-variant-num
 .history-body h3{font-size:14px;margin:14px 0 6px}
 .danger-text{color:var(--error)}
 .fdh-group + .fdh-group{margin-left:0}
+
+/* dd/mm/yyyy date boxes (common.js setupDateInputs) */
+.dmy{position:relative;display:block}
+.dmy .dmy-text{padding-right:38px;font-variant-numeric:tabular-nums}
+.dmy .dmy-text:invalid{border-color:var(--error)}
+.dmy-pick{position:absolute;top:1px;right:1px;bottom:1px;width:36px;min-height:0;padding:0;border:0;border-radius:0 var(--radius-sm) var(--radius-sm) 0;cursor:pointer;
+  background:transparent url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' fill='none' stroke='%238a9792' stroke-width='1.5'%3E%3Crect x='2' y='3' width='12' height='11' rx='1.5'/%3E%3Cpath d='M2 6.5h12M5 1.5v3M11 1.5v3'/%3E%3C/svg%3E") no-repeat center}
+.dmy-pick:hover{background-color:var(--accent-soft)}
+.dmy .dmy-native{position:absolute;left:0;bottom:0;width:100%;height:100%;opacity:0;pointer-events:none;border:0;padding:0;min-height:0}
