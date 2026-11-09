@@ -17,7 +17,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
-from . import aipn_routes, auth, nhso18_routes
+from . import aipn_routes, auth, nhso18_routes, repstm_routes
 from .aipn_db import AipnDb
 from .config import Settings, load_settings
 from .export import ExportError, build_export, normalise_station, is_excluded, item_name, send_amounts, usage_fields
@@ -119,6 +119,21 @@ def create_app(settings: Settings | None = None, hosxp: Any = None, store: Store
     auth.register(app, settings, db, local, templates, **({"moph_fetch": moph_fetch} if moph_fetch else {}))
     aipn_routes.register(app, settings, aipn_db or AipnDb(db), local, templates)
     nhso18_routes.register(app, settings, db, local, templates)
+    results = repstm_routes.register(app, settings, local, templates)
+
+    def with_results(visits: list[dict]) -> list[dict]:
+        """Imported REP/STM files win over rcmdb: STM means paid, otherwise the newest REP line gives A or C."""
+        found = results.latest(text(v.get("vn")) for v in visits)
+        for visit in visits:
+            mine = found.get(text(visit.get("vn")))
+            if not mine:
+                continue
+            visit["rep_no"], visit["stm_paid"] = mine.get("rep_no", ""), mine.get("stm_paid", "")
+            if mine.get("stm_no"):
+                visit["rep"] = mine["stm_no"]
+            elif mine.get("rep_stat"):
+                visit["chi_status"], visit["chi_codes"] = mine["rep_stat"], mine["rep_codes"]
+        return visits
 
     @app.get("/", response_class=HTMLResponse)
     def index(request: Request):
@@ -145,16 +160,16 @@ def create_app(settings: Settings | None = None, hosxp: Any = None, store: Store
     @app.post("/api/search")
     def search(body: dict = Body(...)):
         # A POST body keeps HN and VN out of URLs and access logs.
-        visits = db.search_visits(
+        visits = with_results(db.search_visits(
             _parse_date(body.get("start"), "วันที่เริ่ม"), _parse_date(body.get("end"), "วันที่สิ้นสุด"),
             body.get("pttypes") or [], text(body.get("vn")), text(body.get("hn")),
-        )
+        ))
         vns = [text(v["vn"]) for v in visits]
         items = group(with_inclusions(db.fetch_items(vns)))
         excluded = local.exclusions(vns)
         sent = local.sent_vns(vns)
         z_codes, z_ready = z_state()
-        code_names = db.result_code_names()
+        code_names = {**db.result_code_names(), **results.code_names()}
         result = []
         for visit in visits:
             vn = text(visit["vn"])
@@ -167,6 +182,7 @@ def create_app(settings: Settings | None = None, hosxp: Any = None, store: Store
                 "pdx": text(visit.get("pdx")), "clinic": text(visit.get("clinic_name")),
                 "pttype": text(visit.get("pttype_name")), "hospmain": text(visit.get("hospmain")),
                 "income": str(dec(visit.get("income"))),
+                "rep_no": text(visit.get("rep_no")), "stm_paid": text(visit.get("stm_paid")),
                 **send_amounts(items.get(vn, []), excluded),
                 "result_codes": explain_result_codes(visit.get("chi_codes"), code_names) if review["status"] == "ติด C" else [],
                 **review,
@@ -234,7 +250,7 @@ def create_app(settings: Settings | None = None, hosxp: Any = None, store: Store
             raise HTTPException(400, "ยังไม่ได้เลือกรายการ")
 
         # Re-check on the server using fresh data: the screen may be out of date.
-        visits = db.visits_by_vn(vns)
+        visits = with_results(db.visits_by_vn(vns))
         missing = set(vns) - {text(v["vn"]) for v in visits}
         if missing:
             raise HTTPException(400, f"ไม่พบ VN {len(missing)} รายการ")
