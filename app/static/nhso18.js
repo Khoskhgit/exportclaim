@@ -30,11 +30,11 @@ function renderRows() {
   $("rows").replaceChildren(...list.map((r) => {
     const box = el("input", { type: "checkbox", checked: state.selected.has(r.key), disabled: !r.selectable,
       title: r.selectable ? "เลือกส่ง" : "รายการนี้ส่งไม่ได้", "aria-label": `เลือก ${r.key}`, onclick: (e) => e.stopPropagation(),
-      onchange: (e) => { e.target.checked ? state.selected.add(r.key) : state.selected.delete(r.key); renderTotals(); } });
+      onchange: (e) => { pick(r, e.target.checked); renderRows(); renderTotals(); } });
     const problems = [...r.errors, ...r.warns].map((i) => i.message);
     return el("tr", { class: state.current === r.key ? "current" : "", onclick: () => openDrawer(r) },
       el("td", { class: "check" }, box), el("td", {}, resultBadge(r)),
-      el("td", {}, r.status ? el("span", { class: "badge b-sent" }, r.status) : el("span", { class: "muted" }, "—")),
+      el("td", {}, r.status ? el("span", { class: "badge b-sent" }, r.status) : el("span", { class: "muted" }, "—"), walkinTag(r)),
       el("td", {}, r.kind), el("td", { class: "mono" }, r.key), el("td", { class: "mono" }, r.hn),
       el("td", { class: "name-cell", title: r.ptname }, r.ptname, el("span", { class: "sub" }, r.pttype)),
       el("td", { class: "mono" }, r.date), el("td", {}, r.maininscl), el("td", {}, r.pdx || el("span", { class: "muted" }, "—")),
@@ -45,6 +45,17 @@ function renderRows() {
   if (!list.length && state.rows.length) $("empty").replaceChildren(...emptyState("ไม่มีรายการตามตัวกรองนี้"));
   $("result-count").textContent = state.rows.length ? `แสดง ${count.format(list.length)} จาก ${count.format(state.rows.length)} รายการ` : "";
 }
+// UCS walk-in visits of the same HN and day are sent as one claim on the first VN, so they are picked together.
+function pick(r, on) {
+  const rows = r.walkin_group ? state.rows.filter((x) => x.walkin_group === r.walkin_group && x.selectable) : [r];
+  rows.forEach((x) => (on ? state.selected.add(x.key) : state.selected.delete(x.key)));
+}
+function walkinTag(r) {
+  if (r.walkin_first) return el("span", { class: "walkin-tag", title: "Walk-in บัตรทองวันเดียวกัน ค่าใช้จ่ายรวมไปส่งกับ VN แรก" }, `รวมกับ ${r.walkin_first}`);
+  if (r.walkin_group) return el("span", { class: "walkin-tag first", title: "Walk-in บัตรทองวันเดียวกัน visit อื่นรวมเข้ามาที่ VN นี้" }, "VN แรก (รวม walk-in)");
+  return null;
+}
+function mergedText(result) { return result.merged ? ` · รวม walk-in ${result.merged} visit เข้ากับ VN แรก` : ""; }
 function selectedRows() { return state.rows.filter((r) => state.selected.has(r.key)); }
 function renderTotals() {
   const list = selectedRows();
@@ -128,7 +139,7 @@ async function runExport() {
       result = await api("/api/nhso18/export", { ...payload, confirm_resend: true });
     }
     const counts = Object.entries(result.counts).filter(([, n]) => n).map(([f, n]) => `${f} ${n}`).join(", ");
-    const box = notice(`สร้าง ${result.file} แล้ว: ${result.count} รายการ (${counts})`, "ok", true);
+    const box = notice(`สร้าง ${result.file} แล้ว: ${result.count} รายการ (${counts})${mergedText(result)}`, "ok", true);
     box.querySelector(".notice-text").append(" ", el("a", { href: `/api/nhso18/exports/${result.id}/download` }, "ดาวน์โหลด ZIP"));
     state.selected.clear();
     await Promise.all([search(), loadHistory()]);
@@ -167,7 +178,7 @@ async function runFdh(prescreen) {
       result = await api("/api/nhso18/fdh/send", { ...payload, confirm_resend: true });
     }
     const counts = Object.entries(result.counts).filter(([, n]) => n).map(([f, n]) => `${f} ${n}`).join(", ");
-    const head = `${what} ${fdhZoneLabel(result.zone)} ${result.count} รายการ (${counts})`;
+    const head = `${what} ${fdhZoneLabel(result.zone)} ${result.count} รายการ (${counts})${mergedText(result)}`;
     notice(result.ok ? `${head}: ${result.message}` : `${head} ไม่ผ่าน: ${result.message}`, result.ok ? "ok" : "error", true);
     if (result.ok && !prescreen) { state.selected.clear(); await search(); }
   } catch (err) {
@@ -232,7 +243,7 @@ async function runEclaim() {
       result = await api("/api/nhso18/eclaim/send", { ...payload, confirm_resend: true });
     }
     const counts = Object.entries(result.counts).filter(([, n]) => n).map(([f, n]) => `${f} ${n}`).join(", ");
-    const head = `ส่ง New e-Claim ${result.count} รายการ (${counts})`;
+    const head = `ส่ง New e-Claim ${result.count} รายการ (${counts})${mergedText(result)}`;
     notice(result.ok ? `${head}: ${result.message}` : `${head} ไม่ผ่าน: ${result.message}`, result.ok ? "ok" : "error", true);
     if (result.ok) { state.selected.clear(); await search(); }
   } catch (err) {

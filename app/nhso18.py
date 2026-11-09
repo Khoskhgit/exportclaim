@@ -1101,3 +1101,90 @@ def opd_contexts(select: Callable[[str], list[dict]], vns: Sequence[str], groups
         ))
     order = {vn: i for i, vn in enumerate(vns)}
     return sorted(out, key=lambda v: order.get(v.vn, 0))
+
+
+# ---------------------------------------------------------------- UCS walk-in
+# A UCS walk-in patient with more than one OP visit on the same day is claimed once: the later visits' items are
+# merged into the first visit. This is done only in the exported files; HOSxP is not changed.
+WALKIN_LATER_DXTYPE = "4"  # the later visits' principal diagnosis becomes "other" under the first visit
+_SUMS = {"CHT": ("TOTAL", "PAID"), "CHA": ("AMOUNT",), "ADP": ("QTY", "TOTCOPAY", "TOTAL"),
+         "DRU": ("AMOUNT", "TOTCOPAY", "TOTAL"), "PHDB": ("QTY",)}
+
+
+def _clock(value) -> int:
+    if isinstance(value, timedelta):
+        return int(value.total_seconds())
+    if hasattr(value, "hour"):
+        return value.hour * 3600 + value.minute * 60 + value.second
+    m = re.match(r"\s*(\d{1,2}):(\d{2})(?::(\d{2}))?", text(value))
+    return int(m.group(1)) * 3600 + int(m.group(2)) * 60 + int(m.group(3) or 0) if m else 0
+
+
+def same_day_walkin(rows: Iterable[dict], walkin: Iterable[str]) -> dict[str, str]:
+    """Later VN -> first VN for UCS walk-in OP visits of the same HN on the same day."""
+    walk = {text(p) for p in walkin if text(p)}
+    groups: dict[tuple, list[dict]] = {}
+    for r in rows:
+        if (text(r.get("vn")) and text(r.get("pttype")) in walk and text(r.get("maininscl")) == "UCS"
+                and not text(r.get("an")) and not text(r.get("has_an"))):
+            groups.setdefault((text(r.get("hn")), as_date(r.get("vstdate") or r.get("date"))), []).append(r)
+    out: dict[str, str] = {}
+    for visits in groups.values():
+        visits.sort(key=lambda r: (_clock(r.get("vsttime") or r.get("time")), text(r["vn"])))
+        for r in visits[1:]:
+            out[text(r["vn"])] = text(visits[0]["vn"])
+    return out
+
+
+def walkin_siblings(select: Callable[[str], list[dict]], vns: Sequence[str], walkin: Sequence[str]) -> dict[str, str]:
+    """same_day_walkin for the picked VNs, including visits of the same day that were not picked."""
+    if not vns or not walkin:
+        return {}
+    walk = lit_list(walkin)
+    rows = select(f"""
+    SELECT o.vn, o.hn, o.vstdate, o.vsttime, o.pttype, o.an, seekhipdatas(o.pttype,0) maininscl
+    FROM ovst o
+    JOIN (SELECT DISTINCT hn, vstdate FROM ovst WHERE vn IN ({lit_list(vns)}) AND pttype IN ({walk})) p
+      ON p.hn=o.hn AND p.vstdate=o.vstdate
+    WHERE o.pttype IN ({walk}) AND IFNULL(o.an,'')=''""")
+    return same_day_walkin(rows, walkin)
+
+
+def _add(a, b):
+    if isinstance(a, int) and isinstance(b, int):
+        return a + b
+    return num(a) + num(b)
+
+
+def merge_walkin(data: dict[str, list[dict]], merge: dict[str, str]) -> dict[str, list[dict]]:
+    """Move the later visits' rows onto the first VN: one INS/OPD/AER/CHT row, summed charges, diagnoses and
+    procedures without duplicates, and the WALKIN project item once."""
+    if not merge:
+        return data
+    out = {}
+    for name, rows in data.items():
+        if "SEQ" not in {c for c, _, _ in SCHEMA[name]} or not any(text(r.get("SEQ")) in merge for r in rows):
+            out[name] = rows
+            continue
+        keep = [dict(r) for r in rows if text(r.get("SEQ")) not in merge]
+        index = {tuple(text(r.get(c)) for c in KEYS[name]): r for r in keep}
+        for r in rows:
+            seq = text(r.get("SEQ"))
+            if seq not in merge:
+                continue
+            r = {**r, "SEQ": merge[seq]}
+            if name == "ODX" and text(r.get("DXTYPE")) == "1":
+                r["DXTYPE"] = WALKIN_LATER_DXTYPE
+            key = tuple(text(r.get(c)) for c in KEYS[name])
+            target = index.get(key)
+            if target is None:
+                index[key] = r
+                keep.append(r)
+                continue
+            if name == "OPD" and text(r.get("UUC")) == "1":
+                target["UUC"] = "1"
+            if name in _SUMS and not (name == "ADP" and text(r.get("TYPE")) == "5"):
+                for col in _SUMS[name]:
+                    target[col] = _add(target.get(col), r.get(col))
+        out[name] = keep
+    return out

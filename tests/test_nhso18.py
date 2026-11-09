@@ -66,3 +66,80 @@ def test_local_exclusions_in_query():
     b = nhso18.Builder(lambda sql: [], nhso18.Config(hcode="1"), "rcm", "eclaim", excluded={("691", "1500"), ("691", "15'0")})
     clause = b.noexport("oo", "vn", False)
     assert "opitemrece_noexport" in clause and "'691|1500'" in clause and "'691|15\\'0'" in clause
+
+
+# ---------------------------------------------------------------- UCS walk-in
+from datetime import timedelta  # noqa: E402
+
+
+def visit(vn, hn="1", day=date(2026, 11, 3), time=timedelta(hours=9), pttype="W1", inscl="UCS", an=None):
+    return {"vn": vn, "hn": hn, "vstdate": day, "vsttime": time, "pttype": pttype, "maininscl": inscl, "an": an}
+
+
+def test_same_day_walkin_groups_by_hn_and_day():
+    rows = [visit("B", time=timedelta(hours=14)), visit("A", time=timedelta(hours=8, minutes=5)), visit("C", time="9:00:00"),
+            visit("D", day=date(2026, 11, 4)),            # another day
+            visit("E", hn="2"),                            # another patient, alone
+            visit("F", pttype="X"), visit("G", inscl="OFC"), visit("H", an="690000001")]
+    assert nhso18.same_day_walkin(rows, ["W1"]) == {"C": "A", "B": "A"}
+    assert nhso18.same_day_walkin(rows, []) == {}
+    # search rows use date/time/has_an
+    search = [{"vn": "1", "hn": "9", "date": date(2026, 11, 3), "time": timedelta(hours=10), "pttype": "W1", "maininscl": "UCS"},
+              {"vn": "2", "hn": "9", "date": date(2026, 11, 3), "time": timedelta(hours=9), "pttype": "W1", "maininscl": "UCS"}]
+    assert nhso18.same_day_walkin(search, ["W1"]) == {"1": "2"}
+
+
+def test_walkin_siblings_query():
+    asked = []
+
+    def select(sql):
+        asked.append(sql)
+        return [visit("A"), visit("B", time=timedelta(hours=10))]
+
+    assert nhso18.walkin_siblings(select, ["B"], ["W1"]) == {"B": "A"}
+    assert "vn IN ('B')" in asked[0] and "pttype IN ('W1')" in asked[0]
+    assert nhso18.walkin_siblings(select, ["B"], []) == {} and len(asked) == 1
+
+
+def test_merge_walkin_files():
+    d = date(2026, 11, 3)
+    data = {
+        "INS": [{"HN": "1", "SEQ": "A"}, {"HN": "1", "SEQ": "B"}],
+        "PAT": [{"HN": "1"}],
+        "OPD": [{"HN": "1", "SEQ": "A", "TIMEOPD": "0800", "UUC": "2"}, {"HN": "1", "SEQ": "B", "TIMEOPD": "1400", "UUC": "1"}],
+        "ODX": [{"SEQ": "A", "DIAG": "J00", "DXTYPE": "1"}, {"SEQ": "B", "DIAG": "J00", "DXTYPE": "1"},
+                {"SEQ": "B", "DIAG": "K30", "DXTYPE": "1"}, {"SEQ": "B", "DIAG": "Z71", "DXTYPE": "2"}],
+        "OOP": [{"SEQ": "A", "OPER": "9920"}, {"SEQ": "B", "OPER": "9920"}, {"SEQ": "B", "OPER": "9390"}],
+        "CHT": [{"SEQ": "A", "TOTAL": Decimal("100.00"), "PAID": Decimal("0.00")},
+                {"SEQ": "B", "TOTAL": Decimal("50.50"), "PAID": Decimal("10.00")}],
+        "CHA": [{"SEQ": "A", "CHRGITEM": "31", "AMOUNT": Decimal("60")}, {"SEQ": "B", "CHRGITEM": "31", "AMOUNT": Decimal("20")},
+                {"SEQ": "B", "CHRGITEM": "41", "AMOUNT": Decimal("30.50")}],
+        "ADP": [{"SEQ": "A", "TYPE": "5", "CODE": "WALKIN", "RATE": Decimal("0"), "SP_ITEM": None, "QTY": 1, "TOTAL": None},
+                {"SEQ": "B", "TYPE": "5", "CODE": "WALKIN", "RATE": Decimal("0"), "SP_ITEM": None, "QTY": 1, "TOTAL": None},
+                {"SEQ": "A", "TYPE": "3", "CODE": "55021", "RATE": Decimal("100"), "SP_ITEM": None, "QTY": 1,
+                 "TOTCOPAY": Decimal("0"), "TOTAL": Decimal("100")},
+                {"SEQ": "B", "TYPE": "3", "CODE": "55021", "RATE": Decimal("100"), "SP_ITEM": None, "QTY": 2,
+                 "TOTCOPAY": Decimal("0"), "TOTAL": Decimal("200")}],
+        "DRU": [{"SEQ": "A", "DID": "D1", "DATE_SERV": d, "USE_STATUS": "1", "AMOUNT": 10, "TOTAL": Decimal("20"), "TOTCOPAY": 0},
+                {"SEQ": "B", "DID": "D1", "DATE_SERV": d, "USE_STATUS": "1", "AMOUNT": 5, "TOTAL": Decimal("10"), "TOTCOPAY": 0},
+                {"SEQ": "B", "DID": "D2", "DATE_SERV": d, "USE_STATUS": "1", "AMOUNT": 1, "TOTAL": Decimal("3"), "TOTCOPAY": 0}],
+        "AER": [{"SEQ": "B", "UCAE": ""}],
+        "IPD": [{"AN": "690000001"}],
+        "ORF": [],
+    }
+    out = nhso18.merge_walkin(data, {"B": "A"})
+    assert [r["SEQ"] for r in out["INS"]] == ["A"] and out["PAT"] is data["PAT"]
+    assert out["OPD"] == [{"HN": "1", "SEQ": "A", "TIMEOPD": "0800", "UUC": "1"}]
+    assert [(r["DIAG"], r["DXTYPE"]) for r in out["ODX"]] == [("J00", "1"), ("K30", "4"), ("Z71", "2")]
+    assert {r["SEQ"] for r in out["ODX"]} == {"A"}
+    assert [r["OPER"] for r in out["OOP"]] == ["9920", "9390"]
+    assert out["CHT"] == [{"SEQ": "A", "TOTAL": Decimal("150.50"), "PAID": Decimal("10.00")}]
+    assert [(r["CHRGITEM"], r["AMOUNT"]) for r in out["CHA"]] == [("31", Decimal("80")), ("41", Decimal("30.50"))]
+    adp = {r["CODE"]: r for r in out["ADP"]}
+    assert len(out["ADP"]) == 2 and adp["WALKIN"]["QTY"] == 1
+    assert adp["55021"]["QTY"] == 3 and adp["55021"]["TOTAL"] == Decimal("300")
+    assert [(r["DID"], r["AMOUNT"], r["TOTAL"]) for r in out["DRU"]] == [("D1", 15, Decimal("30")), ("D2", 1, Decimal("3"))]
+    assert out["AER"] == [{"SEQ": "A", "UCAE": ""}]  # only the later visit had one: it moves to the first VN
+    assert out["IPD"] is data["IPD"]
+    assert data["CHT"][0]["TOTAL"] == Decimal("100.00") and data["ODX"][1]["SEQ"] == "B"  # input not changed
+    assert nhso18.merge_walkin(data, {}) is data

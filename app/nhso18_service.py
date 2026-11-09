@@ -43,6 +43,12 @@ def load_setup(q: Select, hcode: str) -> tuple[nhso18.Config, PttypeGroups]:
     return config, groups
 
 
+def walkin_pttypes(q: Select) -> tuple[str, ...]:
+    """The walk-in rights (sys_var Walkin), as load_setup reads them."""
+    row = (q("SELECT sys_value FROM sys_var WHERE sys_name='Walkin' LIMIT 1") or [{}])[0]
+    return _csv_quoted(row.get("sys_value"))
+
+
 def pttypes(q: Select) -> list[dict]:
     return q("SELECT pttype, name, hipdata_code FROM pttype WHERE isuse='Y' ORDER BY pttype")
 

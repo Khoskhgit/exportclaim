@@ -49,6 +49,8 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
         fdh_sent = local.fdh_sent(keys)
         eclaim_sent = local.eclaim_sent(keys)
         excluded = local.nhso18_excluded(keys)
+        merge = nhso18.same_day_walkin(rows, svc.walkin_pttypes(q))
+        firsts = set(merge.values())
         out = []
         for r in rows:
             k = svc.key_of(r)
@@ -66,6 +68,7 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
                 "excluded_count": sum(1 for s, _ in excluded if s == k),
                 "selectable": not f["errors"], "has_error": bool(f["errors"]), "has_warn": bool(f["warns"]),
                 "already_sent": bool(st), "default_selected": not f["errors"] and not st,
+                "walkin_first": merge.get(k, ""), "walkin_group": merge.get(k) or (k if k in firsts else ""),
             })
         return out
 
@@ -122,13 +125,19 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
         local.set_nhso18_item(key, icode, bool(body.get("excluded")))
         return {"excluded_count": len(local.nhso18_excluded([key]))}
 
-    def build(body: dict) -> tuple[list[str], list[str], dict[str, list[dict]]] | JSONResponse:
-        """Re-check the picked rows with fresh data and build the rows of each file (shared by ZIP and FDH)."""
+    def build(body: dict) -> tuple[list[str], list[str], dict[str, list[dict]], int] | JSONResponse:
+        """Re-check the picked rows with fresh data and build the rows of each file (shared by ZIP, FDH and e-Claim).
+
+        UCS walk-in visits of the same HN and day are taken together (also the ones not picked) and merged into the
+        first visit; the last value is how many visits were merged away."""
         picked = [p for p in body.get("rows") or [] if text(p.get("key"))]
         if not picked:
             raise HTTPException(400, "ยังไม่ได้เลือกรายการ")
         vns = list(dict.fromkeys(text(p["key"]) for p in picked if p.get("kind") != "IPD"))
         ans = list(dict.fromkeys(text(p["key"]) for p in picked if p.get("kind") == "IPD"))
+        config, groups = svc.load_setup(q, settings.hcode)
+        merge = nhso18.walkin_siblings(q, vns, groups.walkin)
+        vns += [v for v in dict.fromkeys([*merge.values(), *merge]) if v not in vns]
         rows = svc.search(q, settings.rcm_db, None, None, [], bool(vns), bool(ans), vn_list=vns, an_list=ans)
         reviewed = review(rows)
         blocked = [{"key": r["key"], "reason": r["errors"][0]["message"]} for r in reviewed if r["errors"]]
@@ -137,24 +146,25 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
         resend = [r["key"] for r in reviewed if r["status"]]
         if resend and not body.get("confirm_resend"):
             return JSONResponse({"detail": "ต้องยืนยันการส่งซ้ำ", "resend": resend, "needs_confirm": True}, status_code=409)
-        config, groups = svc.load_setup(q, settings.hcode)
         odsmis = svc._csv_quoted((q("SELECT sys_value FROM sys_var WHERE sys_name REGEXP 'ODSMIS' LIMIT 1") or [{}])[0].get("sys_value"))
         visits = nhso18.opd_contexts(q, vns, groups, config.zone) + svc.ipd_contexts(q, ans, groups, odsmis)
         if not visits:
             raise HTTPException(400, "ไม่พบรายการที่เลือก")
         excluded = local.nhso18_excluded(vns + ans)
-        return vns, ans, nhso18.Builder(q, config, settings.rcm_db, ECLAIM_DB, excluded).run(visits)
+        data = nhso18.Builder(q, config, settings.rcm_db, ECLAIM_DB, excluded).run(visits)
+        return vns, ans, nhso18.merge_walkin(data, merge), len(merge)
 
     @app.post("/api/nhso18/export")
     def export(request: Request, body: dict = Body(...)):
         built = build(body)
         if isinstance(built, JSONResponse):
             return built
-        vns, ans, data = built
+        vns, ans, data, merged = built
         result = nhso18.build_zip(data, settings.hcode, settings.export_dir)
         export_id = local.record_nhso18_export(result.zip_path, vns + ans, auth.user_label(request))
         log.info("nhso18 export id=%s visits=%s", export_id, len(vns) + len(ans))
-        return {"id": export_id, "file": result.zip_path.name, "count": len(vns) + len(ans), "counts": result.counts}
+        return {"id": export_id, "file": result.zip_path.name, "count": len(vns) + len(ans), "merged": merged,
+                "counts": result.counts}
 
     def save_copy(prefix: str, parts: dict[str, bytes]) -> Path:
         folder = settings.export_dir / f"{prefix}_{datetime.now():%Y%m%d-%H%M%S}"
@@ -205,7 +215,7 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
         built = build(body)
         if isinstance(built, JSONResponse):
             return built
-        vns, ans, data = built
+        vns, ans, data, merged = built
         parts = fdh.files(fdh.fix_rows(data, q), with_phdb=bool(body.get("phdb", True)) and not prescreen)
         mode = "prescreen" if prescreen else "send"
         folder = save_copy(f"FDH_{zone}_{mode}", parts)
@@ -218,7 +228,7 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
         send_id = local.record_fdh_send(vns + ans, zone, mode, reply.ok, reply.http_status, reply.message, str(folder), user)
         log.info("fdh %s zone=%s id=%s visits=%s ok=%s http=%s", mode, zone, send_id, len(vns) + len(ans), reply.ok, reply.http_status)
         return {"id": send_id, "ok": reply.ok, "zone": zone, "mode": mode, "count": len(vns) + len(ans),
-                "http_status": reply.http_status, "status": reply.status, "message": reply.message, "counts": line_counts(parts)}
+                "merged": merged, "http_status": reply.http_status, "status": reply.status, "message": reply.message, "counts": line_counts(parts)}
 
     @app.get("/api/nhso18/fdh/history")
     def fdh_history():
@@ -250,7 +260,7 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
         built = build(body)
         if isinstance(built, JSONResponse):
             return built
-        vns, ans, data = built
+        vns, ans, data, merged = built
         parts = eclaim_api.files(data)
         folder = save_copy("ECLAIM", {f"{n}.txt": c for n, c in parts.items()})
         user, seqs = auth.user_label(request), vns + ans
@@ -261,8 +271,8 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
             raise HTTPException(502, str(exc)) from None
         send_id = local.record_eclaim_send(seqs, maininscl, import_dup, reply.ok, reply.http_status, reply.message, str(folder), user)
         log.info("eclaim send id=%s visits=%s ok=%s http=%s", send_id, len(seqs), reply.ok, reply.http_status)
-        return {"id": send_id, "ok": reply.ok, "count": len(seqs), "http_status": reply.http_status, "status": reply.status,
-                "message": reply.message, "counts": line_counts(parts)}
+        return {"id": send_id, "ok": reply.ok, "count": len(seqs), "merged": merged,
+                "http_status": reply.http_status, "status": reply.status, "message": reply.message, "counts": line_counts(parts)}
 
     @app.get("/api/nhso18/eclaim/history")
     def eclaim_history():
