@@ -141,9 +141,16 @@ function setupPresets(form) {
   });
 }
 function updatePttypeLabel() {
-  const total = document.querySelectorAll("#pttype-list input").length;
-  const chosen = document.querySelectorAll("#pttype-list input:checked").length;
-  $("pttype-label").textContent = chosen === total ? `ทุกสิทธิ (${total})` : `เลือก ${chosen} จาก ${total} สิทธิ`;
+  // Show which rights are picked (code: name), not just how many; the full list is in the tooltip.
+  const boxes = [...document.querySelectorAll("#pttype-list input.one")];
+  const chosen = boxes.filter((b) => b.checked).map((b) => b.parentElement.textContent.trim());
+  const label = $("pttype-label");
+  if (!chosen.length) label.textContent = "ยังไม่ได้เลือกสิทธิ";
+  else if (chosen.length === boxes.length) label.textContent = `ทุกสิทธิ (${boxes.length})`;
+  else label.textContent = `${chosen.length} สิทธิ: ${chosen.slice(0, 3).join(", ")}${chosen.length > 3 ? ` +${chosen.length - 3}` : ""}`;
+  label.title = chosen.length && chosen.length < boxes.length ? chosen.join("\n") : "";
+  const all = document.querySelector("#pttype-list label.all input");
+  if (all) { all.checked = chosen.length === boxes.length; all.indeterminate = chosen.length > 0 && chosen.length < boxes.length; }
 }
 function fillPttypes(list) {
   const all = el("input", { type: "checkbox", checked: true, onchange: (e) => {
