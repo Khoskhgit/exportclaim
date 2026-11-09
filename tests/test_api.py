@@ -247,3 +247,10 @@ def test_fdh_sent_counts_only_successful_production_sends(tmp_path):
     store.record_fdh_send(["D", "D"], "prod", "send", True, 200, "ok")
     assert store.fdh_sent(["A", "B", "C", "D"]) == {"D"}
     assert [h["visit_count"] for h in store.fdh_history()] == [1, 1, 1, 1]
+
+
+def test_eclaim_routes_without_credentials(client):
+    assert client.get("/api/nhso18/eclaim/status").json()["ready"] is False
+    assert client.post("/api/nhso18/eclaim/send", json={"rows": [{"key": OK}]}).status_code == 400
+    assert "NHSO_USER" in client.post("/api/nhso18/eclaim/test", json={}).json()["detail"]
+    assert client.get("/api/nhso18/eclaim/history").json() == []

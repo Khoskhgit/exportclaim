@@ -10,7 +10,7 @@ from fastapi import Body, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 
-from . import auth, fdh, nhso18, nhso18_service as svc
+from . import auth, eclaim_api, fdh, nhso18, nhso18_service as svc
 from .config import Settings
 from .store import Store
 from .aipn import number
@@ -47,12 +47,14 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
         found = svc.checks(q, settings.rcm_db, rows)
         sent = local.nhso18_sent(keys)
         fdh_sent = local.fdh_sent(keys)
+        eclaim_sent = local.eclaim_sent(keys)
         excluded = local.nhso18_excluded(keys)
         out = []
         for r in rows:
             k = svc.key_of(r)
             f = found[k]
-            st = svc.status(r, k in sent, k in fdh_sent)
+            label = "ส่ง FDH แล้ว" if k in fdh_sent else "ส่ง e-Claim แล้ว" if k in eclaim_sent else ""
+            st = svc.status(r, k in sent, label)
             moment = r.get("date")
             out.append({
                 "key": k, "kind": r["kind"], "vn": text(r.get("vn")), "an": text(r.get("an")), "hn": text(r.get("hn")),
@@ -154,6 +156,19 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
         log.info("nhso18 export id=%s visits=%s", export_id, len(vns) + len(ans))
         return {"id": export_id, "file": result.zip_path.name, "count": len(vns) + len(ans), "counts": result.counts}
 
+    def save_copy(prefix: str, parts: dict[str, bytes]) -> Path:
+        folder = settings.export_dir / f"{prefix}_{datetime.now():%Y%m%d-%H%M%S}"
+        try:
+            folder.mkdir(parents=True, exist_ok=True)
+            for name, content in parts.items():
+                (folder / name).write_bytes(content)
+        except OSError as exc:
+            raise HTTPException(500, f"บันทึกสำเนาแฟ้มที่ส่งไม่สำเร็จ: {exc.__class__.__name__}") from None
+        return folder
+
+    def line_counts(parts: dict[str, bytes]) -> dict[str, int]:
+        return {n.split(".")[0].upper(): max(c.count(b"\r\n") - 1, 0) for n, c in parts.items()}
+
     # ------------------------------------------------------------ FDH
     def client() -> fdh.Client:
         return fdh.Client(settings.fdh_user, settings.fdh_password, settings.hcode, settings.fdh_token_url,
@@ -193,13 +208,7 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
         vns, ans, data = built
         parts = fdh.files(fdh.fix_rows(data, q), with_phdb=bool(body.get("phdb", True)) and not prescreen)
         mode = "prescreen" if prescreen else "send"
-        folder = settings.export_dir / f"FDH_{datetime.now():%Y%m%d-%H%M%S}_{zone}_{mode}"
-        try:
-            folder.mkdir(parents=True, exist_ok=True)
-            for name, content in parts.items():
-                (folder / name).write_bytes(content)
-        except OSError as exc:
-            raise HTTPException(500, f"บันทึกสำเนาแฟ้มที่ส่งไม่สำเร็จ: {exc.__class__.__name__}") from None
+        folder = save_copy(f"FDH_{zone}_{mode}", parts)
         user = auth.user_label(request)
         try:
             reply = client().send(zone, parts, prescreen)
@@ -208,13 +217,56 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
             raise HTTPException(502, str(exc)) from None
         send_id = local.record_fdh_send(vns + ans, zone, mode, reply.ok, reply.http_status, reply.message, str(folder), user)
         log.info("fdh %s zone=%s id=%s visits=%s ok=%s http=%s", mode, zone, send_id, len(vns) + len(ans), reply.ok, reply.http_status)
-        counts = {n.split(".")[0].upper(): max(c.count(b"\r\n") - 1, 0) for n, c in parts.items()}
         return {"id": send_id, "ok": reply.ok, "zone": zone, "mode": mode, "count": len(vns) + len(ans),
-                "http_status": reply.http_status, "status": reply.status, "message": reply.message, "counts": counts}
+                "http_status": reply.http_status, "status": reply.status, "message": reply.message, "counts": line_counts(parts)}
 
     @app.get("/api/nhso18/fdh/history")
     def fdh_history():
         return local.fdh_history()
+
+    # ------------------------------------------------------------ New e-Claim API
+    def eclaim() -> eclaim_api.Client:
+        return eclaim_api.Client(settings.nhso_user, settings.nhso_password, settings.moph_user_agent)
+
+    @app.get("/api/nhso18/eclaim/status")
+    def eclaim_status():
+        return {"ready": bool(settings.nhso_user and settings.nhso_password), "maininscl": list(eclaim_api.MAININSCL)}
+
+    @app.post("/api/nhso18/eclaim/test")
+    def eclaim_test():
+        try:
+            eclaim().token()
+        except eclaim_api.EclaimError as exc:
+            raise HTTPException(502, str(exc)) from None
+        return {"message": "เชื่อมต่อ New e-Claim ได้ (Token OK)"}
+
+    @app.post("/api/nhso18/eclaim/send")
+    def eclaim_send(request: Request, body: dict = Body(...)):
+        if not settings.nhso_user or not settings.nhso_password:
+            raise HTTPException(400, "ยังไม่ได้ตั้ง NHSO_USER / NHSO_PASSWORD ใน .env")
+        maininscl, import_dup = text(body.get("maininscl")), bool(body.get("import_dup"))
+        if maininscl and maininscl not in eclaim_api.MAININSCL:
+            raise HTTPException(400, "สิทธิที่เลือกไม่ถูกต้อง")
+        built = build(body)
+        if isinstance(built, JSONResponse):
+            return built
+        vns, ans, data = built
+        parts = eclaim_api.files(data)
+        folder = save_copy("ECLAIM", {f"{n}.txt": c for n, c in parts.items()})
+        user, seqs = auth.user_label(request), vns + ans
+        try:
+            reply = eclaim().send(parts, maininscl, import_dup)
+        except eclaim_api.EclaimError as exc:
+            local.record_eclaim_send(seqs, maininscl, import_dup, False, None, str(exc), str(folder), user)
+            raise HTTPException(502, str(exc)) from None
+        send_id = local.record_eclaim_send(seqs, maininscl, import_dup, reply.ok, reply.http_status, reply.message, str(folder), user)
+        log.info("eclaim send id=%s visits=%s ok=%s http=%s", send_id, len(seqs), reply.ok, reply.http_status)
+        return {"id": send_id, "ok": reply.ok, "count": len(seqs), "http_status": reply.http_status, "status": reply.status,
+                "message": reply.message, "counts": line_counts(parts)}
+
+    @app.get("/api/nhso18/eclaim/history")
+    def eclaim_history():
+        return local.eclaim_history()
 
     @app.get("/api/nhso18/exports")
     def exports():

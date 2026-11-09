@@ -196,14 +196,14 @@ def checks(q: Select, rcm: str, rows: list[dict]) -> dict[str, dict]:
     return found
 
 
-def status(r: dict, local_sent: bool, fdh_sent: bool = False) -> str:
+def status(r: dict, local_sent: bool, sent_label: str = "") -> str:
     if text(r.get("rep_invoice")):
         return "ชดเชยแล้ว"
     if text(r.get("rep_rep")):
         return "ส่งแล้ว"
     if text(r.get("fdh_status")):
         return text(r["fdh_status"])[:40]
-    return "ส่ง FDH แล้ว" if fdh_sent else "ส่งออกแล้ว" if local_sent else ""
+    return sent_label or ("ส่งออกแล้ว" if local_sent else "")
 
 
 # ------------------------------------------------------------------ IPD context

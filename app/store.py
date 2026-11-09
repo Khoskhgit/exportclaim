@@ -70,6 +70,14 @@ CREATE TABLE IF NOT EXISTS fdh_sends (
 CREATE TABLE IF NOT EXISTS fdh_send_keys (
   send_id INTEGER NOT NULL REFERENCES fdh_sends(id), seq TEXT NOT NULL, PRIMARY KEY (send_id, seq)
 );
+CREATE TABLE IF NOT EXISTS eclaim_sends (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, created_at TEXT NOT NULL, maininscl TEXT NOT NULL DEFAULT '',
+  import_dup INTEGER NOT NULL DEFAULT 0, visit_count INTEGER NOT NULL, ok INTEGER NOT NULL, http_status INTEGER,
+  message TEXT NOT NULL DEFAULT '', folder TEXT NOT NULL DEFAULT '', created_by TEXT NOT NULL DEFAULT ''
+);
+CREATE TABLE IF NOT EXISTS eclaim_send_keys (
+  send_id INTEGER NOT NULL REFERENCES eclaim_sends(id), seq TEXT NOT NULL, PRIMARY KEY (send_id, seq)
+);
 CREATE TABLE IF NOT EXISTS z_codes (
   code TEXT PRIMARY KEY, description TEXT
 );
@@ -353,6 +361,32 @@ class Store:
                  message[:1000], folder, created_by))
             db.executemany("INSERT INTO fdh_send_keys (send_id, seq) VALUES (?,?)", [(cur.lastrowid, s) for s in seqs])
             return cur.lastrowid
+
+    def eclaim_sent(self, seqs: Iterable[str]) -> set[str]:
+        """Visits sent to New e-Claim with a success reply."""
+        wanted = set(seqs)
+        with self._db() as db:
+            return {r["seq"] for r in db.execute(
+                "SELECT DISTINCT k.seq FROM eclaim_send_keys k JOIN eclaim_sends s ON s.id=k.send_id WHERE s.ok=1")
+                if r["seq"] in wanted}
+
+    def record_eclaim_send(self, seqs: Iterable[str], maininscl: str, import_dup: bool, ok: bool, http_status: int | None,
+                           message: str, folder: str = "", created_by: str = "", now: datetime | None = None) -> int:
+        seqs = list(dict.fromkeys(seqs))
+        with self._db() as db:
+            cur = db.execute(
+                "INSERT INTO eclaim_sends (created_at, maininscl, import_dup, visit_count, ok, http_status, message, folder, "
+                "created_by) VALUES (?,?,?,?,?,?,?,?,?)",
+                ((now or datetime.now()).isoformat(timespec="seconds"), maininscl, int(import_dup), len(seqs), int(ok),
+                 http_status, message[:1000], folder, created_by))
+            db.executemany("INSERT INTO eclaim_send_keys (send_id, seq) VALUES (?,?)", [(cur.lastrowid, s) for s in seqs])
+            return cur.lastrowid
+
+    def eclaim_history(self, limit: int = 50) -> list[dict]:
+        with self._db() as db:
+            return [dict(r) for r in db.execute(
+                "SELECT id, created_at, maininscl, import_dup, visit_count, ok, http_status, message, created_by "
+                "FROM eclaim_sends ORDER BY id DESC LIMIT ?", (limit,))]
 
     def fdh_history(self, limit: int = 50) -> list[dict]:
         with self._db() as db:

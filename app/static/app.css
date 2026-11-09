@@ -261,3 +261,4 @@ dl.sum dt{color:var(--muted)}dl.sum dd{margin:0;font-weight:600;font-variant-num
 @media (max-width:760px){.fdh-group{margin-left:0;padding-left:0;border-left:0;width:100%}.actions .fdh-group label.fdh-zone{width:calc(50% - 4px)}}
 .history-body h3{font-size:14px;margin:14px 0 6px}
 .danger-text{color:var(--error)}
+.fdh-group + .fdh-group{margin-left:0}

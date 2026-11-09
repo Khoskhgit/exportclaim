@@ -51,7 +51,7 @@ function renderTotals() {
   $("selected-count").textContent = `เลือก ${count.format(list.length)} รายการ`;
   $("selected-total").textContent = `ค่าใช้จ่าย ${baht.format(list.reduce((s, r) => s + Number(r.money), 0))} บาท`;
   $("export").disabled = list.length === 0;
-  $("fdh-send").disabled = $("fdh-prescreen").disabled = list.length === 0 || state.fdhBusy;
+  $("fdh-send").disabled = $("fdh-prescreen").disabled = $("eclaim-send").disabled = list.length === 0 || state.fdhBusy;
 }
 function render() { renderChips(); renderRows(); renderTotals(); }
 
@@ -207,6 +207,69 @@ async function setupFdh() {
   loadFdhHistory();
 }
 
+// ------------------------------------------------------------- New e-Claim API
+async function runEclaim() {
+  clearNotices();
+  const list = selectedRows();
+  const inscl = $("eclaim-inscl").value, dup = $("eclaim-dup").checked;
+  const summary = el("dl", { class: "sum" },
+    el("dt", {}, "ปลายทาง"), el("dd", { class: "danger-text" }, "New e-Claim (ส่งจริง)"),
+    el("dt", {}, "OPD"), el("dd", {}, `${list.filter((r) => r.kind === "OPD").length} visit`),
+    el("dt", {}, "IPD"), el("dd", {}, `${list.filter((r) => r.kind === "IPD").length} AN`),
+    el("dt", {}, "ค่าใช้จ่ายรวม"), el("dd", {}, `${baht.format(list.reduce((s, r) => s + Number(r.money), 0))} บาท`),
+    el("dt", {}, "สิทธิ"), el("dd", {}, inscl || "ทุกสิทธิ"),
+    el("dt", {}, "นำเข้าซ้ำ"), el("dd", { class: dup ? "danger-text" : "" }, dup ? "ใช่" : "ไม่"));
+  if (!await confirmDialog("ยืนยันส่ง New e-Claim", [summary], "ส่ง New e-Claim")) return;
+  const payload = { rows: list.map((r) => ({ key: r.key, kind: r.kind })), maininscl: inscl, import_dup: dup };
+  state.fdhBusy = true; renderTotals(); $("eclaim-send").textContent = "กำลังส่ง…";
+  try {
+    let result;
+    try { result = await api("/api/nhso18/eclaim/send", payload); }
+    catch (err) {
+      if (!err.data || !err.data.needs_confirm) throw err;
+      const again = el("p", {}, `มี ${err.data.resend.length} รายการที่เคยส่งหรือส่งออกแล้ว ต้องการส่งซ้ำใช่หรือไม่?`);
+      if (!await confirmDialog("ยืนยันการส่งซ้ำ", [again], "ส่งซ้ำ")) return;
+      result = await api("/api/nhso18/eclaim/send", { ...payload, confirm_resend: true });
+    }
+    const counts = Object.entries(result.counts).filter(([, n]) => n).map(([f, n]) => `${f} ${n}`).join(", ");
+    const head = `ส่ง New e-Claim ${result.count} รายการ (${counts})`;
+    notice(result.ok ? `${head}: ${result.message}` : `${head} ไม่ผ่าน: ${result.message}`, result.ok ? "ok" : "error", true);
+    if (result.ok) { state.selected.clear(); await search(); }
+  } catch (err) {
+    const detail = err.data && err.data.blocked ? `: ${err.data.blocked.map((b) => `${b.key} (${b.reason})`).join(", ")}` : "";
+    notice(err.message + detail);
+  } finally {
+    state.fdhBusy = false; $("eclaim-send").textContent = "ส่ง New e-Claim"; renderTotals(); loadEclaimHistory();
+  }
+}
+
+async function testEclaim() {
+  clearNotices();
+  $("eclaim-test").disabled = true;
+  try { notice((await api("/api/nhso18/eclaim/test", {})).message, "ok"); }
+  catch (err) { notice(err.message); }
+  finally { $("eclaim-test").disabled = false; }
+}
+
+async function loadEclaimHistory() {
+  if ($("eclaim").hidden) { $("eclaim-history").replaceChildren(el("p", { class: "muted" }, "ยังไม่ได้ตั้งค่า New e-Claim API")); return; }
+  try {
+    const rows = await api("/api/nhso18/eclaim/history");
+    $("eclaim-history").replaceChildren(rows.length ? table(["เวลา", "สิทธิ", "นำเข้าซ้ำ", "จำนวน", "ผล", "ข้อความ", "ผู้ส่ง"], rows.map((r) => el("tr", {},
+      el("td", {}, r.created_at.replace("T", " ")), el("td", {}, r.maininscl || "ทุกสิทธิ"), el("td", {}, r.import_dup ? "ใช่" : "-"),
+      el("td", {}, String(r.visit_count)), el("td", {}, el("span", { class: `badge ${r.ok ? "b-ok" : "b-error"}` }, r.ok ? "สำเร็จ" : "ไม่ผ่าน")),
+      el("td", { class: "problems" }, r.message), el("td", {}, r.created_by || "-")))) : el("p", {}, "ยังไม่มีประวัติ"));
+  } catch (err) { $("eclaim-history").replaceChildren(el("p", {}, err.message)); }
+}
+
+async function setupEclaim() {
+  try {
+    const status = await api("/api/nhso18/eclaim/status");
+    $("eclaim").hidden = !status.ready; $("eclaim-off").hidden = status.ready;
+  } catch (err) { $("eclaim-off").hidden = false; }
+  loadEclaimHistory();
+}
+
 async function search() {
   const form = $("search");
   const key = form.elements.key.value.trim();
@@ -261,6 +324,7 @@ async function start() {
   } catch (err) { setConnection("เชื่อมต่อไม่ได้", false); notice(err.message); }
   loadHistory();
   setupFdh();
+  setupEclaim();
 }
 
 $("search").addEventListener("submit", (e) => { e.preventDefault(); clearNotices(); search(); });
@@ -271,6 +335,8 @@ $("export").onclick = runExport;
 $("fdh-send").onclick = () => runFdh(false);
 $("fdh-prescreen").onclick = () => runFdh(true);
 $("fdh-test").onclick = testFdh;
+$("eclaim-send").onclick = runEclaim;
+$("eclaim-test").onclick = testEclaim;
 $("drawer-close").onclick = closeDrawer;
 $("drawer-backdrop").onclick = closeDrawer;
 document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("drawer").hidden && !$("confirm").open) closeDrawer(); });

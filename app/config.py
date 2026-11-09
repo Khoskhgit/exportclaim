@@ -73,6 +73,9 @@ class Settings:
     fdh_password: str = field(default="", repr=False)
     fdh_token_url: str = "https://fdh.moph.go.th"
     fdh_hash_key: str = field(default="$jwt@moph#", repr=False)
+    # New e-Claim API (nhsoapi.nhso.go.th ecimp)
+    nhso_user: str = ""
+    nhso_password: str = field(default="", repr=False)
 
     @property
     def allowed_hosts(self) -> list[str]:
@@ -159,4 +162,6 @@ def load_settings(env_file: Path | None = None) -> Settings:
         fdh_password=get("FDH_PASSWORD") or "",
         fdh_token_url=(get("FDH_TOKEN_URL") or "https://fdh.moph.go.th").strip().rstrip("/"),
         fdh_hash_key=get("FDH_HASH_KEY") or "$jwt@moph#",
+        nhso_user=(get("NHSO_USER") or "").strip(),
+        nhso_password=get("NHSO_PASSWORD") or "",
     )

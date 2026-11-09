@@ -131,6 +131,10 @@ session อยู่ได้ `SESSION_HOURS` ชั่วโมง (ค่า�
 
 ตั้ง `FDH_USER` และ `FDH_PASSWORD` ใน `.env` แล้วด้านล่างหน้า 18 แฟ้มจะมีปุ่ม "ทดสอบเชื่อมต่อ", "PreScreen" และ "ส่ง FDH" ให้เลือกปลายทาง UAT (ทดสอบ) หรือ PROD (ส่งจริง) ใช้รายการที่เลือกและผลตรวจเดียวกับการสร้าง ZIP แปลงเป็นรูปแบบคอลัมน์ของ FDH แบบ UTF-8 ตาม `api_fdh.txt` (ตัด LAB, ADP.BILLMAUD, PHDB.NAME, เพิ่ม ORF.REFERDATE, เปลี่ยน PERMITNO `PG…` เป็น `visit_pttype.auth_code`) แล้วส่งที่ `/api/v2/data_hub/16_files` (PreScreen ส่งที่ `/api/v1/auth/open_api/fda/file` โดยไม่รวม PHDB) สำเนาแฟ้มที่ส่งเก็บใน `exports/FDH_<เวลา>_<zone>_<mode>/` และประวัติการส่งเก็บใน SQLite รายการที่ส่ง PROD สำเร็จจะขึ้นสถานะ "ส่ง FDH แล้ว"
 
+### ส่ง New e-Claim ผ่าน API
+
+ตั้ง `NHSO_USER` และ `NHSO_PASSWORD` (บัญชี e-Claim ที่สมัครโครงการส่งข้อมูลผ่าน API กับ สปสช. แล้ว ติดต่อ apieclaim@nhso.go.th) ใน `.env` แล้วหน้า 18 แฟ้มจะมีกลุ่ม "New e-Claim" ให้เลือกสิทธิ (ทุกสิทธิ/UCS/OFC/LGO/SSS/NHS) ติ๊กนำเข้าซ้ำ ปุ่ม "ทดสอบ Token" และ "ส่ง New e-Claim" ตาม `api_eclaim_new.txt`: ขอ token ที่ `https://nhsoapi.nhso.go.th/FMU/ecimp/v1/auth` แล้วส่ง JSON ที่มี 16 แฟ้ม (TXT ชุดเดียวกับใน ZIP เป็น base64 MS874, ไม่ส่ง PHDB, LAB เป็น null) ไปที่ `/ecimp/v1/send` ใช้ได้เฉพาะ production เหมือนโปรแกรมเดิม สำเนาแฟ้มเก็บใน `exports/ECLAIM_<เวลา>/` รายการที่ส่งสำเร็จขึ้นสถานะ "ส่ง e-Claim แล้ว"
+
 ## ทดสอบ
 
 ```bash

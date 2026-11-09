@@ -54,7 +54,7 @@
 
   <details class="panel history">
     <summary>ประวัติการส่งออก 18 แฟ้ม</summary>
-    <div class="history-body"><h3>ZIP</h3><div id="history"></div><h3>ส่ง FDH</h3><div id="fdh-history"></div></div>
+    <div class="history-body"><h3>ZIP</h3><div id="history"></div><h3>ส่ง FDH</h3><div id="fdh-history"></div><h3>ส่ง New e-Claim</h3><div id="eclaim-history"></div></div>
   </details>
 </main>
 
@@ -71,6 +71,14 @@
       <button id="fdh-prescreen" type="button" class="big" disabled>PreScreen</button>
       <button id="fdh-send" type="button" class="primary big" disabled>ส่ง FDH</button>
     </div>
+    <div id="eclaim" class="fdh-group" hidden>
+      <span class="fdh-title">New e-Claim</span>
+      <label class="fdh-zone">สิทธิ<select id="eclaim-inscl"><option value="">ทุกสิทธิ</option><option>UCS</option><option>OFC</option><option>LGO</option><option>SSS</option><option>NHS</option></select></label>
+      <label class="inline"><input type="checkbox" id="eclaim-dup"> นำเข้าซ้ำ</label>
+      <button id="eclaim-test" type="button" class="ghost">ทดสอบ Token</button>
+      <button id="eclaim-send" type="button" class="primary big" disabled>ส่ง New e-Claim</button>
+    </div>
+    <span id="eclaim-off" class="fdh-off" hidden>ส่ง New e-Claim: ยังไม่ได้ตั้ง NHSO_USER / NHSO_PASSWORD ใน .env</span>
     <span id="fdh-off" class="fdh-off" hidden>ส่ง FDH: ยังไม่ได้ตั้ง FDH_USER / FDH_PASSWORD ใน .env</span>
   </div>
 </footer>
