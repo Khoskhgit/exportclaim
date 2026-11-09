@@ -101,16 +101,19 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
         col = "an" if kind == "IPD" else "vn"
         excluded = local.nhso18_excluded([key])
         items = q(f"""
-        SELECT oo.icode, CONCAT_WS(' ',d.name,d.strength) name, inc.drg_chrgitem_id billmaud, d.nhso_adp_code adp,
+        SELECT oo.icode, CONCAT_WS(' ',d.name,d.strength) name, inc.drg_chrgitem_id billmaud, MAX(drg.drg_chrgitem_name) billmaud_name,
+          d.nhso_adp_code adp,
           SUM(oo.qty) qty, SUM(oo.sum_price) amount,
           MAX(EXISTS(SELECT 1 FROM opitemrece_noexport no WHERE no.seq=oo.{col} AND no.icode=oo.icode)) hosxp_noexport
         FROM opitemrece oo LEFT JOIN s_drugitems d ON d.icode=oo.icode LEFT JOIN income inc ON inc.income=oo.income
+        LEFT JOIN drg_chrgitem drg ON drg.drg_chrgitem_id=inc.drg_chrgitem_id
         WHERE oo.{col}={nhso18.lit(key)}
         GROUP BY oo.icode ORDER BY inc.drg_chrgitem_id, oo.icode""")
         table = "iptdiag" if kind == "IPD" else "ovstdiag"
         dx = q(f"SELECT diagtype, icd10, icdname(icd10) name FROM {table} WHERE {col}={nhso18.lit(key)} ORDER BY diagtype, icd10")
         return {
-            "items": [{"icode": text(i["icode"]), "name": text(i["name"]), "billmaud": text(i["billmaud"]), "adp": text(i["adp"]),
+            "items": [{"icode": text(i["icode"]), "name": text(i["name"]), "billmaud": text(i["billmaud"]),
+                       "billmaud_name": text(i.get("billmaud_name")), "adp": text(i["adp"]),
                        "qty": number(i["qty"]), "amount": svc.money(i["amount"]),
                        "hosxp_excluded": bool(i["hosxp_noexport"]), "excluded": (key, text(i["icode"])) in excluded}
                       for i in items],

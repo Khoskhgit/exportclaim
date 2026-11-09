@@ -70,6 +70,31 @@ function table(headers, rows) {
   return el("table", {}, el("thead", {}, el("tr", {}, ...headers.map((h) => el("th", { class: h.num ? "num" : "" }, h.label || h)))), el("tbody", {}, ...rows));
 }
 
+// Totals of the cost tab by charge category (หมวด), split into what is sent and what is left out.
+function costSummary(items) {
+  const groups = new Map();
+  for (const item of items) {
+    const key = item.billmaud || "-";
+    const g = groups.get(key) || { code: key, name: item.billmaud_name || "", count: 0, total: 0, left: 0 };
+    const amount = Number(item.amount) || 0;
+    g.count += 1; g.total += amount;
+    if (item.excluded || item.hosxp_excluded) g.left += amount;
+    groups.set(key, g);
+  }
+  const list = [...groups.values()].sort((a, b) => (Number(a.code) || 999) - (Number(b.code) || 999));
+  const sum = (k) => list.reduce((s, g) => s + g[k], 0);
+  const money = (n, cls = "num") => el("td", { class: cls }, baht.format(n));
+  const head = el("thead", {}, el("tr", {}, el("th", {}, "หมวด"), el("th", { class: "num" }, "รายการ"),
+    el("th", { class: "num" }, "ยอดรวม"), el("th", { class: "num" }, "ไม่ส่ง"), el("th", { class: "num" }, "ยอดที่ส่ง")));
+  const body = el("tbody", {}, ...list.map((g) => el("tr", {},
+    el("td", {}, el("span", { class: "mono" }, g.code), g.name ? ` ${g.name}` : ""), el("td", { class: "num" }, count.format(g.count)),
+    money(g.total), g.left ? money(g.left, "num left") : el("td", { class: "num muted" }, "—"), money(g.total - g.left))));
+  const foot = el("tfoot", {}, el("tr", {}, el("th", {}, "รวมทั้งหมด"), el("th", { class: "num" }, count.format(sum("count"))),
+    el("th", { class: "num" }, baht.format(sum("total"))), el("th", { class: "num" }, baht.format(sum("left"))),
+    el("th", { class: "num" }, baht.format(sum("total") - sum("left")))));
+  return el("table", { class: "cost-table" }, head, body, foot);
+}
+
 async function openDrawer(r) {
   state.current = r.key; renderRows();
   $("drawer").hidden = false; $("drawer-backdrop").hidden = false;
@@ -93,7 +118,10 @@ async function openDrawer(r) {
     } else check.push(el("div", { class: "all-good" }, "✓ ผ่านการตรวจทั้งหมด พร้อมส่ง"));
 
     const dx = [data.dx.length ? table(["ประเภท", "รหัส", "ชื่อโรค"], data.dx.map((d) => el("tr", {}, el("td", {}, d.type), el("td", { class: "mono" }, d.code), el("td", {}, d.name)))) : el("p", { class: "muted" }, "ไม่มีข้อมูล")];
-    const costs = [el("p", { class: "muted-note" }, "ติ๊ก \"ไม่ส่ง\" เพื่อเอารายการออกจากแฟ้ม CHT, CHA, ADP, DRU และ PHDB (ไม่แก้ข้อมูลใน HOSxP) รายการที่ HOSxP กำหนดไม่ส่งไว้จะไม่ถูกส่งเหมือนโปรแกรมเดิม"),
+    const summary = el("div", { class: "cost-summary" });
+    const showSummary = () => summary.replaceChildren(costSummary(data.items));
+    showSummary();
+    const costs = [summary, el("p", { class: "muted-note" }, "ติ๊ก \"ไม่ส่ง\" เพื่อเอารายการออกจากแฟ้ม CHT, CHA, ADP, DRU และ PHDB (ไม่แก้ข้อมูลใน HOSxP) รายการที่ HOSxP กำหนดไม่ส่งไว้จะไม่ถูกส่งเหมือนโปรแกรมเดิม"),
       table(["ไม่ส่ง", "หมวด", "รายการ", "ADP", { label: "จำนวน", num: true }, { label: "รวม", num: true }], data.items.map((item) => {
         const row = el("tr", { class: item.excluded || item.hosxp_excluded ? "excluded" : "" });
         row.append(
@@ -102,7 +130,8 @@ async function openDrawer(r) {
             onchange: async (e) => {
               try {
                 const res = await api("/api/nhso18/item", { key: r.key, icode: item.icode, excluded: e.target.checked });
-                r.excluded_count = res.excluded_count; row.classList.toggle("excluded", e.target.checked); renderRows();
+                item.excluded = e.target.checked;
+                r.excluded_count = res.excluded_count; row.classList.toggle("excluded", e.target.checked); renderRows(); showSummary();
               } catch (err) { e.target.checked = !e.target.checked; notice(err.message); }
             } })),
           el("td", {}, item.billmaud), el("td", {}, item.name, item.hosxp_excluded ? el("div", { class: "muted-note" }, "HOSxP กำหนดไม่ส่ง") : ""),
