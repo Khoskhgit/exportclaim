@@ -97,7 +97,7 @@ async function openDrawer(v) {
           el("div", { class: "issue-title" }, el("span", { class: `badge ${r.warning ? "b-warn" : "b-error"}` }, r.code), " ", r.name),
           el("ul", {}, el("li", {}, `วิธีแก้: ${r.hint}`), ...related.map((item) => el("li", {}, `เกี่ยวข้อง: ${item.icode} ${item.name} ${baht.format(Number(item.sum_price))} บาท`))));
       })));
-      check.push(el("p", { class: "hint" }, "แก้แล้วกดค้นหาอีกครั้ง จากนั้นเลือก visit นี้และส่งใหม่ด้วยประเภท E: แก้ไข โดยใช้ Session No เลขใหม่"));
+      check.push(el("p", { class: "hint" }, `แก้แล้วกดค้นหาอีกครั้ง จากนั้นเลือก visit นี้และส่งใหม่ด้วยประเภท ${v.resend_flag === "E" ? "E: แก้ไข (สกส. รับ ID นี้แล้ว)" : "A: ขอเบิก (สกส. ยังไม่เคยรับรายการนี้ ห้ามใช้ E)"} โดยใช้ Session No เลขใหม่`));
     }
     if (v.special || v.issues.length) {
       check.push(el("h3", {}, "ผลตรวจ"));

@@ -178,6 +178,19 @@ def test_rejected_visit_must_be_resent_as_a_correction(tmp_path):
     assert found["needs_correction"] and "E: แก้ไข" in found["result_codes"][0]["hint"]
 
 
+def test_rejected_visit_never_accepted_is_resent_as_new(tmp_path):
+    db = FakeHosxp()
+    db.visits = [visit(vn=OK, chi_status="C", chi_codes="R61,T61,W05,W07")]
+    client = TestClient(create_app(replace(settings(), export_dir=tmp_path / "exports"), db, Store(tmp_path / "s.sqlite3")))
+
+    unconfirmed = export(client, [OK])
+    assert unconfirmed.status_code == 409 and unconfirmed.json()["needs_confirm"]
+    assert export(client, [OK], confirm_resend=True).status_code == 200
+
+    found = client.post("/api/search", json={"start": "2026-10-01", "end": "2026-10-31", "pttypes": []}).json()["visits"][0]
+    assert found["resend_flag"] == "A" and "A: ขอเบิก" in found["result_codes"][0]["hint"]
+
+
 @pytest.mark.parametrize("host,shown", [("192.168.1.4", "xxx.xxx.1.4"), ("127.0.0.1", "xxx.xxx.0.1"), ("db.example.org", "xxx")])
 def test_database_host_is_masked(host, shown):
     assert mask_host(host) == shown

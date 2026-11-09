@@ -160,6 +160,8 @@ RESULT_HINTS = {
     "S01": "ระบบรับ ID นี้แล้ว ให้ใช้ VN เดิมและส่งใหม่ด้วยประเภท E: แก้ไข",
     "T02": "ระบบรับ ID นี้แล้ว ให้ใช้ VN เดิมและส่งใหม่ด้วยประเภท E: แก้ไข",
     "S18": "ตรวจรหัสวินิจฉัยใน HOSxP และ codeset ของรหัสนั้น",
+    "R61": "สกส. ยังไม่เคยรับรายการนี้ (ส่งไปแล้วติด C) จึงแก้ด้วย E ไม่ได้ ให้ส่งใหม่ด้วยประเภท A: ขอเบิก ใช้ VN เดิม",
+    "T61": "สกส. ยังไม่เคยรับรายการนี้ (ส่งไปแล้วติด C) จึงแก้ด้วย E ไม่ได้ ให้ส่งใหม่ด้วยประเภท A: ขอเบิก ใช้ VN เดิม",
     "S21": "ตรวจรหัสและราคาของรายการหมวด B (ทำหัตถการและวิสัญญี)",
     "T31": "ตรวจว่า visit มีรายการค่าใช้จ่ายที่ส่งออกได้",
     "T33": "ตรวจยอดรวม รายการที่ติ๊กไม่ส่ง และยอดที่ผู้ป่วยจ่ายเอง",
@@ -172,6 +174,19 @@ RESULT_HINTS = {
     "Z99": "รอ สกส. แจ้ง แล้วจึงส่งข้อมูลใหม่",
 }
 RESULT_GROUPS = {"S21": ["B"]}
+# A claim rejected with these codes is already held by SSO, so it is resent as E; any other C claim was never
+# accepted, so it is resent as A (sending E then fails with R61/T61: no original to edit).
+ACCEPTED_ID_CODES = {"R01", "S01", "T02"}
+
+
+def resend_flag(status: str, codes) -> str:
+    """The TFlag a visit must be sent with again: E for one SSO already holds, A for a rejected one, '' if unsent."""
+    if status in {"ส่งแล้ว", "ชดเชยแล้ว", "ส่งออกแล้ว"}:
+        return "E"
+    if status == "ติด C":
+        found = {part.strip().upper() for part in text(codes).split(",")}
+        return "E" if found & ACCEPTED_ID_CODES else "A"
+    return ""
 
 
 def explain_result_codes(codes, names: dict[str, str]) -> list[dict]:
@@ -319,6 +334,7 @@ def review_visit(
         "selectable": selectable,
         "already_sent": already_sent,
         "needs_correction": status == "ติด C",
+        "resend_flag": resend_flag(status, visit.get("chi_codes")),
         "default_selected": selectable and not status and WARN_C not in levels,
         "has_error": ERROR in levels,
         "has_warn": WARN in levels,

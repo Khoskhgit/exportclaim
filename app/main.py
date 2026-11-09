@@ -242,7 +242,7 @@ def create_app(settings: Settings | None = None, hosxp: Any = None, store: Store
         dx_rows = group(db.fetch_dx(vns))
         sent = local.sent_vns(vns)
         z_codes, z_ready = z_state()
-        blocked, resend = [], []
+        blocked, resend, must_edit = [], [], []
         for visit in visits:
             vn = text(visit["vn"])
             review = review_visit(visit, items.get(vn, []), settings.hosp_main, z_codes, z_ready, vn in sent)
@@ -251,11 +251,13 @@ def create_app(settings: Settings | None = None, hosxp: Any = None, store: Store
                 blocked.append({"vn": vn, "reason": reason})
             elif review["already_sent"] or review["needs_correction"]:
                 resend.append(vn)
+                if review["resend_flag"] == "E":
+                    must_edit.append(vn)
         if blocked:
             return JSONResponse({"detail": "มีรายการที่ส่งไม่ได้", "blocked": blocked}, status_code=409)
-        if resend and flag == "A":
+        if must_edit and flag == "A":
             return JSONResponse(
-                {"detail": "มีรายการที่ส่งแล้วหรือติด C ต้องเลือกประเภท E หรือ D หรือเอารายการออก", "resend": resend}, status_code=409,
+                {"detail": "มีรายการที่ สกส. รับแล้ว ต้องเลือกประเภท E หรือ D หรือเอารายการออก", "resend": must_edit}, status_code=409,
             )
         if resend and not body.get("confirm_resend"):
             return JSONResponse({"detail": "ต้องยืนยันการส่งซ้ำ", "resend": resend, "needs_confirm": True}, status_code=409)
