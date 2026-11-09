@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import re
+import threading
 from typing import Any, Iterable, Sequence
 
 import pymysql
@@ -37,8 +38,31 @@ class HosxpError(RuntimeError):
 class Hosxp:
     def __init__(self, settings: Settings):
         self.settings = settings
-        self._conn = None
+        # FastAPI runs requests on many threads at once; a pymysql connection must not be shared between them
+        # (two threads reading one socket fails with "PyMemoryView_FromBuffer(): info->buf must not be NULL").
+        self._local = threading.local()
+        self._all: set = set()
+        self._all_lock = threading.Lock()
         self._schema: dict[str, Any] | None = None
+
+    @property
+    def _conn(self):
+        return getattr(self._local, "conn", None)
+
+    @_conn.setter
+    def _conn(self, conn) -> None:
+        old = getattr(self._local, "conn", None)
+        if old is not None and old is not conn:
+            with self._all_lock:
+                self._all.discard(old)
+            try:
+                old.close()
+            except Exception:
+                pass
+        self._local.conn = conn
+        if conn is not None:
+            with self._all_lock:
+                self._all.add(conn)
 
     # ------------------------------------------------------------- connection
     def _connect(self):
@@ -75,6 +99,10 @@ class Hosxp:
         except pymysql.MySQLError as exc:
             self._conn = None
             raise HosxpError(f"อ่านข้อมูลไม่สำเร็จ: {exc.args[-1] if exc.args else exc}") from exc
+        except (OSError, ValueError, AttributeError) as exc:
+            # A broken socket can surface as a plain Python error; drop the connection so the next query reconnects.
+            self._conn = None
+            raise HosxpError(f"การเชื่อมต่อฐานข้อมูลขาด กรุณาลองใหม่ ({type(exc).__name__})") from exc
 
     def _rcm(self, table: str) -> str:
         if not IDENTIFIER.match(self.settings.rcm_db):
@@ -341,6 +369,11 @@ class Hosxp:
         return rows[0] if len(rows) == 1 else None
 
     def close(self) -> None:
-        if self._conn is not None:
-            self._conn.close()
-            self._conn = None
+        with self._all_lock:
+            conns, self._all = list(self._all), set()
+        for conn in conns:
+            try:
+                conn.close()
+            except Exception:
+                pass
+        self._local = threading.local()
