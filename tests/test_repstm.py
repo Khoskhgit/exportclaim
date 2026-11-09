@@ -95,12 +95,14 @@ def test_import_drives_ssop_status(client, tmp_path):
     assert upload(client, "10866_SOCDBIL_9170006.ZIP", REP_ZIP).status_code == 200
     rows = by_vn(client)
     assert rows[OK]["status"] == "ติด C" and rows[OK]["resend_flag"] == "A"
+    assert rows[OK]["rep_file"] == "10866_SOCDBIL_9170006" and rows[OK]["stm_paid"] == ""
     assert [c["code"] for c in rows[OK]["result_codes"]][:2] == ["R61", "T61"]
     assert rows[OK]["result_codes"][0]["name"].startswith("เป็นรายการลบ")
 
     assert upload(client, "10866_SOGNSTM_202610.ZIP", STM_ZIP).status_code == 200
     rows = by_vn(client)
     assert rows[SENT]["status"] == "ชดเชยแล้ว" and rows[SENT]["stm_paid"] == "795.00"
+    assert rows[SENT]["stm_no"] == "10866_SOGNSTMP_202610" and rows[SENT]["rep_file"] == "10866_SOCDBIL_9170006"
 
     again = upload(client, "10866_SOCDBIL_9170006.ZIP", REP_ZIP).json()
     assert again["again"]

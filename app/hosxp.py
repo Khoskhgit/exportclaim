@@ -218,6 +218,10 @@ class Hosxp:
                 f"(SELECT GROUP_CONCAT(DISTINCT rep) FROM {self._rcm('repeclaim')} r "
                 "WHERE r.vn=o.vn AND IFNULL(r.errorcode,'')='')"
             )
+        rep_file_col = "NULL"
+        if self._has_rcm("repdata"):
+            rep_file_col = (f"(SELECT r.Rep FROM {self._rcm('repdata')} r WHERE r.VN=o.vn "
+                            "ORDER BY r.SendDate DESC, r.Period DESC LIMIT 1)")
         hi_col = "EXISTS(SELECT 1 FROM hi_register h WHERE h.vn=o.vn)" if self._has("hi_register") else "0"
         sql = f"""
         SELECT o.vn, o.hn, o.an, o.pttype, o.spclty, o.vstdate, o.vsttime, o.cur_dep_time,
@@ -233,7 +237,7 @@ class Hosxp:
           {hospmain} AS hospmain, v.pttype_begin AS datein, v.pttype_expire AS dateexp,
           {doctor} AS doctor, v.income, v.rcpt_money,
           v.debt_id_list AS debt_id, v.rcpno_list AS rcpno,
-          {chi_col} AS chi_status, {chi_codes} AS chi_codes, {rep_col} AS rep, {hi_col} AS hi_registered,
+          {chi_col} AS chi_status, {chi_codes} AS chi_codes, {rep_col} AS rep, {rep_file_col} AS rcm_rep_file, {hi_col} AS hi_registered,
           (SELECT MAX(a.nextdate) FROM oapp a
             WHERE a.vn=o.vn AND IFNULL(a.oapp_status_id,0) NOT IN (4)) AS appoint_date,
           (SELECT MAX(TIMESTAMP(pd.outdate, pd.outtime)) FROM ptdepart pd

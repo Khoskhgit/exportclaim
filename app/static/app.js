@@ -47,7 +47,7 @@ function renderRows() {
     });
     return el("tr", { class: state.current === v.vn ? "current" : "", onclick: () => openDrawer(v) },
       el("td", { class: "check" }, box), el("td", {}, resultBadge(v)),
-      el("td", {}, v.status ? el("span", { class: "badge b-sent" }, v.status) : el("span", { class: "muted" }, "—")),
+      el("td", {}, statusCell(v)),
       el("td", { class: "mono" }, v.vn), el("td", { class: "mono" }, v.hn),
       el("td", { class: "name-cell", title: v.ptname }, v.ptname, el("span", { class: "sub" }, v.pttype)),
       el("td", { class: "mono" }, v.visit_at), el("td", {}, v.pdx || el("span", { class: "muted" }, "—")),
@@ -69,6 +69,16 @@ function renderTotals() {
   $("export").disabled = list.length === 0;
 }
 function render() { renderChips(); renderRows(); renderTotals(); }
+
+function statusCell(v) {
+  if (!v.status) return el("span", { class: "muted" }, "—");
+  const tone = v.status === "ชดเชยแล้ว" ? "b-ok" : v.status === "ติด C" ? "b-c" : "b-sent";
+  const repFile = v.rep_file || (v.status === "ชดเชยแล้ว" && !v.stm_no ? v.rep_doc : "");
+  return el("div", { class: "status-cell" }, el("span", { class: `badge ${tone}` }, v.status),
+    v.stm_paid ? el("span", { class: "paid" }, `ชดเชย ${baht.format(Number(v.stm_paid))} บาท`) : null,
+    repFile ? el("span", { class: "sub mono", title: "ไฟล์ตอบรับ (REP)" }, `REP ${repFile}`) : null,
+    v.stm_no ? el("span", { class: "sub mono", title: "ใบชดเชย (STM)" }, `STM ${v.stm_no}`) : null);
+}
 
 function info(pairs) {
   return el("dl", { class: "info-grid" }, ...pairs.map(([k, v]) => el("div", {}, el("dt", {}, k), el("dd", {}, v || "—"))));

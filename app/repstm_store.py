@@ -196,11 +196,12 @@ class RepStmStore:
             for part in _chunks(vns):
                 marks = ",".join("?" * len(part))
                 for row in db.execute(
-                    f"""SELECT b.invno, b.stat, b.codes, b.rep_no, f.issued_at FROM rep_bills b
+                    f"""SELECT b.invno, b.stat, b.codes, b.rep_no, f.issued_at, f.hcode, f.account FROM rep_bills b
                     JOIN rep_files f ON f.rep_no=b.rep_no WHERE b.invno IN ({marks})
                     ORDER BY f.issued_at, b.rep_no""", part):
                     found.setdefault(row["invno"], {}).update(
-                        rep_stat=row["stat"], rep_codes=row["codes"], rep_no=row["rep_no"], rep_at=row["issued_at"])
+                        rep_stat=row["stat"], rep_codes=row["codes"], rep_no=row["rep_no"], rep_at=row["issued_at"],
+                        rep_file=f"{row['hcode']}_{row['account']}BIL_{row['rep_no']}")
                 for row in db.execute(
                     f"""SELECT b.invno, GROUP_CONCAT(b.stm_no) AS stm_no, SUM(CAST(b.total AS REAL)) AS paid
                     FROM stm_bills b WHERE b.invno IN ({marks}) GROUP BY b.invno""", part):

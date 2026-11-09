@@ -297,3 +297,6 @@ body.no-footer{padding-bottom:24px}
 .disp-head{margin-bottom:6px;font-size:14px}
 .stm-filter{margin:10px 0}
 @media (max-width:640px){.vn-search{grid-template-columns:1fr}}
+.status-cell{display:grid;gap:2px;justify-items:start}
+.status-cell .paid{font-size:12px;font-weight:600;color:var(--ok);white-space:nowrap}
+.status-cell .sub{white-space:nowrap}

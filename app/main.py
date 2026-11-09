@@ -128,7 +128,8 @@ def create_app(settings: Settings | None = None, hosxp: Any = None, store: Store
             mine = found.get(text(visit.get("vn")))
             if not mine:
                 continue
-            visit["rep_no"], visit["stm_paid"] = mine.get("rep_no", ""), mine.get("stm_paid", "")
+            visit["rep_file"], visit["stm_paid"] = mine.get("rep_file", ""), mine.get("stm_paid", "")
+            visit["stm_no"] = mine.get("stm_no", "")
             if mine.get("stm_no"):
                 visit["rep"] = mine["stm_no"]
             elif mine.get("rep_stat"):
@@ -182,7 +183,8 @@ def create_app(settings: Settings | None = None, hosxp: Any = None, store: Store
                 "pdx": text(visit.get("pdx")), "clinic": text(visit.get("clinic_name")),
                 "pttype": text(visit.get("pttype_name")), "hospmain": text(visit.get("hospmain")),
                 "income": str(dec(visit.get("income"))),
-                "rep_no": text(visit.get("rep_no")), "stm_paid": text(visit.get("stm_paid")),
+                "rep_file": text(visit.get("rep_file")) or text(visit.get("rcm_rep_file")), "stm_no": text(visit.get("stm_no")),
+                "stm_paid": text(visit.get("stm_paid")), "rep_doc": text(visit.get("rep")),
                 **send_amounts(items.get(vn, []), excluded),
                 "result_codes": explain_result_codes(visit.get("chi_codes"), code_names) if review["status"] == "ติด C" else [],
                 **review,
