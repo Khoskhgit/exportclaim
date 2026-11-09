@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
@@ -10,7 +10,7 @@ from fastapi import Body, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 
-from . import auth, nhso18, nhso18_service as svc
+from . import auth, fdh, nhso18, nhso18_service as svc
 from .config import Settings
 from .store import Store
 from .aipn import number
@@ -46,12 +46,13 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
         keys = [svc.key_of(r) for r in rows]
         found = svc.checks(q, settings.rcm_db, rows)
         sent = local.nhso18_sent(keys)
+        fdh_sent = local.fdh_sent(keys)
         excluded = local.nhso18_excluded(keys)
         out = []
         for r in rows:
             k = svc.key_of(r)
             f = found[k]
-            st = svc.status(r, k in sent)
+            st = svc.status(r, k in sent, k in fdh_sent)
             moment = r.get("date")
             out.append({
                 "key": k, "kind": r["kind"], "vn": text(r.get("vn")), "an": text(r.get("an")), "hn": text(r.get("hn")),
@@ -119,14 +120,13 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
         local.set_nhso18_item(key, icode, bool(body.get("excluded")))
         return {"excluded_count": len(local.nhso18_excluded([key]))}
 
-    @app.post("/api/nhso18/export")
-    def export(request: Request, body: dict = Body(...)):
+    def build(body: dict) -> tuple[list[str], list[str], dict[str, list[dict]]] | JSONResponse:
+        """Re-check the picked rows with fresh data and build the rows of each file (shared by ZIP and FDH)."""
         picked = [p for p in body.get("rows") or [] if text(p.get("key"))]
         if not picked:
             raise HTTPException(400, "ยังไม่ได้เลือกรายการ")
         vns = list(dict.fromkeys(text(p["key"]) for p in picked if p.get("kind") != "IPD"))
         ans = list(dict.fromkeys(text(p["key"]) for p in picked if p.get("kind") == "IPD"))
-        # Re-check with fresh data before building the files.
         rows = svc.search(q, settings.rcm_db, None, None, [], bool(vns), bool(ans), vn_list=vns, an_list=ans)
         reviewed = review(rows)
         blocked = [{"key": r["key"], "reason": r["errors"][0]["message"]} for r in reviewed if r["errors"]]
@@ -141,11 +141,80 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
         if not visits:
             raise HTTPException(400, "ไม่พบรายการที่เลือก")
         excluded = local.nhso18_excluded(vns + ans)
-        data = nhso18.Builder(q, config, settings.rcm_db, ECLAIM_DB, excluded).run(visits)
+        return vns, ans, nhso18.Builder(q, config, settings.rcm_db, ECLAIM_DB, excluded).run(visits)
+
+    @app.post("/api/nhso18/export")
+    def export(request: Request, body: dict = Body(...)):
+        built = build(body)
+        if isinstance(built, JSONResponse):
+            return built
+        vns, ans, data = built
         result = nhso18.build_zip(data, settings.hcode, settings.export_dir)
         export_id = local.record_nhso18_export(result.zip_path, vns + ans, auth.user_label(request))
-        log.info("nhso18 export id=%s visits=%s", export_id, len(visits))
-        return {"id": export_id, "file": result.zip_path.name, "count": len(visits), "counts": result.counts}
+        log.info("nhso18 export id=%s visits=%s", export_id, len(vns) + len(ans))
+        return {"id": export_id, "file": result.zip_path.name, "count": len(vns) + len(ans), "counts": result.counts}
+
+    # ------------------------------------------------------------ FDH
+    def client() -> fdh.Client:
+        return fdh.Client(settings.fdh_user, settings.fdh_password, settings.hcode, settings.fdh_token_url,
+                          settings.fdh_hash_key, settings.moph_user_agent)
+
+    def zone_of(body: dict) -> str:
+        zone = text(body.get("zone")) or "uat"
+        if zone not in fdh.ZONES:
+            raise HTTPException(400, "ปลายทาง FDH ไม่ถูกต้อง")
+        return zone
+
+    @app.get("/api/nhso18/fdh/status")
+    def fdh_status():
+        return {"ready": bool(settings.fdh_user and settings.fdh_password), "zones": fdh.ZONES}
+
+    @app.post("/api/nhso18/fdh/test")
+    def fdh_test(body: dict = Body(...)):
+        zone = zone_of(body)
+        try:
+            reply = client().test(zone)
+        except fdh.FdhError as exc:
+            raise HTTPException(502, str(exc)) from None
+        if not reply.ok:
+            raise HTTPException(502, f"FDH ตอบกลับ: {reply.message}")
+        return {"message": f"เชื่อมต่อ FDH {zone.upper()} ได้ (Token OK)"}
+
+    @app.post("/api/nhso18/fdh/send")
+    def fdh_send(request: Request, body: dict = Body(...)):
+        zone, prescreen = zone_of(body), bool(body.get("prescreen"))
+        if not settings.fdh_user or not settings.fdh_password:
+            raise HTTPException(400, "ยังไม่ได้ตั้ง FDH_USER / FDH_PASSWORD ใน .env")
+        if prescreen:
+            body = {**body, "confirm_resend": True}  # PreScreen only checks; it never needs the resend question.
+        built = build(body)
+        if isinstance(built, JSONResponse):
+            return built
+        vns, ans, data = built
+        parts = fdh.files(fdh.fix_rows(data, q), with_phdb=bool(body.get("phdb", True)) and not prescreen)
+        mode = "prescreen" if prescreen else "send"
+        folder = settings.export_dir / f"FDH_{datetime.now():%Y%m%d-%H%M%S}_{zone}_{mode}"
+        try:
+            folder.mkdir(parents=True, exist_ok=True)
+            for name, content in parts.items():
+                (folder / name).write_bytes(content)
+        except OSError as exc:
+            raise HTTPException(500, f"บันทึกสำเนาแฟ้มที่ส่งไม่สำเร็จ: {exc.__class__.__name__}") from None
+        user = auth.user_label(request)
+        try:
+            reply = client().send(zone, parts, prescreen)
+        except fdh.FdhError as exc:
+            local.record_fdh_send(vns + ans, zone, mode, False, None, str(exc), str(folder), user)
+            raise HTTPException(502, str(exc)) from None
+        send_id = local.record_fdh_send(vns + ans, zone, mode, reply.ok, reply.http_status, reply.message, str(folder), user)
+        log.info("fdh %s zone=%s id=%s visits=%s ok=%s http=%s", mode, zone, send_id, len(vns) + len(ans), reply.ok, reply.http_status)
+        counts = {n.split(".")[0].upper(): max(c.count(b"\r\n") - 1, 0) for n, c in parts.items()}
+        return {"id": send_id, "ok": reply.ok, "zone": zone, "mode": mode, "count": len(vns) + len(ans),
+                "http_status": reply.http_status, "status": reply.status, "message": reply.message, "counts": counts}
+
+    @app.get("/api/nhso18/fdh/history")
+    def fdh_history():
+        return local.fdh_history()
 
     @app.get("/api/nhso18/exports")
     def exports():

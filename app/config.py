@@ -68,6 +68,11 @@ class Settings:
     moph_user_agent: str = "EMR"
     ssl_certfile: str = ""
     ssl_keyfile: str = ""
+    # Financial Data Hub
+    fdh_user: str = ""
+    fdh_password: str = field(default="", repr=False)
+    fdh_token_url: str = "https://fdh.moph.go.th"
+    fdh_hash_key: str = field(default="$jwt@moph#", repr=False)
 
     @property
     def allowed_hosts(self) -> list[str]:
@@ -150,4 +155,8 @@ def load_settings(env_file: Path | None = None) -> Settings:
         moph_user_agent=(get("MOPH_USER_AGENT") or "EMR").strip(),
         ssl_certfile=get("SSL_CERTFILE") or _existing(BASE_DIR / "data" / "tls" / "localhost.pem"),
         ssl_keyfile=get("SSL_KEYFILE") or _existing(BASE_DIR / "data" / "tls" / "localhost-key.pem"),
+        fdh_user=(get("FDH_USER") or "").strip(),
+        fdh_password=get("FDH_PASSWORD") or "",
+        fdh_token_url=(get("FDH_TOKEN_URL") or "https://fdh.moph.go.th").strip().rstrip("/"),
+        fdh_hash_key=get("FDH_HASH_KEY") or "$jwt@moph#",
     )

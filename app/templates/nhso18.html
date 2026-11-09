@@ -54,7 +54,7 @@
 
   <details class="panel history">
     <summary>ประวัติการส่งออก 18 แฟ้ม</summary>
-    <div class="history-body"><div id="history"></div></div>
+    <div class="history-body"><h3>ZIP</h3><div id="history"></div><h3>ส่ง FDH</h3><div id="fdh-history"></div></div>
   </details>
 </main>
 
@@ -63,6 +63,15 @@
     <div class="totals"><span class="step" aria-hidden="true">1</span><div><strong id="selected-count">เลือก 0 รายการ</strong><span id="selected-total" class="amount">ค่าใช้จ่าย 0.00 บาท</span></div></div>
     <span class="arrow" aria-hidden="true">→</span>
     <button id="export" class="primary big" type="button" disabled>สร้าง ZIP 18 แฟ้ม</button>
+    <div id="fdh" class="fdh-group" hidden>
+      <span class="fdh-title">FDH</span>
+      <label class="fdh-zone">ปลายทาง<select id="fdh-zone"><option value="uat">UAT (ทดสอบ)</option><option value="prod">PROD (ส่งจริง)</option></select></label>
+      <label class="inline"><input type="checkbox" id="fdh-phdb" checked> ส่งแฟ้ม PHDB ด้วย</label>
+      <button id="fdh-test" type="button" class="ghost">ทดสอบเชื่อมต่อ</button>
+      <button id="fdh-prescreen" type="button" class="big" disabled>PreScreen</button>
+      <button id="fdh-send" type="button" class="primary big" disabled>ส่ง FDH</button>
+    </div>
+    <span id="fdh-off" class="fdh-off" hidden>ส่ง FDH: ยังไม่ได้ตั้ง FDH_USER / FDH_PASSWORD ใน .env</span>
   </div>
 </footer>
 

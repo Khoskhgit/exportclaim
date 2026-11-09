@@ -229,3 +229,21 @@ def test_allowed_hosts_follow_settings(tmp_path):
 def test_static_links_carry_a_version(client):
     page = client.get("/").text
     assert re.search(r'/static/app\.css\?v=[0-9a-f]{10}"', page) and re.search(r'/static/app\.js\?v=[0-9a-f]{10}"', page)
+
+
+def test_fdh_routes_without_credentials(client):
+    assert client.get("/api/nhso18/fdh/status").json()["ready"] is False
+    assert client.post("/api/nhso18/fdh/send", json={"zone": "uat", "rows": [{"key": OK}]}).status_code == 400
+    assert client.post("/api/nhso18/fdh/test", json={"zone": "live"}).status_code == 400
+    assert "FDH_USER" in client.post("/api/nhso18/fdh/test", json={"zone": "uat"}).json()["detail"]
+    assert client.get("/api/nhso18/fdh/history").json() == []
+
+
+def test_fdh_sent_counts_only_successful_production_sends(tmp_path):
+    store = Store(tmp_path / "s.sqlite3")
+    store.record_fdh_send(["A"], "uat", "send", True, 200, "ok")
+    store.record_fdh_send(["B"], "prod", "prescreen", True, 200, "ok")
+    store.record_fdh_send(["C"], "prod", "send", False, 400, "bad")
+    store.record_fdh_send(["D", "D"], "prod", "send", True, 200, "ok")
+    assert store.fdh_sent(["A", "B", "C", "D"]) == {"D"}
+    assert [h["visit_count"] for h in store.fdh_history()] == [1, 1, 1, 1]

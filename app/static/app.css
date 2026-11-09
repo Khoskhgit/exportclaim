@@ -252,3 +252,12 @@ dl.sum dt{color:var(--muted)}dl.sum dd{margin:0;font-weight:600;font-variant-num
 .presets{flex-wrap:wrap;align-items:center}
 .presets label.inline{display:inline-flex;gap:5px;align-items:center;font-size:13px;font-weight:600;color:var(--ink)}
 #groups{display:inline-flex;gap:6px;flex-wrap:wrap}
+.fdh-group{display:flex;gap:8px;align-items:end;flex-wrap:wrap;margin-left:auto;padding-left:14px;border-left:1px solid var(--line)}
+.fdh-group .fdh-title{align-self:center;font-weight:700;color:var(--accent)}
+.actions .fdh-group label.fdh-zone{width:150px}
+.actions .fdh-group label.inline{width:auto;align-self:center}
+.fdh-group.prod select{border-color:var(--error);color:var(--error);font-weight:700}
+.fdh-off{margin-left:auto;align-self:center;color:var(--faint);font-size:13px}
+@media (max-width:760px){.fdh-group{margin-left:0;padding-left:0;border-left:0;width:100%}.actions .fdh-group label.fdh-zone{width:calc(50% - 4px)}}
+.history-body h3{font-size:14px;margin:14px 0 6px}
+.danger-text{color:var(--error)}

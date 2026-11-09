@@ -62,6 +62,14 @@ CREATE TABLE IF NOT EXISTS nhso18_export_keys (
 CREATE TABLE IF NOT EXISTS nhso18_items (
   seq TEXT NOT NULL, icode TEXT NOT NULL, PRIMARY KEY (seq, icode)
 );
+CREATE TABLE IF NOT EXISTS fdh_sends (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, created_at TEXT NOT NULL, zone TEXT NOT NULL, mode TEXT NOT NULL,
+  visit_count INTEGER NOT NULL, ok INTEGER NOT NULL, http_status INTEGER, message TEXT NOT NULL DEFAULT '',
+  folder TEXT NOT NULL DEFAULT '', created_by TEXT NOT NULL DEFAULT ''
+);
+CREATE TABLE IF NOT EXISTS fdh_send_keys (
+  send_id INTEGER NOT NULL REFERENCES fdh_sends(id), seq TEXT NOT NULL, PRIMARY KEY (send_id, seq)
+);
 CREATE TABLE IF NOT EXISTS z_codes (
   code TEXT PRIMARY KEY, description TEXT
 );
@@ -325,6 +333,32 @@ class Store:
         wanted = set(seqs)
         with self._db() as db:
             return {r["seq"] for r in db.execute("SELECT DISTINCT seq FROM nhso18_export_keys") if r["seq"] in wanted}
+
+    def fdh_sent(self, seqs: Iterable[str]) -> set[str]:
+        """Visits sent to production FDH with a success reply (prescreen and UAT do not count)."""
+        wanted = set(seqs)
+        with self._db() as db:
+            return {r["seq"] for r in db.execute(
+                "SELECT DISTINCT k.seq FROM fdh_send_keys k JOIN fdh_sends s ON s.id=k.send_id "
+                "WHERE s.zone='prod' AND s.mode='send' AND s.ok=1") if r["seq"] in wanted}
+
+    def record_fdh_send(self, seqs: Iterable[str], zone: str, mode: str, ok: bool, http_status: int | None, message: str,
+                        folder: str = "", created_by: str = "", now: datetime | None = None) -> int:
+        seqs = list(dict.fromkeys(seqs))
+        with self._db() as db:
+            cur = db.execute(
+                "INSERT INTO fdh_sends (created_at, zone, mode, visit_count, ok, http_status, message, folder, created_by) "
+                "VALUES (?,?,?,?,?,?,?,?,?)",
+                ((now or datetime.now()).isoformat(timespec="seconds"), zone, mode, len(seqs), int(ok), http_status,
+                 message[:1000], folder, created_by))
+            db.executemany("INSERT INTO fdh_send_keys (send_id, seq) VALUES (?,?)", [(cur.lastrowid, s) for s in seqs])
+            return cur.lastrowid
+
+    def fdh_history(self, limit: int = 50) -> list[dict]:
+        with self._db() as db:
+            return [dict(r) for r in db.execute(
+                "SELECT id, created_at, zone, mode, visit_count, ok, http_status, message, created_by FROM fdh_sends "
+                "ORDER BY id DESC LIMIT ?", (limit,))]
 
     def record_nhso18_export(self, zip_path: Path, seqs: Iterable[str], created_by: str = "", now: datetime | None = None) -> int:
         seqs = list(seqs)
