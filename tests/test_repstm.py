@@ -5,7 +5,7 @@ from dataclasses import replace
 import pytest
 from fastapi.testclient import TestClient
 
-from app import repstm
+from app import repstm, repstm_store
 from app.main import create_app
 from app.store import Store
 from test_api import OK, SENT, FakeHosxp, by_vn
@@ -144,3 +144,22 @@ def test_duplicate_refusal_after_acceptance_keeps_a(client):
 def test_rejection_without_earlier_acceptance_stays_c(client):
     upload(client, "10866_SOCDBIL_9170006.ZIP", bil("9170006", "09/11/2569", "C", "R01,S01,T02"))
     assert by_vn(client)[OK]["status"] == "ติด C"
+
+
+def test_seq_restarts_for_each_station(tmp_path):
+    """The October 2026 STM numbers bills 1, 2, 3 … again under each station; the old key refused it."""
+    import sqlite3
+    path = tmp_path / "s.sqlite3"
+    with sqlite3.connect(path) as db:  # a store made before the fix
+        db.execute(repstm_store.SCHEMA.split("CREATE TABLE IF NOT EXISTS stm_bills")[1].split(";")[0]
+                   .replace("PRIMARY KEY (stm_no, station, seq)", "PRIMARY KEY (stm_no, seq)")
+                   .join(["CREATE TABLE stm_bills", ""]))
+        db.execute("INSERT INTO stm_bills VALUES ('old', 1, '01', '', '', '', '', 'v', '', '', '', '', '', '', '', '', '1', '', '', '')")
+    bill = STM.split(b"<TBill>")[1].split(b"</TBill>")[0]
+    second = bill.replace(b"<station>09</station>", b"<station>01</station>").replace(SENT.encode(), b"690000000002")
+    data = STM.replace(b"</TBill></HG>", b"</TBill><TBill>" + second + b"</TBill></HG>")
+    client = TestClient(create_app(replace(settings(), export_dir=tmp_path / "exports"), FakeHosxp(), Store(path)))
+    assert upload(client, "10866_SOGNSTMP_202610.xml", data).status_code == 200
+    with sqlite3.connect(path) as db:
+        rows = db.execute("SELECT stm_no, station, seq FROM stm_bills ORDER BY stm_no, station").fetchall()
+    assert rows == [("10866_SOGNSTMP_202610", "01", 1), ("10866_SOGNSTMP_202610", "09", 1), ("old", "01", 1)]

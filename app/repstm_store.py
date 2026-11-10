@@ -50,7 +50,7 @@ CREATE TABLE IF NOT EXISTS stm_bills (
   stm_no TEXT NOT NULL, seq INTEGER NOT NULL, station TEXT NOT NULL, hmain TEXT NOT NULL, hproc TEXT NOT NULL,
   hcare TEXT NOT NULL, hn TEXT NOT NULL, invno TEXT NOT NULL, bf TEXT NOT NULL, pcode TEXT NOT NULL, care TEXT NOT NULL,
   payplan TEXT NOT NULL, bp TEXT NOT NULL, dttran TEXT NOT NULL, copay TEXT NOT NULL, cfh TEXT NOT NULL,
-  total TEXT NOT NULL, extp TEXT NOT NULL, rid TEXT NOT NULL, cstat TEXT NOT NULL, PRIMARY KEY (stm_no, seq)
+  total TEXT NOT NULL, extp TEXT NOT NULL, rid TEXT NOT NULL, cstat TEXT NOT NULL, PRIMARY KEY (stm_no, station, seq)
 );
 CREATE INDEX IF NOT EXISTS stm_bills_invno ON stm_bills(invno);
 """
@@ -80,7 +80,19 @@ class RepStmStore:
     def __init__(self, store: Store):
         self._db = store._db
         with self._db() as db:
+            self._migrate(db)
             db.executescript(SCHEMA)
+
+    @staticmethod
+    def _migrate(db) -> None:
+        # SEQ in an STM restarts for each station (01, 09, …): the old key (stm_no, seq) refused such files.
+        old = db.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='stm_bills'").fetchone()
+        if old and "PRIMARY KEY (stm_no, seq)" in old[0]:
+            db.execute("ALTER TABLE stm_bills RENAME TO stm_bills_old")
+            db.execute("DROP INDEX IF EXISTS stm_bills_invno")
+            db.executescript(SCHEMA)
+            db.execute("INSERT INTO stm_bills SELECT * FROM stm_bills_old")
+            db.execute("DROP TABLE stm_bills_old")
 
     def seen(self, sha256: str) -> dict | None:
         with self._db() as db:
@@ -175,7 +187,7 @@ class RepStmStore:
             head = db.execute("SELECT * FROM stm_files WHERE stm_no=?", (stm_no,)).fetchone()
             if head is None:
                 return None
-            bills = [dict(r) for r in db.execute("SELECT * FROM stm_bills WHERE stm_no=? ORDER BY seq", (stm_no,))]
+            bills = [dict(r) for r in db.execute("SELECT * FROM stm_bills WHERE stm_no=? ORDER BY station, seq", (stm_no,))]
         return {**dict(head), "bills": bills}
 
     def vn_history(self, vn: str) -> dict:
