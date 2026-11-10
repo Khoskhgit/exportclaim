@@ -27,12 +27,21 @@ def mask_cid(cid: str) -> str:
     return f"{'x' * 9}{cid[-4:]}" if len(cid) == 13 else cid
 
 
-def pick_visit(visits: list[dict]) -> dict | None:
-    """The visit a claim belongs to: one with dental work first, then the earliest of the day."""
-    with_vn = [v for v in visits if v.get("vn")]
-    if not with_vn:
+def rank_visits(visits: list[dict], pttypes: tuple[str, ...] = ()) -> list[dict]:
+    """A day's visits, most likely dental claim first: under the dental right, then with dental work, then earliest."""
+    return sorted([v for v in visits if v.get("vn")],
+                  key=lambda v: (text(v.get("pttype")) not in pttypes, not v.get("has_dental"),
+                                 str(v.get("vsttime") or ""), str(v["vn"])))
+
+
+def pick_visit(visits: list[dict], pttypes: tuple[str, ...] = (), nth: int = 0) -> dict | None:
+    """The visit for the nth claim of a person's day: several claims spread over the day's dental visits in time
+    order of likelihood, and share the best one when there are fewer such visits than claims."""
+    ranked = rank_visits(visits, pttypes)
+    if not ranked:
         return None
-    return sorted(with_vn, key=lambda v: (not v.get("has_dental"), str(v.get("vsttime") or ""), str(v["vn"])))[0]
+    dental = [v for v in ranked if text(v.get("pttype")) in pttypes or v.get("has_dental")]
+    return dental[nth] if nth < len(dental) else ranked[0]
 
 
 def state_of(claim: dict) -> str:
@@ -104,12 +113,15 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
                         found.setdefault((text(v["cid"]), str(v["vstdate"])[:10]), []).append(v)
             except Exception as exc:  # HOSxP down: still show what was imported
                 db_error = f"จับคู่กับ HOSxP ไม่ได้: {exc}"
-        matches, rows = {}, []
-        for claim in claims:
-            visit = pick_visit(found.get((claim["cid"], claim["service_date"]), []))
+        matches, rows, nth = {}, [], {}
+        for claim in sorted(claims, key=lambda c: (c["service_date"], c["cid"], c["claim_date"], c["seq"])):
+            day = (claim["cid"], claim["service_date"])
+            nth[day] = nth.get(day, -1) + 1
+            visit = pick_visit(found.get(day, []), settings.dental_pttypes, nth[day])
             person = names.get(claim["cid"], {})
             if visit:
-                matches[(claim["cid"], claim["service_date"])] = (text(visit["hn"]), text(visit["vn"]))
+                key = (claim["cid"], claim["service_date"], claim["service_type"], claim["claim_amount"], claim["seq"])
+                matches[key] = (text(visit["hn"]), text(visit["vn"]))
             rows.append({
                 "cid": mask_cid(claim["cid"]), "service_date": claim["service_date"], "service_type": claim["service_type"],
                 "claim_date": claim["claim_date"], "claim_amount": claim["claim_amount"], "status": claim["status"],
@@ -119,11 +131,32 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
                 "vn": text(visit["vn"]) if visit else (claim["vn"] if db_error else ""),
                 "ptname": text(person.get("ptname")), "pttype": text(visit.get("pttype_name")) if visit else "",
                 "has_dental": bool(visit and visit.get("has_dental")),
+                "right_ok": bool(visit) and text(visit.get("pttype")) in settings.dental_pttypes,
                 "visits_that_day": len(found.get((claim["cid"], claim["service_date"]), [])),
                 "in_hosxp": bool(person),
             })
         if matches:
             claims_db.set_match(matches)
-        return {"claims": rows, "uploads": claims_db.uploads(), "db_error": db_error}
+        # Visits under the dental right in the same period that no imported claim points to.
+        unclaimed: list[dict] = []
+        first, last = start or (min(c["service_date"] for c in claims) if claims else ""), \
+            end or (max(c["service_date"] for c in claims) if claims else "")
+        if first and last and not db_error:
+            claimed = {vn for _, vn in matches.values()}
+            try:
+                for v in hosxp.visits_with_pttypes(settings.dental_pttypes, first, last):
+                    if text(v["vn"]) in claimed:
+                        continue
+                    unclaimed.append({
+                        "cid": mask_cid(text(v.get("cid"))), "service_date": str(v["vstdate"])[:10], "service_type": "",
+                        "claim_date": "", "claim_amount": "", "status": "", "paid_amount": "", "voucher": "",
+                        "transfer_date": "", "state": "unclaimed", "hn": text(v["hn"]), "vn": text(v["vn"]),
+                        "ptname": text(v.get("ptname")), "pttype": text(v.get("pttype_name")),
+                        "has_dental": bool(v.get("has_dental")), "right_ok": True, "visits_that_day": 1, "in_hosxp": True,
+                    })
+            except Exception as exc:
+                db_error = f"หา visit ที่ยังไม่ส่งเบิกไม่ได้: {exc}"
+        return {"claims": rows + unclaimed, "uploads": claims_db.uploads(), "db_error": db_error,
+                "dental_pttypes": list(settings.dental_pttypes), "range": [first, last]}
 
     return claims_db

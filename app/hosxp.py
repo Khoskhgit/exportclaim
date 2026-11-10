@@ -379,13 +379,27 @@ class Hosxp:
             part = cids[at:at + 500]
             rows += self._select(
                 f"""SELECT p.cid, p.hn, CONCAT(IFNULL(p.pname,''), IFNULL(p.fname,''), ' ', IFNULL(p.lname,'')) AS ptname,
-                o.vn, o.vstdate, o.vsttime, ptt.name AS pttype_name, {dental} AS has_dental
+                o.vn, o.vstdate, o.vsttime, o.pttype, ptt.name AS pttype_name, {dental} AS has_dental
                 FROM patient p
                 LEFT JOIN ovst o ON o.hn=p.hn AND o.vstdate BETWEEN %s AND %s
                 LEFT JOIN pttype ptt ON ptt.pttype=o.pttype
                 WHERE p.cid IN ({",".join(["%s"] * len(part))})""",
                 [start, end, *part])
         return rows
+
+    def visits_with_pttypes(self, pttypes: Iterable[str], start, end) -> list[dict]:
+        """Visits between start and end under these rights (e.g. the SSO dental right), for finding unclaimed ones."""
+        pttypes = sorted({p for p in pttypes if p})
+        if not pttypes:
+            return []
+        dental = "EXISTS(SELECT 1 FROM dtmain d WHERE d.vn=o.vn)" if self._has("dtmain") else "0"
+        return self._select(
+            f"""SELECT o.vn, o.hn, o.vstdate, o.vsttime, o.pttype, ptt.name AS pttype_name, p.cid,
+            CONCAT(IFNULL(p.pname,''), IFNULL(p.fname,''), ' ', IFNULL(p.lname,'')) AS ptname, {dental} AS has_dental
+            FROM ovst o JOIN patient p ON p.hn=o.hn LEFT JOIN pttype ptt ON ptt.pttype=o.pttype
+            WHERE o.vstdate BETWEEN %s AND %s AND o.pttype IN ({",".join(["%s"] * len(pttypes))})
+            ORDER BY o.vstdate, o.vsttime""",
+            [start, end, *pttypes])
 
     def close(self) -> None:
         with self._all_lock:

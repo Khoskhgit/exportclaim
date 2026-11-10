@@ -61,15 +61,26 @@ def test_other_files_are_refused():
 def test_visit_with_dental_work_wins():
     visits = [{"vn": "2", "vsttime": "08:00", "has_dental": 0}, {"vn": "3", "vsttime": "10:00", "has_dental": 1}]
     assert pick_visit(visits)["vn"] == "3" and pick_visit([{"vn": None}]) is None
+    visits.append({"vn": "4", "vsttime": "12:00", "has_dental": 0, "pttype": "29"})
+    assert pick_visit(visits, ("29",))["vn"] == "4"
 
 
 class DentalHosxp(FakeHosxp):
     def dental_visits(self, cids, start, end):
         return [
             {"cid": A, "hn": "000001", "ptname": "ผู้ป่วย หนึ่ง", "vn": "691001080000", "vstdate": "2026-10-01",
-             "vsttime": "08:00", "pttype_name": "ประกันสังคม", "has_dental": 1},
+             "vsttime": "08:00", "pttype": "29", "pttype_name": "ประกันสังคม กรณีทันตกรรม", "has_dental": 1},
             {"cid": B, "hn": "000002", "ptname": "ผู้ป่วย สอง", "vn": None, "vstdate": None, "vsttime": None,
              "pttype_name": None, "has_dental": 0},
+        ]
+
+
+    def visits_with_pttypes(self, pttypes, start, end):
+        assert pttypes == ("29",)
+        return [
+            {"vn": "691001080000", "hn": "000001", "vstdate": "2026-10-01", "cid": A, "ptname": "a", "has_dental": 1},
+            {"vn": "691003090000", "hn": "000009", "vstdate": "2026-10-03", "cid": "9" * 13, "ptname": "b",
+             "pttype_name": "ประกันสังคม กรณีทันตกรรม", "has_dental": 1},
         ]
 
 
@@ -89,15 +100,19 @@ def test_import_both_reports_in_any_order(client, tmp_path):
     second = upload(client, "REPORT_01.xlsx", SUB).json()
     assert (second["added"], second["updated"]) == (2, 1)
     claims = {c["service_date"]: c for c in client.post("/api/dental/list", json={}).json()["claims"]}
+    result = client.post("/api/dental/list", json={}).json()
+    unclaimed = [c for c in result["claims"] if c["state"] == "unclaimed"]
+    assert [c["vn"] for c in unclaimed] == ["691003090000"] and result["range"] == ["2026-10-01", "2026-10-06"]
     paid = claims["2026-10-01"]
-    assert (paid["state"], paid["paid_amount"], paid["claim_amount"], paid["vn"], paid["has_dental"]) == (
-        "paid", "650.00", "700.00", "691001080000", True)
+    assert (paid["state"], paid["paid_amount"], paid["claim_amount"], paid["vn"], paid["has_dental"], paid["right_ok"]) == (
+        "paid", "650.00", "700.00", "691001080000", True, True)
     assert paid["cid"] == "xxxxxxxxx1111"
     assert claims["2026-10-05"]["state"] == "waiting" and claims["2026-10-05"]["vn"] == "" and claims["2026-10-05"]["in_hosxp"]
     assert claims["2026-10-06"]["state"] == "rejected" and not claims["2026-10-06"]["in_hosxp"]
     again = upload(client, "REPORT_01.xlsx", SUB).json()
     assert again["again"] and again["added"] == 0
-    assert len(client.post("/api/dental/list", json={"start": "2026-10-02", "end": "2026-10-31"}).json()["claims"]) == 2
+    ranged = client.post("/api/dental/list", json={"start": "2026-10-02", "end": "2026-10-31"}).json()["claims"]
+    assert len([c for c in ranged if c["state"] != "unclaimed"]) == 2
     assert list((tmp_path / "dental").glob("*_REPORT_01.xlsx"))
 
 
@@ -120,6 +135,14 @@ def test_several_claims_on_one_day_are_kept_apart(client):
     ], ["350", "350"])
     upload(client, "s.xlsx", sub)
     upload(client, "p.xlsx", pay)
-    claims = client.post("/api/dental/list", json={}).json()["claims"]
+    claims = [c for c in client.post("/api/dental/list", json={}).json()["claims"] if c["state"] != "unclaimed"]
     assert sorted((c["claim_amount"], c["state"]) for c in claims) == [
         ("350.00", "paid"), ("700.00", "rejected"), ("700.00", "waiting")]
+
+
+def test_same_day_claims_spread_over_dental_visits():
+    visits = [{"vn": "1", "vsttime": "06:28", "pttype": "29", "has_dental": 1},
+              {"vn": "2", "vsttime": "16:01", "pttype": "29", "has_dental": 1},
+              {"vn": "3", "vsttime": "09:00", "pttype": "34", "has_dental": 0}]
+    assert [pick_visit(visits, ("29",), n)["vn"] for n in range(3)] == ["1", "2", "1"]
+    assert pick_visit(visits[:1] + visits[2:], ("29",), 1)["vn"] == "1"

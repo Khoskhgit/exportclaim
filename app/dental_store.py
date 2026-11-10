@@ -85,12 +85,12 @@ class DentalStore:
         with self._db() as db:
             return [dict(r) for r in db.execute(sql + " ORDER BY service_date DESC, cid, seq", params)]
 
-    def set_match(self, matches: dict[tuple[str, str], tuple[str, str]], now: datetime | None = None) -> None:
-        """matches: (cid, service_date) -> (hn, vn)."""
+    def set_match(self, matches: dict[tuple, tuple[str, str]], now: datetime | None = None) -> None:
+        """matches: (cid, service_date, service_type, claim_amount, seq) -> (hn, vn)."""
         at = (now or datetime.now()).isoformat(timespec="seconds")
         with self._db() as db:
-            db.executemany("UPDATE dental_claims SET hn=?, vn=?, matched_at=? WHERE cid=? AND service_date=?",
-                           [(hn, vn, at, cid, day) for (cid, day), (hn, vn) in matches.items()])
+            db.executemany(f"UPDATE dental_claims SET hn=?, vn=?, matched_at=? WHERE {KEY_WHERE}",
+                           [(hn, vn, at, *key) for key, (hn, vn) in matches.items()])
 
     def uploads(self, limit: int = 30) -> list[dict]:
         with self._db() as db:

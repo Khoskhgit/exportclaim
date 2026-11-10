@@ -1,5 +1,5 @@
 "use strict";
-const state = { claims: [], filter: "all", text: "", sort: { key: "service_date", dir: "desc" } };
+const state = { claims: [], filter: "all", text: "", pttypes: ["29"], sort: { key: "service_date", dir: "desc" } };
 const money = (v) => (v === "" || v === null || v === undefined ? "" : baht.format(Number(v)));
 const dash = () => el("span", { class: "muted" }, "—");
 const mismatch = (c) => c.paid_amount !== "" && Number(c.paid_amount) !== Number(c.claim_amount);
@@ -10,14 +10,17 @@ const STATES = {
   waiting: ["รอจ่าย", "b-warn"],
   rejected: ["ไม่อนุมัติ", "b-error"],
   unknown: ["มีแต่รายงานจ่าย", "b-sent"],
+  unclaimed: ["ยังไม่ส่งเบิก", "b-c"],
 };
+const claimed = (c) => c.state !== "unclaimed";
 const CATEGORIES = {
-  all: ["ทั้งหมด", () => true, "all"],
+  all: ["ส่งเบิกทั้งหมด", claimed, "all"],
   paid: ["จ่ายแล้ว", (c) => c.state === "paid" || c.state === "paid_no_detail", "ok"],
   waiting: ["รอจ่าย", (c) => c.state === "waiting", "warn"],
   rejected: ["ไม่อนุมัติ", (c) => c.state === "rejected", "error"],
-  nomatch: ["ไม่พบ visit ใน HOSxP", (c) => !c.vn, "special"],
+  nomatch: ["ไม่พบ visit / ไม่ใช่สิทธิทันตกรรม", (c) => claimed(c) && (!c.vn || !c.right_ok), "special"],
   mismatch: ["ยอดจ่ายไม่ตรง", mismatch, "sent"],
+  unclaimed: ["ใช้สิทธิทันตกรรม ยังไม่ส่งเบิก", (c) => c.state === "unclaimed", "error"],
 };
 
 function notes(c) {
@@ -25,6 +28,7 @@ function notes(c) {
   if (!c.in_hosxp) list.push("ไม่พบเลขบัตรนี้ใน HOSxP");
   else if (!c.vn) list.push("ไม่พบ visit วันที่ใช้สิทธิ");
   else if (!c.has_dental) list.push("visit นี้ไม่มีบันทึกทันตกรรม");
+  if (c.vn && !c.right_ok) list.push(`visit ไม่ได้ใช้สิทธิ ${state.pttypes.join(", ")}`);
   if (c.visits_that_day > 1) list.push(`วันนั้นมี ${c.visits_that_day} visit`);
   if (mismatch(c)) list.push(`จ่ายต่างจากขอเบิก ${baht.format(Number(c.paid_amount) - Number(c.claim_amount))}`);
   if (c.state === "waiting" && c.status !== "รอจ่าย") list.push(c.status);
@@ -52,7 +56,7 @@ function render() {
       el("td", { class: "mono" }, c.vn || dash()), el("td", { class: "mono" }, c.hn || dash()),
       el("td", { class: "name-cell", title: c.ptname }, c.ptname || dash(), c.pttype ? el("span", { class: "sub" }, c.pttype) : null),
       el("td", { class: "mono" }, c.cid), el("td", {}, c.service_type),
-      el("td", { class: "num" }, money(c.claim_amount)),
+      el("td", { class: "num" }, c.claim_amount !== "" ? money(c.claim_amount) : dash()),
       el("td", { class: "num paid" }, c.paid_amount !== "" ? money(c.paid_amount) : dash()),
       el("td", { class: "mono doc" }, c.voucher || dash()), el("td", { class: "mono" }, c.transfer_date ? toDmy(c.transfer_date) : dash()),
       el("td", { class: "problems" }, remarks.length ? remarks.join(" · ") : dash()));
@@ -76,6 +80,7 @@ async function load() {
   try {
     const data = await api("/api/dental/list", { start: form.elements.start.value, end: form.elements.end.value });
     state.claims = data.claims;
+    state.pttypes = data.dental_pttypes;
     if (data.db_error) notice(data.db_error, "warn");
     renderHistory(data.uploads);
   } catch (err) { notice(err.message); }
