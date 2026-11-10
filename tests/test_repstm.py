@@ -118,3 +118,29 @@ def test_import_drives_ssop_status(client, tmp_path):
 def test_bad_upload_is_refused(client):
     response = upload(client, "x.zip", b"not a zip")
     assert response.status_code == 400 and "ZIP" in response.json()["detail"]
+
+
+def bil(rep_no, issued, stat, codes):
+    text = f"""รหัส ร.พ.\t= 10866
+งวดส่งของ ร.พ.\t= 0001_09_20261109-100000
+วันที่ออกเลขตอบรับ \t= {issued}   เวลา: 10:00
+สถานี: 09
+*| {stat} 09, 1, 10866, 10699, , 15/10/2569 20:56, {OK}, {PID}, S, 443.00, 443.00 | {codes}
+"""
+    return zipped({f"10866_SOCDBIL_{rep_no}.BIL": text.encode("tis-620")})
+
+
+def test_duplicate_refusal_after_acceptance_keeps_a(client):
+    # Imported newest first, to show the order of import does not matter.
+    upload(client, "10866_SOCDBIL_9170006.ZIP", bil("9170006", "09/11/2569", "C", "R01,S01,T02,W05"))
+    upload(client, "10866_SOCDBIL_9170005.ZIP", bil("9170005", "08/11/2569", "A", "W05"))
+    upload(client, "10866_SOCDBIL_9170004.ZIP", bil("9170004", "07/11/2569", "C", "R61,T61"))
+    row = by_vn(client)[OK]
+    assert row["status"] == "ส่งแล้ว" and row["rep_file"] == "10866_SOCDBIL_9170005"
+    history = client.post("/api/repstm/vn", json={"vn": OK}).json()
+    assert history["status_stat"] == "A" and [r["duplicate"] for r in history["reps"]] == [False, False, True]
+
+
+def test_rejection_without_earlier_acceptance_stays_c(client):
+    upload(client, "10866_SOCDBIL_9170006.ZIP", bil("9170006", "09/11/2569", "C", "R01,S01,T02"))
+    assert by_vn(client)[OK]["status"] == "ติด C"

@@ -159,13 +159,13 @@ async function openVn(vn) {
     const h = await api("/api/repstm/vn", { vn });
     const repRows = h.reps.map((b) => el("tr", { onclick: () => openRep(b.rep_no) },
       el("td", { class: "mono" }, b.rep_no), el("td", {}, when(b.issued_at)), el("td", { class: "mono" }, b.session),
-      el("td", {}, statBadge(b.stat)), el("td", { class: "num" }, money(b.claimamt)), el("td", {}, codeList(b.codes, h.code_names))));
+      el("td", {}, statBadge(b.stat), b.duplicate ? el("span", { class: "sub" }, "ส่งซ้ำ รายการเดิมผ่านแล้ว") : null),
+      el("td", { class: "num" }, money(b.claimamt)), el("td", {}, codeList(b.codes, h.code_names))));
     const stmRows = h.stms.map((b) => el("tr", { onclick: () => openStm(b.stm_no) },
       el("td", { class: "mono" }, b.stm_no), el("td", { class: "mono" }, b.period), el("td", {}, toDmy(b.date_issue)),
       el("td", { class: "mono" }, b.rid), el("td", { class: "num" }, money(b.total))));
-    const last = h.reps[h.reps.length - 1];
     const status = h.stms.length ? el("span", { class: "badge b-ok" }, `ชดเชยแล้ว ${money(h.stms.reduce((s, b) => s + Number(b.total || 0), 0))} บาท`)
-      : last ? statBadge(last.stat) : el("span", { class: "badge b-sent" }, "ยังไม่มีผลตอบกลับ");
+      : h.status_stat ? statBadge(h.status_stat) : el("span", { class: "badge b-sent" }, "ยังไม่มีผลตอบกลับ");
     openDrawer(`VN ${vn}`, "ประวัติผลตอบรับและการชดเชย", [
       el("p", {}, "สถานะล่าสุด: ", status),
       el("h3", {}, `REP (${h.reps.length})`),

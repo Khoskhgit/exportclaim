@@ -61,6 +61,16 @@ STM_FILE_COLS = ("stm_no", "hcode", "account", "period", "date_start", "date_end
                  "count", "amount")
 
 
+# A C line with only "already have this ID" rejections (Dispense ID / SvID / InvNo sent before) after the VN was
+# accepted means the resend was refused as a duplicate: the earlier A still stands.
+DUPLICATE_CODES = {"R01", "S01", "T02"}
+
+
+def is_duplicate_of_accepted(stat: str, codes: str, accepted_before: bool) -> bool:
+    found = {c.strip().upper() for c in (codes or "").split(",") if c.strip()}
+    return accepted_before and stat != "A" and bool(found & DUPLICATE_CODES)
+
+
 def _chunks(values: list[str], size: int = 500):
     for start in range(0, len(values), size):
         yield values[start:start + size]
@@ -182,7 +192,14 @@ class RepStmStore:
                 WHERE b.invno=? ORDER BY f.period""", (vn,))]
         for disp in disps:
             disp["drugs"] = [d for d in drugs if d["rep_no"] == disp["rep_no"] and d["dispid"] == disp["dispid"]]
-        return {"vn": vn, "reps": reps, "disps": disps, "stms": stms}
+        accepted, status = False, None
+        for rep in reps:
+            rep["duplicate"] = is_duplicate_of_accepted(rep["stat"], rep["codes"], accepted)
+            if not rep["duplicate"]:
+                accepted = accepted or rep["stat"] == "A"
+                status = rep
+        return {"vn": vn, "reps": reps, "disps": disps, "stms": stms,
+                "status_rep": status["rep_no"] if status else "", "status_stat": status["stat"] if status else ""}
 
     def code_names(self) -> dict[str, str]:
         with self._db() as db:
@@ -198,8 +215,13 @@ class RepStmStore:
                 for row in db.execute(
                     f"""SELECT b.invno, b.stat, b.codes, b.rep_no, f.issued_at, f.hcode, f.account FROM rep_bills b
                     JOIN rep_files f ON f.rep_no=b.rep_no WHERE b.invno IN ({marks})
-                    ORDER BY f.issued_at, b.rep_no""", part):
-                    found.setdefault(row["invno"], {}).update(
+                    ORDER BY f.issued_at, b.rep_no, b.line""", part):
+                    mine = found.setdefault(row["invno"], {})
+                    if is_duplicate_of_accepted(row["stat"], row["codes"], mine.get("accepted", False)):
+                        mine["duplicate_rep"] = row["rep_no"]
+                        continue
+                    mine["accepted"] = mine.get("accepted", False) or row["stat"] == "A"
+                    mine.update(
                         rep_stat=row["stat"], rep_codes=row["codes"], rep_no=row["rep_no"], rep_at=row["issued_at"],
                         rep_file=f"{row['hcode']}_{row['account']}BIL_{row['rep_no']}")
                 for row in db.execute(
