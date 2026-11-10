@@ -8,8 +8,8 @@ const STATES = {
   matched: ["ใช้แทน ClaimCode", "b-ok"],
   wrong_right: ["visit ไม่ใช่สิทธิเบิกจ่ายตรง", "b-warn"],
   no_visit: ["ไม่พบ visit", "b-error"],
-  refunded: ["ถูกคืนเงิน", "b-sent"],
-  refund: ["รายการคืนเงิน", "b-sent"],
+  refunded: ["ถูกคืนเงิน/ยกเลิก", "b-sent"],
+  refund: ["คืนเงิน/Void", "b-sent"],
   missing: ["ยังไม่มี Approve Code", "b-c"],
 };
 const payment = (r) => r.kind === "PAYMENT";
@@ -18,7 +18,7 @@ const CATEGORIES = {
   matched: ["ใช้แทน ClaimCode", (r) => r.state === "matched", "ok"],
   nomatch: ["ไม่พบ visit / ไม่ใช่สิทธิ", (r) => r.state === "no_visit" || r.state === "wrong_right", "error"],
   mismatch: ["ยอดรูดไม่ตรงค่าใช้จ่าย", mismatch, "warn"],
-  refund: ["คืนเงิน", (r) => r.state === "refunded" || r.state === "refund", "sent"],
+  refund: ["คืนเงิน / ยกเลิก", (r) => r.state === "refunded" || r.state === "refund", "sent"],
   missing: ["visit สิทธิเบิกจ่ายตรง ยังไม่มี Approve Code", (r) => r.state === "missing", "special"],
 };
 
@@ -27,7 +27,8 @@ function notes(r) {
   if (r.state === "no_visit") list.push(r.in_hosxp ? "ไม่พบ visit ในวันที่รูดบัตร" : "ไม่พบเลขบัตรนี้ใน HOSxP");
   if (r.state === "wrong_right") list.push(`visit ใช้สิทธิ ${r.pttype}`);
   if (mismatch(r)) list.push(`ยอดรูดต่างจากค่าใช้จ่าย ${baht.format(Number(r.amount) - Number(r.income))}`);
-  if (r.refunded_by) list.push(`ถูกคืนเงินด้วย ${r.refunded_by}`);
+  if (r.refunded_by) list.push(`ถูกคืนเงิน/ยกเลิกด้วย ${r.refunded_by}`);
+  if (r.kind === "VOID") list.push(r.refund_of ? `ยกเลิก (Void) รายการ ${r.refund_of}` : "ยกเลิก (Void) แต่ยังไม่พบรายการชำระ");
   if (r.kind === "REFUND") list.push(r.refund_of ? `คืนเงินรายการ ${r.refund_of}${r.refund_of_date ? ` (${toDmy(r.refund_of_date)})` : ""}` : "ยังไม่พบรายการชำระที่ถูกคืน (อาจอยู่ในไฟล์วันอื่น)");
   if (r.channel === "CB-IBANK") list.push(`คีย์มือ${r.reason ? `: ${r.reason}` : ""}`);
   if (r.state === "matched" && r.visit_date && r.visit_date !== r.txn_date) list.push(`visit วันที่ ${toDmy(r.visit_date)}`);

@@ -79,7 +79,7 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
         except ApproveError as exc:
             raise HTTPException(400, f"{name}: {exc}") from None
         for member, parsed in files:
-            if settings.hcode and parsed.hcode != settings.hcode:
+            if settings.hcode and parsed.hcode and parsed.hcode != settings.hcode:  # an EDC-only CSV names no hospital
                 raise HTTPException(400, f"{member}: เป็นไฟล์ของสถานพยาบาล {parsed.hcode} ไม่ใช่ {settings.hcode}")
         digest = hashlib.sha256(data).hexdigest()
         before = store.seen(digest)

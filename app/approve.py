@@ -9,17 +9,25 @@ reports HCD001-HCD004 of the same transactions. Only the TXT is read: UTF-8, one
   22 amount (refunds negative)  23 batch  24 trace  25 Payment / Refund  26 APPR. CODE  27 Trans Ref ID  28 user id
   29 menu  30 reason for keying in by hand  31 APPR. CODE of the old payment  35 channel (TMS = EDC, CB-IBANK = keyed in)
 
+The same day's transactions can also be downloaded from the Krungthai web as healthcare_online_dd-mm-yyyy.csv
+(TIS-620, quoted, one header row): No, Terminal ID, Post Date, Post Time, Transaction Date, Transaction Time,
+Personal ID, Personal Name, REF PID, PID CUS, Menu, Paid Type, Trans Amount (1,140.50), Channel (EDC / CB-IBANK), …,
+Trans Ref ID, TXNS Code (Payment / Refund / Void), App. Code, User ID (…@00000<hcode> when keyed in), Reason,
+Old Approvel Code, Reason Other. A Void cancels the payment with the same Trans Ref ID, as a refund does.
+Both files give the same Approve Code and Trans Ref ID, so importing the CSV and later the TXT001 does not double up.
+
 Names, birth dates and the other people's IDs are not kept.
 """
 from __future__ import annotations
 
+import csv
 import io
 import re
 import zipfile
 from dataclasses import dataclass, field
 from datetime import date, datetime
 
-PAYMENT, REFUND = "PAYMENT", "REFUND"
+PAYMENT, REFUND, VOID = "PAYMENT", "REFUND", "VOID"
 MIN_FIELDS = 36
 
 
@@ -56,8 +64,8 @@ class ApproveFile:
 
 
 def iso_date(value: str) -> str:
-    """dd/mm/yyyy (Christian or Buddhist year) to yyyy-mm-dd; '' when it is not a date."""
-    match = re.fullmatch(r"(\d{1,2})/(\d{1,2})/(\d{4})", (value or "").strip())
+    """dd/mm/yyyy or dd-mm-yyyy (Christian or Buddhist year) to yyyy-mm-dd; '' when it is not a date."""
+    match = re.fullmatch(r"(\d{1,2})[/-](\d{1,2})[/-](\d{4})", (value or "").strip())
     if not match:
         return ""
     day, month, year = (int(g) for g in match.groups())
@@ -119,6 +127,55 @@ def parse_txt(data: bytes, name: str = "") -> ApproveFile:
     return out
 
 
+CSV_NEEDED = ("Transaction Date", "Personal ID", "Trans Amount", "Trans Ref ID", "TXNS Code", "App. Code")
+
+
+def parse_csv(data: bytes, name: str = "") -> ApproveFile:
+    """The online report healthcare_online_dd-mm-yyyy.csv from the Krungthai web."""
+    try:
+        content = data.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        content = data.decode("cp874", errors="replace")
+    reader = csv.DictReader(io.StringIO(content))
+    header = [h.strip() for h in reader.fieldnames or []]
+    if any(h not in header for h in CSV_NEEDED):
+        raise ApproveError("ไม่ใช่ไฟล์ CSV รายการ Health Care ของกรุงไทย (healthcare_online_….csv)")
+    reader.fieldnames = header
+    out = ApproveFile()
+    if match := re.search(r"(\d{2}-\d{2}-\d{4})", name):
+        out.file_date = iso_date(match.group(1))
+    for number, raw in enumerate(reader, 2):
+        f = {k: (v or "").strip() for k, v in raw.items() if k}
+        if not any(f.values()):
+            continue
+        kind = f["TXNS Code"].upper()
+        cid = re.sub(r"\D", "", f["Personal ID"])
+        amount = _money(f["Trans Amount"])
+        if kind not in (PAYMENT, REFUND, VOID):
+            raise ApproveError(f"บรรทัด {number}: ไม่รู้จักชนิดรายการ {f['TXNS Code']!r}")
+        if not f["App. Code"] or len(cid) != 13 or not iso_date(f["Transaction Date"]) or not amount:
+            raise ApproveError(f"บรรทัด {number}: Approve Code, เลขบัตร, วันที่ หรือยอดเงินไม่ถูกต้อง")
+        if kind != PAYMENT and not amount.startswith("-"):
+            amount = f"-{amount}"  # a void or refund takes money back, as the TXT shows it
+        if match := re.search(r"@0*(\d{5})$", f.get("User ID", "")):
+            if out.hcode and match.group(1) != out.hcode:
+                raise ApproveError(f"บรรทัด {number}: รหัสสถานพยาบาลไม่ตรงกับบรรทัดก่อน")
+            out.hcode = match.group(1)
+        old = f.get("Old Approvel Code", "") or f.get("Old Approval Code", "")
+        channel = f.get("Channel", "")
+        out.rows.append(Approval(
+            appr_code=f["App. Code"], trans_ref=f["Trans Ref ID"], kind=kind, cid=cid,
+            txn_date=iso_date(f["Transaction Date"]), txn_time=_time(f.get("Transaction Time", "")),
+            post_date=iso_date(f.get("Post Date", "")), post_time=_time(f.get("Post Time", "")), amount=amount,
+            channel="TMS" if channel == "EDC" else channel, terminal=f.get("Terminal ID", ""),
+            reason=" ".join(v for v in (f.get("Reason", ""), f.get("Reason Other", "")) if v),
+            appr_old=old if old.isdigit() else "",
+        ))
+    if not out.rows:
+        raise ApproveError("ไม่พบรายการในไฟล์")
+    return out
+
+
 def parse_upload(name: str, data: bytes) -> tuple[list[tuple[str, ApproveFile]], list[str]]:
     """A TXT, or a ZIP of the bank's download folder. Returns the files read and the names that were skipped."""
     lower = name.lower()
@@ -142,18 +199,20 @@ def parse_upload(name: str, data: bytes) -> tuple[list[tuple[str, ApproveFile]],
         return found, skipped
     if lower.endswith(".txt"):
         return [(name, parse_txt(data, name))], []
-    raise ApproveError("รับเฉพาะไฟล์ .txt (TXT001) หรือ .zip ของโฟลเดอร์ที่ดาวน์โหลด")
+    if lower.endswith(".csv"):
+        return [(name, parse_csv(data, name))], []
+    raise ApproveError("รับเฉพาะไฟล์ .txt (TXT001), .csv (healthcare_online) หรือ .zip ของโฟลเดอร์ที่ดาวน์โหลด")
 
 
 # ------------------------------------------------------------------ refunds and matching
 def cancelled(rows: list[dict]) -> dict[str, str]:
-    """Payments taken back by a refund: payment appr_code -> refund appr_code.
+    """Payments taken back by a refund or a void: payment appr_code -> refund appr_code.
 
-    A refund names the payment by its Trans Ref ID (or the old Approve Code); failing that, it takes back the latest
+    A refund (or void) names the payment by its Trans Ref ID (or the old Approve Code); failing that, it takes back the latest
     earlier payment of the same patient and amount."""
     payments = sorted((r for r in rows if r["kind"] == PAYMENT), key=lambda r: (r["txn_date"], r["txn_time"]))
     out: dict[str, str] = {}
-    for refund in sorted((r for r in rows if r["kind"] == REFUND), key=lambda r: (r["txn_date"], r["txn_time"])):
+    for refund in sorted((r for r in rows if r["kind"] in (REFUND, VOID)), key=lambda r: (r["txn_date"], r["txn_time"])):
         free = [p for p in payments if p["appr_code"] not in out]
         target = next((p for p in free if refund["appr_old"] and p["appr_code"] == refund["appr_old"]), None) \
             or next((p for p in free if refund["trans_ref"] and p["trans_ref"] == refund["trans_ref"]), None)

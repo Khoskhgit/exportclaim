@@ -6,7 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app import nhso18
-from app.approve import ApproveError, assign, cancelled, iso_date, parse_txt, parse_upload
+from app.approve import ApproveError, assign, cancelled, iso_date, parse_csv, parse_txt, parse_upload
 from app.approve_routes import Approvals
 from app.approve_store import ApproveStore
 from app.main import create_app
@@ -151,3 +151,34 @@ def test_export_uses_the_approve_code(tmp_path):
     data = {"INS": [{"SEQ": "691108104135", "PERMITNO": "EP2"}, {"SEQ": "690000000001", "PERMITNO": "PP"}]}
     nhso18.set_permitno(data, {"691108104135": "369490258"})
     assert [r["PERMITNO"] for r in data["INS"]] == ["369490258", "PP"]
+
+
+CSV_HEAD = ('"No","Terminal ID","Post Date","Post Time","Transaction Date","Transaction Time","Personal ID","Personal Name",'
+            '"REF PID","PID CUS","Menu","Paid Type","Trans Amount","Channel","Check In Date Time","Telemed Start Date Time",'
+            '"Telemed Finish Date Time","Batch","Trace","Trans Ref ID","TXNS Code","App. Code","User ID","Reason",'
+            '"Old Approvel Code","Reason Other"')
+
+
+def csv_line(no, cid, time, amount, code, appr, ref, channel="EDC", user="EDC", reason="", other=""):
+    values = [no, "0040000967", "10-11-2026", time, "10-11-2026", time, cid, "ชื่อ สกุล", cid, "", "M1", "ผู้ป่วยนอก",
+              amount, channel, "", "", "", "3596", "000430", ref, code, appr, user, reason, "", other]
+    return ",".join(f'"{v}"' for v in values)
+
+
+def test_online_csv_with_a_void():
+    data = "\r\n".join([CSV_HEAD,
+                        csv_line(1, B, "15:03:31", "140.00", "Void", "369918913", "304144013"),
+                        csv_line(2, B, "15:01:10", "140.00", "Payment", "369917987", "304144013"),
+                        csv_line(3, A, "10:40:42", "1,140.50", "Payment", "369817178", "304073552"),
+                        csv_line(4, C, "20:08:00", "150.00", "Payment", "369980038", "369980038", "CB-IBANK",
+                                 "SINGLE1@0000010866", "อื่น ๆ", "DC มีปัญหา"), ""]).encode("cp874")
+    files, _ = parse_upload("healthcare_online_10-11-2026.csv", data)
+    parsed = files[0][1]
+    assert (parsed.hcode, parsed.file_date, len(parsed.rows)) == ("10866", "2026-11-10", 4)
+    void, pay, big, keyed = parsed.rows
+    assert (void.kind, void.amount) == ("VOID", "-140.00") and big.amount == "1140.50" and pay.channel == "TMS"
+    assert (keyed.channel, keyed.reason) == ("CB-IBANK", "อื่น ๆ DC มีปัญหา")
+    assert not any("ชื่อ" in str(v) for r in parsed.rows for v in vars(r).values())
+    assert cancelled([vars(r) for r in parsed.rows]) == {"369917987": "369918913"}
+    with pytest.raises(ApproveError):
+        parse_csv(b'"a","b"\r\n"1","2"\r\n')
