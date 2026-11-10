@@ -105,7 +105,9 @@ async function openDrawer(r) {
   try {
     const data = await api("/api/nhso18/detail", { key: r.key, kind: r.kind });
     if (state.current !== r.key) return;
-    const check = [el("dl", { class: "info-grid" }, ...[["เลขบัตร", r.cid], ["สิทธิ", r.pttype], ["MainInscl", r.maininscl], ["ClaimCode", r.claimcode || "(ไม่มี)"],
+    const check = [el("dl", { class: "info-grid" }, ...[["เลขบัตร", r.cid], ["สิทธิ", r.pttype], ["MainInscl", r.maininscl], ...(r.approve_required
+        ? [["Approve Code (ใช้ส่ง)", r.claimcode || "(ยังไม่มี)"], ["ClaimCode ใน HOSxP", r.claimcode_hosxp || "(ไม่มี)"]]
+        : [["ClaimCode", r.claimcode || "(ไม่มี)"]]),
       ["PDx", r.pdx], ["ค่าใช้จ่าย", `${baht.format(Number(r.money))} บาท`], ["สถานะ", r.status || "ยังไม่ส่ง"], ["ชดเชย FDH", r.fdh_amount ? `${baht.format(Number(r.fdh_amount))} บาท` : "—"]]
       .map(([k, v]) => el("div", {}, el("dt", {}, k), el("dd", {}, v || "—"))))];
     const issues = [...r.errors.map((i) => ({ ...i, level: "error" })), ...r.warns.map((i) => ({ ...i, level: "warn" }))];

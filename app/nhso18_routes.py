@@ -34,9 +34,25 @@ def _mask(value: Any) -> str:
     return f"{'x' * (len(cid) - 4)}{cid[-4:]}" if len(cid) > 4 else cid
 
 
-def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templates: Jinja2Templates) -> None:
+def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templates: Jinja2Templates,
+             approvals: Any = None) -> None:
     def q(sql: str) -> list[dict]:
         return hosxp._select(sql, [])
+
+    def with_approve_codes(rows: list[dict]) -> None:
+        """OPD visits under the approve rights take the imported Krungthai Approve Code as their claim code."""
+        if approvals is None:
+            return
+        mine = [r for r in rows if r["kind"] == "OPD" and text(r.get("pttype")) in approvals.pttypes]
+        if not mine:
+            return
+        found = approvals.for_visits(mine)
+        for r in mine:
+            payment = found.get(text(r.get("vn")))
+            r["approve_required"] = True
+            r["claimcode_hosxp"] = text(r.get("claimcode"))
+            r["claimcode"] = payment["appr_code"] if payment else ""
+            r["approve_amount"] = payment["amount"] if payment else ""
 
     @app.exception_handler(nhso18.Nhso18Error)
     async def nhso18_error(_: Request, exc: nhso18.Nhso18Error):
@@ -44,6 +60,7 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
 
     def review(rows: list[dict]) -> list[dict]:
         keys = [svc.key_of(r) for r in rows]
+        with_approve_codes(rows)
         found = svc.checks(q, settings.rcm_db, rows)
         sent = local.nhso18_sent(keys)
         fdh_sent = local.fdh_sent(keys)
@@ -63,6 +80,7 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
                 "cid": _mask(r.get("cid")), "ptname": text(r.get("ptname")),
                 "date": f"{moment:%Y-%m-%d}" if moment else "", "pttype": f"{text(r.get('pttype'))}: {text(r.get('pttype_name'))}",
                 "maininscl": text(r.get("maininscl")), "pdx": text(r.get("pdx")), "claimcode": text(r.get("claimcode")),
+                "approve_required": bool(r.get("approve_required")), "claimcode_hosxp": text(r.get("claimcode_hosxp")),
                 "money": svc.money(r.get("money_hosxp")), "fdh_amount": svc.money(r.get("fdh_amount")) if r.get("fdh_amount") else "",
                 "errors": f["errors"], "warns": f["warns"], "status": st,
                 "excluded_count": sum(1 for s, _ in excluded if s == k),
@@ -155,6 +173,7 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
             raise HTTPException(400, "ไม่พบรายการที่เลือก")
         excluded = local.nhso18_excluded(vns + ans)
         data = nhso18.Builder(q, config, settings.rcm_db, ECLAIM_DB, excluded).run(visits)
+        nhso18.set_permitno(data, {r["key"]: r["claimcode"] for r in reviewed if r["approve_required"]})
         return vns, ans, nhso18.merge_walkin(data, merge), len(merge)
 
     @app.post("/api/nhso18/export")

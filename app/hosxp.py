@@ -411,6 +411,26 @@ class Hosxp:
             ORDER BY o.vstdate, o.vsttime""",
             [start, end, *pttypes])
 
+    def ofc_visits(self, start, end, cids: Iterable[str] = (), pttypes: Iterable[str] = ()) -> list[dict]:
+        """OPD visits between start and end of these patients, or under these rights, with the cost and the
+        claim code HOSxP holds (for tying the Krungthai Approve Codes to visits)."""
+        cids, pttypes = sorted({c for c in cids if c}), sorted({p for p in pttypes if p})
+        rows: list[dict] = []
+        base = """SELECT p.cid, o.hn, CONCAT(IFNULL(p.pname,''), IFNULL(p.fname,''), ' ', IFNULL(p.lname,'')) AS ptname,
+            o.vn, o.vstdate, o.vsttime, o.pttype, ptt.name AS pttype_name, v.income,
+            (SELECT vp.claim_code FROM visit_pttype vp WHERE vp.vn=o.vn AND vp.pttype=o.pttype LIMIT 1) AS claim_code
+            FROM ovst o JOIN patient p ON p.hn=o.hn LEFT JOIN pttype ptt ON ptt.pttype=o.pttype
+            LEFT JOIN vn_stat v ON v.vn=o.vn
+            WHERE o.vstdate BETWEEN %s AND %s AND IFNULL(o.an,'')='' AND """
+        for at in range(0, len(cids), 500):
+            part = cids[at:at + 500]
+            rows += self._select(base + f"p.cid IN ({','.join(['%s'] * len(part))})", [start, end, *part])
+        if pttypes:
+            seen = {str(r["vn"]) for r in rows}
+            rows += [r for r in self._select(base + f"o.pttype IN ({','.join(['%s'] * len(pttypes))})",
+                                             [start, end, *pttypes]) if str(r["vn"]) not in seen]
+        return rows
+
     def close(self) -> None:
         with self._all_lock:
             conns, self._all = list(self._all), set()

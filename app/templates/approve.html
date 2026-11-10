@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Approve Code ข้าราชการ · Export Claim</title>
+<link rel="stylesheet" href="/static/app.css?v={{ v }}">
+</head>
+<body class="no-footer">
+{% set active = "approve" %}{% include "_top.html" %}
+<main>
+  <div class="page-head"><h2>Approve Code เบิกจ่ายตรงข้าราชการ</h2><p>นำเข้าไฟล์ของกรุงไทย แล้วใช้ Approve Code แทน ClaimCode ตอนส่งออก 18 แฟ้ม (สิทธิ <span id="pttypes">21</span>)</p></div>
+
+  <section class="panel import-panel">
+    <label id="drop" class="drop" for="files">
+      <span class="drop-icon" aria-hidden="true">⇪</span>
+      <strong>ลากไฟล์มาวาง หรือคลิกเพื่อเลือกไฟล์</strong>
+      <span class="sub">HCG…_TXT001_yyyymmdd.txt หรือ ZIP ของโฟลเดอร์ DWN_HOSPITAL_… · ไฟล์ PDF (HCD001–004) ไม่ต้องนำเข้า · เลือกได้หลายไฟล์</span>
+      <input id="files" type="file" multiple accept=".txt,.zip,.pdf" class="sr-only">
+    </label>
+    <ul id="import-log" class="import-log"></ul>
+  </section>
+
+  <form id="search" class="panel search">
+    <label>วันที่รูดบัตรตั้งแต่<input type="date" name="start"></label>
+    <label>ถึงวันที่<input type="date" name="end"></label>
+    <div class="actions-cell"><button class="primary" type="submit">แสดง</button><button type="button" id="show-all" class="ghost">ทั้งหมด</button></div>
+    <div class="presets"><span>ช่วงด่วน:</span><button type="button" data-preset="this">เดือนนี้</button><button type="button" data-preset="last">เดือนก่อน</button></div>
+  </form>
+
+  <section id="summary" class="cards" aria-label="สรุปและกรองตามสถานะ"></section>
+
+  <section class="panel table-panel">
+    <div class="table-tools">
+      <div class="search-box"><input id="filter" type="search" placeholder="กรองจาก VN, HN, ชื่อ หรือ Approve Code" aria-label="กรองรายการ"></div>
+      <span id="result-count" class="result-count"></span>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead id="thead"><tr>
+          <th data-sort="state">สถานะ</th><th data-sort="txn_date">วันที่รูดบัตร</th><th data-sort="vn">VN</th><th data-sort="hn">HN</th>
+          <th data-sort="ptname">ชื่อ (HOSxP)</th><th>เลขบัตร</th>
+          <th class="num" data-sort="amount">ยอดรูด</th><th class="num" data-sort="income">ค่าใช้จ่าย</th>
+          <th data-sort="appr_code">Approve Code</th><th data-sort="claim_code">ClaimCode ใน HOSxP</th><th data-sort="channel">ช่องทาง</th><th>หมายเหตุ</th>
+        </tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+      <div id="empty" class="empty"><div class="empty-icon" aria-hidden="true">⌕</div><div>นำเข้าไฟล์ หรือกด "ทั้งหมด"</div></div>
+    </div>
+  </section>
+
+  <details class="panel history">
+    <summary>ประวัติการนำเข้า</summary>
+    <div class="history-body"><div id="history"></div></div>
+  </details>
+</main>
+<script src="/static/common.js?v={{ v }}"></script>
+<script src="/static/approve.js?v={{ v }}"></script>
+</body>
+</html>

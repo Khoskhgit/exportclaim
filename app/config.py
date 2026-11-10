@@ -43,6 +43,7 @@ class Settings:
     hname: str = ""
     hosp_main: tuple[str, ...] = ()
     dental_pttypes: tuple[str, ...] = ("29",)
+    ofc_approve_pttypes: tuple[str, ...] = ("21",)
     default_doctor: str = ""
     default_usage_code: str = "0201"
     default_usage_name: str = DEFAULT_USAGE_NAME
@@ -133,6 +134,7 @@ def load_settings(env_file: Path | None = None) -> Settings:
         hname=get("HNAME", ""),
         hosp_main=_csv(get("HOSP_MAIN")),
         dental_pttypes=_csv(get("DENTAL_PTTYPES")) or ("29",),
+        ofc_approve_pttypes=_csv(get("OFC_APPROVE_PTTYPES")) or ("21",),
         default_doctor=get("DEFAULT_DOCTOR", ""),
         default_usage_code=get("DEFAULT_USAGE_CODE", "0201"),
         default_usage_name=get("DEFAULT_USAGE_NAME") or DEFAULT_USAGE_NAME,

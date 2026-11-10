@@ -11,7 +11,7 @@
 | login MOPH ID | ใช้ได้ | Health ID + Provider ID เข้าได้เฉพาะบุคลากร รพ.คลองหาด (10866) ส่ง `User-Agent: EMR` เพราะ Cloudflare ของ provider.id.th บล็อกชื่อ Python |
 | HTTPS | ใช้ได้ | certificate สร้างเองใน `data/tls/` (`make_cert.py`) |
 | GitHub | ขึ้นแล้ว | https://github.com/Khoskhgit/exportclaim branch `main` |
-| Test | ผ่าน 188 รายการ | `.venv/bin/python -m pytest -q` |
+| Test | ผ่าน 244 รายการ | `.venv/bin/python -m pytest -q` |
 
 ## เครื่องที่ใช้
 - **เครื่องพัฒนา (192.168.11.20):** https://localhost:5180 เปิดเฉพาะเครื่องตัวเอง
@@ -35,6 +35,7 @@ cd /var/khclaim/exportclaim && git pull && chown -R exportclaim:exportclaim . &&
 10. **Walk-in บัตรทองหลาย visit:** รวมเข้า VN แรกแล้ว (ทดลองกับข้อมูลจริง 1 คู่ ยอด CHT ตรง) ยังไม่ได้ส่งจริงดูว่า สปสช. รับและจ่ายตามที่คาด
 11. **REP / STM:** นำเข้าได้เฉพาะ SSOP (SOCDBIL/SOCDDIS/SOGNSTMP) ทดลองกับไฟล์จริง 1 REP และ 1 STM แล้ว ยังไม่รองรับ REP/STM ของ AIPN และ สปสช.
 12. **ทันตกรรม ปกส.:** นำเข้ารายงานส่งเบิก/จ่ายได้ ทดลองกับรายงาน ต.ค. 69 (31 รายการ จับคู่ VN ได้ครบ) แสดง visit สิทธิ 29 ที่ยังไม่ส่งเบิกแล้ว (ต.ค. 69 พบ 3 visit)
+13. **Approve Code ข้าราชการ:** นำเข้าไฟล์กรุงไทย TXT001 ได้ ทดลองกับไฟล์ 08/11/2569 (ชำระ 6 รายการ จับคู่ VN สิทธิ 21 ได้ครบ ยอดตรงทุกรายการ) หน้า 18 แฟ้มใช้ Approve Code ใน INS.PERMITNO แล้ว ยังไม่ได้ส่งจริงดูว่า สปสช. รับ
 
 ## ไฟล์ที่ไม่อยู่ใน git
 `.env` (รหัสผ่านและ key), `data/` (SQLite, session, certificate), `exports/` และไฟล์ ZIP/XML ที่มีข้อมูลผู้ป่วย ต้องคัดลอกหรือสร้างใหม่บนแต่ละเครื่อง

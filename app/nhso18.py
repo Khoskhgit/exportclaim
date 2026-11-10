@@ -1156,6 +1156,14 @@ def _add(a, b):
     return num(a) + num(b)
 
 
+def set_permitno(data: dict[str, list[dict]], codes: dict[str, str]) -> None:
+    """Put these claim codes (by SEQ) in INS.PERMITNO, e.g. the Krungthai Approve Code of a CSMBS direct-payment visit."""
+    for row in data.get("INS", []):
+        seq = text(row.get("SEQ"))
+        if seq in codes:
+            row["PERMITNO"] = codes[seq]
+
+
 def merge_walkin(data: dict[str, list[dict]], merge: dict[str, str]) -> dict[str, list[dict]]:
     """Move the later visits' rows onto the first VN: one INS/OPD/AER/CHT row, summed charges, diagnoses and
     procedures without duplicates, and the WALKIN project item once."""

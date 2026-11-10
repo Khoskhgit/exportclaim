@@ -167,7 +167,13 @@ def checks(q: Select, rcm: str, rows: list[dict]) -> dict[str, dict]:
         f = found[k]
         e, w = f["errors"], f["warns"]
         add = lambda bucket, code, message, items=(): bucket.append({"code": code, "message": message, "items": [text(i) for i in items if i]})
-        if text(r.get("maininscl")) == "OFC" and not text(r.get("claimcode")):
+        if r.get("approve_required"):
+            if not text(r.get("claimcode")):
+                add(e, "NO_APPROVE", "ไม่พบ Approve Code กรุงไทย (นำเข้าที่เมนู Approve Code)")
+            elif r.get("approve_amount") and r.get("money_hosxp") is not None \
+                    and abs(Decimal(str(r["approve_amount"])) - Decimal(str(r["money_hosxp"]))) >= Decimal("0.01"):
+                add(w, "APPROVE_AMOUNT", f"ยอดรูดบัตร {money(r['approve_amount'])} ไม่ตรงค่าใช้จ่าย {money(r['money_hosxp'])}")
+        elif text(r.get("maininscl")) == "OFC" and not text(r.get("claimcode")):
             add(e, "NO_CLAIMCODE", "ไม่พบ ClaimCode")
         if not text(r.get("pdx")):
             add(e, "PDX_EMPTY", "ไม่พบ PDx")
