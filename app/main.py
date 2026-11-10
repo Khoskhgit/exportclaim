@@ -17,7 +17,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
-from . import aipn_routes, auth, nhso18_routes, repstm_routes
+from . import aipn_routes, auth, dental_routes, nhso18_routes, repstm_routes
 from .aipn_db import AipnDb
 from .config import Settings, load_settings
 from .export import ExportError, build_export, normalise_station, is_excluded, item_name, send_amounts, usage_fields
@@ -120,6 +120,7 @@ def create_app(settings: Settings | None = None, hosxp: Any = None, store: Store
     aipn_routes.register(app, settings, aipn_db or AipnDb(db), local, templates)
     nhso18_routes.register(app, settings, db, local, templates)
     results = repstm_routes.register(app, settings, local, templates)
+    dental_routes.register(app, settings, db, local, templates)
 
     def with_results(visits: list[dict]) -> list[dict]:
         """Imported REP/STM files win over rcmdb: STM means paid, otherwise the newest REP line gives A or C."""

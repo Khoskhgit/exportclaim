@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ทันตกรรม ปกส. · Export Claim</title>
+<link rel="stylesheet" href="/static/app.css?v={{ v }}">
+</head>
+<body class="no-footer">
+{% set active = "dental" %}{% include "_top.html" %}
+<main>
+  <div class="page-head"><h2>ทันตกรรม ประกันสังคม</h2><p>นำเข้ารายงานการส่งเบิกและรายงานการจ่าย แล้วจับคู่กับ visit ใน HOSxP</p></div>
+
+  <section class="panel import-panel">
+    <label id="drop" class="drop" for="files">
+      <span class="drop-icon" aria-hidden="true">⇪</span>
+      <strong>ลากไฟล์ Excel มาวาง หรือคลิกเพื่อเลือกไฟล์</strong>
+      <span class="sub">REPORT_01_DENTAL_CLAIM_SUBMISSION.xlsx (ส่งเบิก) · REPORT_02_DENTAL_CLAIM_PAYMENT.xlsx (จ่าย) · เลือกได้หลายไฟล์</span>
+      <input id="files" type="file" multiple accept=".xlsx" class="sr-only">
+    </label>
+    <ul id="import-log" class="import-log"></ul>
+  </section>
+
+  <form id="search" class="panel search">
+    <label>ใช้สิทธิตั้งแต่<input type="date" name="start"></label>
+    <label>ถึงวันที่<input type="date" name="end"></label>
+    <div class="actions-cell"><button class="primary" type="submit">แสดง</button><button type="button" id="show-all" class="ghost">ทั้งหมด</button></div>
+    <div class="presets"><span>ช่วงด่วน:</span><button type="button" data-preset="this">เดือนนี้</button><button type="button" data-preset="last">เดือนก่อน</button></div>
+  </form>
+
+  <section id="summary" class="cards" aria-label="สรุปและกรองตามสถานะ"></section>
+
+  <section class="panel table-panel">
+    <div class="table-tools">
+      <div class="search-box"><input id="filter" type="search" placeholder="กรองจาก VN, HN, ชื่อ หรือเลขใบสำคัญ" aria-label="กรองรายการ"></div>
+      <span id="result-count" class="result-count"></span>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead id="thead"><tr>
+          <th data-sort="state">สถานะ</th><th data-sort="service_date">วันที่ใช้สิทธิ</th><th data-sort="vn">VN</th><th data-sort="hn">HN</th>
+          <th data-sort="ptname">ชื่อ (HOSxP)</th><th>เลขบัตร</th><th data-sort="service_type">ประเภท</th>
+          <th class="num" data-sort="claim_amount">ขอเบิก</th><th class="num" data-sort="paid_amount">จ่าย</th>
+          <th data-sort="voucher">เลขใบสำคัญรับเงิน</th><th data-sort="transfer_date">วันที่โอน</th><th>หมายเหตุ</th>
+        </tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+      <div id="empty" class="empty"><div class="empty-icon" aria-hidden="true">⌕</div><div>นำเข้ารายงาน หรือกด "ทั้งหมด"</div></div>
+    </div>
+  </section>
+
+  <details class="panel history">
+    <summary>ประวัติการนำเข้า</summary>
+    <div class="history-body"><div id="history"></div></div>
+  </details>
+</main>
+<script src="/static/common.js?v={{ v }}"></script>
+<script src="/static/dental.js?v={{ v }}"></script>
+</body>
+</html>

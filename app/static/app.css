@@ -299,3 +299,4 @@ body.no-footer{padding-bottom:24px}
 @media (max-width:640px){.vn-search{grid-template-columns:1fr}}
 td.paid{color:var(--ok);font-weight:600}
 td.doc{font-size:12px;color:var(--muted);white-space:nowrap}
+tr.flag-row td{background:var(--warn-bg)!important}

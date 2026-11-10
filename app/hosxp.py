@@ -368,6 +368,25 @@ class Hosxp:
         )
         return rows[0] if len(rows) == 1 else None
 
+    def dental_visits(self, cids: Iterable[str], start, end) -> list[dict]:
+        """Visits between start and end of the patients with these CIDs, and whether each has dental work (dtmain)."""
+        cids = sorted({c for c in cids if c})
+        if not cids:
+            return []
+        rows: list[dict] = []
+        dental = "EXISTS(SELECT 1 FROM dtmain d WHERE d.vn=o.vn)" if self._has("dtmain") else "0"
+        for at in range(0, len(cids), 500):
+            part = cids[at:at + 500]
+            rows += self._select(
+                f"""SELECT p.cid, p.hn, CONCAT(IFNULL(p.pname,''), IFNULL(p.fname,''), ' ', IFNULL(p.lname,'')) AS ptname,
+                o.vn, o.vstdate, o.vsttime, ptt.name AS pttype_name, {dental} AS has_dental
+                FROM patient p
+                LEFT JOIN ovst o ON o.hn=p.hn AND o.vstdate BETWEEN %s AND %s
+                LEFT JOIN pttype ptt ON ptt.pttype=o.pttype
+                WHERE p.cid IN ({",".join(["%s"] * len(part))})""",
+                [start, end, *part])
+        return rows
+
     def close(self) -> None:
         with self._all_lock:
             conns, self._all = list(self._all), set()
