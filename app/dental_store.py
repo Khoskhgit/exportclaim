@@ -92,6 +92,11 @@ class DentalStore:
             db.executemany(f"UPDATE dental_claims SET hn=?, vn=?, matched_at=? WHERE {KEY_WHERE}",
                            [(hn, vn, at, *key) for key, (hn, vn) in matches.items()])
 
+    def claims_of_vn(self, vn: str) -> list[dict]:
+        with self._db() as db:
+            return [dict(r) for r in db.execute(
+                "SELECT * FROM dental_claims WHERE vn=? ORDER BY service_date, seq", (vn,))]
+
     def uploads(self, limit: int = 30) -> list[dict]:
         with self._db() as db:
             return [dict(r) for r in db.execute(

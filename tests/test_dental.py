@@ -75,6 +75,9 @@ class DentalHosxp(FakeHosxp):
         ]
 
 
+    def dental_procedures(self, vn):
+        return [{"tmcode": "000208", "tm_name": "ขูดหินปูน", "ttcode": "#47", "icd": "K021", "icd9": "232", "fee": 650.0}]
+
     def visits_with_pttypes(self, pttypes, start, end):
         assert pttypes == ("29",)
         return [
@@ -146,3 +149,13 @@ def test_same_day_claims_spread_over_dental_visits():
               {"vn": "3", "vsttime": "09:00", "pttype": "34", "has_dental": 0}]
     assert [pick_visit(visits, ("29",), n)["vn"] for n in range(3)] == ["1", "2", "1"]
     assert pick_visit(visits[:1] + visits[2:], ("29",), 1)["vn"] == "1"
+
+
+def test_detail_of_a_matched_visit(client):
+    upload(client, "s.xlsx", SUB)
+    client.post("/api/dental/list", json={})
+    detail = client.post("/api/dental/detail", json={"vn": "691001080000"}).json()
+    assert detail["procedures"][0] == {"tmcode": "000208", "name": "ขูดหินปูน", "tooth": "#47", "icd10": "K021", "icd9": "232",
+                                       "fee": "650.00", "note": ""}
+    assert [(c["claim_amount"], c["state"]) for c in detail["claims"]] == [("700.00", "paid_no_detail")]
+    assert client.post("/api/dental/detail", json={}).status_code == 400

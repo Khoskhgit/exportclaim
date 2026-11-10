@@ -387,6 +387,16 @@ class Hosxp:
                 [start, end, *part])
         return rows
 
+    def dental_procedures(self, vn: str) -> list[dict]:
+        """The dental work recorded on a visit (dtmain), with the treatment name from dttm."""
+        if not self._has("dtmain"):
+            return []
+        name = "tm.name" if self._has("dttm") else "NULL"
+        join = "LEFT JOIN dttm tm ON tm.code=d.tmcode" if self._has("dttm") else ""
+        return self._select(
+            f"""SELECT d.tmcode, {name} AS tm_name, d.ttcode, d.icd, d.icd9, d.fee, d.tcount, d.scount, d.note
+            FROM dtmain d {join} WHERE d.vn=%s ORDER BY d.dtmain_id""", [vn])
+
     def visits_with_pttypes(self, pttypes: Iterable[str], start, end) -> list[dict]:
         """Visits between start and end under these rights (e.g. the SSO dental right), for finding unclaimed ones."""
         pttypes = sorted({p for p in pttypes if p})

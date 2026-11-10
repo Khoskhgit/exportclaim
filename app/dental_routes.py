@@ -159,4 +159,21 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
         return {"claims": rows + unclaimed, "uploads": claims_db.uploads(), "db_error": db_error,
                 "dental_pttypes": list(settings.dental_pttypes), "range": [first, last]}
 
+    @app.post("/api/dental/detail")
+    def detail(body: dict = Body(...)):
+        vn = text(body.get("vn"))
+        if not vn:
+            raise HTTPException(400, "ไม่ได้ระบุ VN")
+        procedures = [{
+            "tmcode": text(p.get("tmcode")), "name": text(p.get("tm_name")), "tooth": text(p.get("ttcode")),
+            "icd10": text(p.get("icd")), "icd9": text(p.get("icd9")), "fee": f"{float(p.get('fee') or 0):.2f}",
+            "note": text(p.get("note")),
+        } for p in hosxp.dental_procedures(vn)]
+        claims = [{
+            "service_date": c["service_date"], "service_type": c["service_type"], "claim_date": c["claim_date"],
+            "claim_amount": c["claim_amount"], "status": c["status"], "paid_amount": c["paid_amount"],
+            "voucher": c["voucher"], "transfer_date": c["transfer_date"], "state": state_of(c),
+        } for c in claims_db.claims_of_vn(vn)]
+        return {"vn": vn, "procedures": procedures, "claims": claims}
+
     return claims_db
