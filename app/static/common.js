@@ -65,9 +65,10 @@ function setConnection(text, ok) {
 // ---------------------------------------------------------------- cards
 // Summary cards double as the status filter. cats: {key: [label, test, tone]}.
 function renderCards(container, cats, rows, current, amountOf, pick) {
-  container.replaceChildren(...Object.entries(cats).map(([key, [label, test, tone]]) => {
+  // A category may bring its own amount (e.g. the paid card sums what the STM paid, not what was claimed).
+  container.replaceChildren(...Object.entries(cats).map(([key, [label, test, tone, ownAmount]]) => {
     const hits = rows.filter(test);
-    const amount = hits.reduce((sum, r) => sum + Number(amountOf(r) || 0), 0);
+    const amount = hits.reduce((sum, r) => sum + Number((ownAmount || amountOf)(r) || 0), 0);
     return el("button", { class: `card tone-${tone}`, type: "button", "aria-pressed": String(current === key), onclick: () => pick(key) },
       el("span", { class: "card-label" }, label),
       el("span", { class: "card-count" }, count.format(hits.length), el("small", {}, " คน")),
@@ -140,8 +141,10 @@ function setupPresets(form) {
     };
   });
 }
-// A native date box shows the browser's own order (mm/dd/yyyy on an English Windows), so each one gets a dd/mm/yyyy
-// text box. The date input stays in the form (hidden) with the ISO value the pages read and write, and opens the calendar.
+// Date boxes: dd/mm/yyyy in the Buddhist year, with a Thai calendar of our own (the browser's picker follows the OS
+// language and the Christian year). The date input stays in the form (hidden) with the ISO value the pages read and write.
+const TH_MONTHS = ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"];
+const TH_DAYS = ["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"];
 function parseDmy(textValue) {
   const m = String(textValue).trim().match(/^(\d{1,2})\s*[\/.\-]\s*(\d{1,2})\s*[\/.\-]\s*(\d{4})$/) || String(textValue).trim().match(/^(\d{2})(\d{2})(\d{4})$/);
   if (!m) return null;
@@ -150,35 +153,122 @@ function parseDmy(textValue) {
   const date = new Date(y, mo - 1, d);
   return date.getFullYear() === y && date.getMonth() === mo - 1 && date.getDate() === d ? isoDate(date) : null;
 }
+// Every date on screen is dd/mm/yyyy in the Buddhist year; the API keeps ISO (Christian) dates.
 function toDmy(iso) {
   const m = String(iso || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  return m ? `${m[3]}/${m[2]}/${m[1]}` : "";
+  return m ? `${m[3]}/${m[2]}/${Number(m[1]) + 543}` : "";
 }
+const toThaiDmy = toDmy;
+// "2026-10-08 06:01:30" or "2026-10-08T06:01" -> "08/10/2569 06:01:30"; anything else is shown as it is.
+function thaiDateTime(value) {
+  const textValue = String(value ?? "").replace("T", " ");
+  const m = textValue.match(/^(\d{4})-(\d{2})-(\d{2})(.*)$/);
+  return m ? `${m[3]}/${m[2]}/${Number(m[1]) + 543}${m[4]}` : textValue;
+}
+function fromIso(iso) {
+  const m = String(iso || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : null;
+}
+
+let openCalendar = null;
+function closeCalendar() {
+  if (!openCalendar) return;
+  openCalendar.popup.remove();
+  openCalendar.pick.setAttribute("aria-expanded", "false");
+  openCalendar = null;
+}
+document.addEventListener("mousedown", (e) => { if (openCalendar && !openCalendar.wrap.contains(e.target)) closeCalendar(); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && openCalendar) { const { box } = openCalendar; closeCalendar(); box.focus(); } });
+
+function showCalendar(wrap, input, box, pick, nativeGet) {
+  if (openCalendar && openCalendar.wrap === wrap) { closeCalendar(); return; }
+  closeCalendar();
+  const popup = el("div", { class: "cal", role: "dialog", "aria-label": "ปฏิทิน" });
+  const chosen = fromIso(nativeGet.call(input));
+  let view = chosen || new Date();
+  view = new Date(view.getFullYear(), view.getMonth(), 1);
+  // On a start/end pair, shade the days between the two.
+  const form = input.form;
+  const other = form && (input.name === "start" ? form.elements.end : input.name === "end" ? form.elements.start : null);
+  const choose = (iso) => {
+    input.value = iso;
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+    closeCalendar();
+    box.focus();
+  };
+  const draw = () => {
+    const today = isoDate(new Date());
+    const value = nativeGet.call(input);
+    const otherValue = other ? other.value : "";
+    const [lo, hi] = [value, otherValue].filter(Boolean).sort();
+    const year = view.getFullYear(), month = view.getMonth();
+    const first = new Date(year, month, 1).getDay();
+    const days = new Date(year, month + 1, 0).getDate();
+    const monthSelect = el("select", { class: "cal-month", "aria-label": "เดือน", onchange: (e) => { view = new Date(year, Number(e.target.value), 1); draw(); } },
+      ...TH_MONTHS.map((name, i) => el("option", { value: String(i), selected: i === month }, name)));
+    const nowYear = new Date().getFullYear();
+    const years = [];
+    for (let y = Math.min(year, nowYear) - 5; y <= Math.max(year, nowYear) + 1; y++) years.push(y);
+    const yearSelect = el("select", { class: "cal-year", "aria-label": "ปี พ.ศ.", onchange: (e) => { view = new Date(Number(e.target.value), month, 1); draw(); } },
+      ...years.map((y) => el("option", { value: String(y), selected: y === year }, `พ.ศ. ${y + 543}`)));
+    const cells = [];
+    for (let i = 0; i < first; i++) cells.push(el("span", { class: "cal-blank" }));
+    for (let d = 1; d <= days; d++) {
+      const iso = isoDate(new Date(year, month, d));
+      const cls = ["cal-day"];
+      if (iso === today) cls.push("today");
+      if (iso === value) cls.push("chosen");
+      else if (iso === otherValue) cls.push("edge");
+      if (lo && hi && lo !== hi && iso > lo && iso < hi) cls.push("between");
+      if ((first + d - 1) % 7 === 0 || (first + d - 1) % 7 === 6) cls.push("weekend");
+      cells.push(el("button", { type: "button", class: cls.join(" "), "data-iso": iso, "aria-label": `${d} ${TH_MONTHS[month]} ${year + 543}`,
+        "aria-pressed": String(iso === value), onclick: () => choose(iso) }, String(d)));
+    }
+    popup.replaceChildren(
+      el("div", { class: "cal-head" },
+        el("button", { type: "button", class: "cal-nav", "aria-label": "เดือนก่อน", onclick: () => { view = new Date(year, month - 1, 1); draw(); } }, "‹"),
+        monthSelect, yearSelect,
+        el("button", { type: "button", class: "cal-nav", "aria-label": "เดือนถัดไป", onclick: () => { view = new Date(year, month + 1, 1); draw(); } }, "›")),
+      el("div", { class: "cal-grid cal-week" }, ...TH_DAYS.map((d, i) => el("span", { class: i === 0 || i === 6 ? "weekend" : "" }, d))),
+      el("div", { class: "cal-grid" }, ...cells),
+      el("div", { class: "cal-foot" },
+        el("button", { type: "button", class: "cal-link", onclick: () => choose(today) }, `วันนี้ ${toThaiDmy(today)}`),
+        el("button", { type: "button", class: "cal-link muted-link", onclick: () => choose("") }, "ล้าง")));
+  };
+  draw();
+  wrap.append(popup);
+  // Keep it on screen: open to the left when there is no room on the right.
+  const rect = popup.getBoundingClientRect();
+  if (rect.right > window.innerWidth - 8) popup.classList.add("cal-right");
+  pick.setAttribute("aria-expanded", "true");
+  openCalendar = { wrap, popup, box, pick };
+  (popup.querySelector(".cal-day.chosen") || popup.querySelector(".cal-day.today") || popup.querySelector(".cal-day")).focus();
+}
+
 function setupDateInputs(root = document) {
   const native = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value");
   root.querySelectorAll('input[type="date"]:not(.dmy-native)').forEach((input) => {
-    const box = el("input", { type: "text", class: "dmy-text", inputMode: "numeric", autocomplete: "off", placeholder: "วว/ดด/ปปปป", title: "วัน/เดือน/ปี ค.ศ. (พิมพ์ปี พ.ศ. ได้)" });
-    const pick = el("button", { type: "button", class: "dmy-pick", "aria-label": "เลือกจากปฏิทิน", title: "เลือกจากปฏิทิน" });
+    const box = el("input", { type: "text", class: "dmy-text", inputMode: "numeric", autocomplete: "off", placeholder: "วว/ดด/ปปปป", title: "วัน/เดือน/ปี พ.ศ." });
+    const pick = el("button", { type: "button", class: "dmy-pick", "aria-label": "เลือกจากปฏิทิน", title: "เลือกจากปฏิทิน", "aria-haspopup": "dialog", "aria-expanded": "false" });
     const wrap = el("span", { class: "dmy" });
     input.replaceWith(wrap);
     input.classList.add("dmy-native");
     input.tabIndex = -1;
     input.setAttribute("aria-hidden", "true");
     wrap.append(box, pick, input);
-    const show = () => { box.value = toDmy(native.get.call(input)); box.setCustomValidity(""); };
+    const show = () => { box.value = toThaiDmy(native.get.call(input)); box.setCustomValidity(""); };
     // Pages set .value directly (presets, defaults); keep the text box in step.
     Object.defineProperty(input, "value", { configurable: true, get() { return native.get.call(this); }, set(v) { native.set.call(this, v); show(); } });
     input.addEventListener("change", show);
     box.addEventListener("input", () => {
       const iso = box.value.trim() ? parseDmy(box.value) : "";
-      if (iso === null) { box.setCustomValidity("วันที่ไม่ถูกต้อง ใช้รูปแบบ วว/ดด/ปปปป"); return; }
+      if (iso === null) { box.setCustomValidity("วันที่ไม่ถูกต้อง ใช้รูปแบบ วว/ดด/ปปปป (พ.ศ.)"); return; }
       box.setCustomValidity("");
       native.set.call(input, iso);
     });
     box.addEventListener("change", () => { if (!box.validationMessage) show(); });
-    pick.onclick = () => {
-      try { input.showPicker(); } catch (err) { box.focus(); }
-    };
+    box.addEventListener("keydown", (e) => { if (e.key === "ArrowDown" && e.altKey) { e.preventDefault(); showCalendar(wrap, input, box, pick, native.get); } });
+    pick.onclick = () => showCalendar(wrap, input, box, pick, native.get);
     show();
   });
 }

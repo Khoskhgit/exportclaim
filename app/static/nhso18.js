@@ -37,7 +37,7 @@ function renderRows() {
       el("td", {}, r.status ? el("span", { class: "badge b-sent" }, r.status) : el("span", { class: "muted" }, "—"), walkinTag(r)),
       el("td", {}, r.kind), el("td", { class: "mono" }, r.key), el("td", { class: "mono" }, r.hn),
       el("td", { class: "name-cell", title: r.ptname }, r.ptname, el("span", { class: "sub" }, r.pttype)),
-      el("td", { class: "mono" }, r.date), el("td", {}, r.maininscl), el("td", {}, r.pdx || el("span", { class: "muted" }, "—")),
+      el("td", { class: "mono" }, toDmy(r.date)), el("td", {}, r.maininscl), el("td", {}, r.pdx || el("span", { class: "muted" }, "—")),
       el("td", { class: "num" }, baht.format(Number(r.money)), r.excluded_count ? el("span", { class: "excluded-note" }, `ไม่ส่ง ${r.excluded_count} รายการ`) : ""),
       el("td", { class: "problems" }, problemText(problems)));
   }));
@@ -99,7 +99,7 @@ async function openDrawer(r) {
   state.current = r.key; renderRows();
   $("drawer").hidden = false; $("drawer-backdrop").hidden = false;
   $("drawer-title").textContent = r.ptname || r.key;
-  $("drawer-sub").textContent = `${r.kind} ${r.key} · HN ${r.hn} · ${r.date}`;
+  $("drawer-sub").textContent = `${r.kind} ${r.key} · HN ${r.hn} · ${toDmy(r.date)}`;
   const body = $("drawer-body");
   body.replaceChildren(el("p", { class: "muted" }, "กำลังโหลด…"));
   try {
@@ -233,7 +233,7 @@ async function loadFdhHistory() {
   try {
     const rows = await api("/api/nhso18/fdh/history");
     $("fdh-history").replaceChildren(rows.length ? table(["เวลา", "ปลายทาง", "ประเภท", "จำนวน", "ผล", "ข้อความ", "ผู้ส่ง"], rows.map((r) => el("tr", {},
-      el("td", {}, r.created_at.replace("T", " ")), el("td", {}, r.zone.toUpperCase()), el("td", {}, r.mode === "prescreen" ? "PreScreen" : "ส่ง"),
+      el("td", {}, thaiDateTime(r.created_at)), el("td", {}, r.zone.toUpperCase()), el("td", {}, r.mode === "prescreen" ? "PreScreen" : "ส่ง"),
       el("td", {}, String(r.visit_count)), el("td", {}, el("span", { class: `badge ${r.ok ? "b-ok" : "b-error"}` }, r.ok ? "สำเร็จ" : "ไม่ผ่าน")),
       el("td", { class: "problems" }, r.message), el("td", {}, r.created_by || "-")))) : el("p", {}, "ยังไม่มีประวัติ"));
   } catch (err) { $("fdh-history").replaceChildren(el("p", {}, err.message)); }
@@ -298,7 +298,7 @@ async function loadEclaimHistory() {
   try {
     const rows = await api("/api/nhso18/eclaim/history");
     $("eclaim-history").replaceChildren(rows.length ? table(["เวลา", "สิทธิ", "นำเข้าซ้ำ", "จำนวน", "ผล", "ข้อความ", "ผู้ส่ง"], rows.map((r) => el("tr", {},
-      el("td", {}, r.created_at.replace("T", " ")), el("td", {}, r.maininscl || "ทุกสิทธิ"), el("td", {}, r.import_dup ? "ใช่" : "-"),
+      el("td", {}, thaiDateTime(r.created_at)), el("td", {}, r.maininscl || "ทุกสิทธิ"), el("td", {}, r.import_dup ? "ใช่" : "-"),
       el("td", {}, String(r.visit_count)), el("td", {}, el("span", { class: `badge ${r.ok ? "b-ok" : "b-error"}` }, r.ok ? "สำเร็จ" : "ไม่ผ่าน")),
       el("td", { class: "problems" }, r.message), el("td", {}, r.created_by || "-")))) : el("p", {}, "ยังไม่มีประวัติ"));
   } catch (err) { $("eclaim-history").replaceChildren(el("p", {}, err.message)); }
@@ -336,7 +336,7 @@ async function loadHistory() {
   try {
     const rows = await api("/api/nhso18/exports");
     $("history").replaceChildren(rows.length ? table(["เวลา", "จำนวน", "ไฟล์", "ผู้สร้าง"], rows.map((r) => el("tr", {},
-      el("td", {}, r.created_at.replace("T", " ")), el("td", {}, String(r.visit_count)),
+      el("td", {}, thaiDateTime(r.created_at)), el("td", {}, String(r.visit_count)),
       el("td", {}, el("a", { href: `/api/nhso18/exports/${r.id}/download` }, r.file)), el("td", {}, r.created_by || "-")))) : el("p", {}, "ยังไม่มีประวัติ"));
   } catch (err) { $("history").replaceChildren(el("p", {}, err.message)); }
 }

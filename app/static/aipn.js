@@ -56,7 +56,7 @@ function renderRows() {
       el("td", {}, r.status ? el("span", { class: "badge b-sent" }, r.status) : el("span", { class: "muted" }, "—")),
       el("td", { class: "mono" }, r.an), el("td", { class: "mono" }, r.hn),
       el("td", { class: "name-cell", title: r.ptname }, r.ptname, el("span", { class: "sub" }, r.pttype)),
-      el("td", { class: "mono" }, r.discharge_at), el("td", {}, r.pdx || el("span", { class: "muted" }, "—")), el("td", {}, r.pay_plan), el("td", {}, care),
+      el("td", { class: "mono" }, thaiDateTime(r.discharge_at)), el("td", {}, r.pdx || el("span", { class: "muted" }, "—")), el("td", {}, r.pay_plan), el("td", {}, care),
       el("td", { class: "num" }, baht.format(Number(r.send_amount)), r.excluded_count ? el("span", { class: "excluded-note" }, `ไม่ส่ง ${r.excluded_count} รายการ`) : ""),
       el("td", { class: "problems" }, problemText(problems)));
   }));
@@ -86,7 +86,7 @@ async function openDrawer(r) {
   state.current = r.an; renderRows();
   $("drawer").hidden = false; $("drawer-backdrop").hidden = false;
   $("drawer-title").textContent = r.ptname || `AN ${r.an}`;
-  $("drawer-sub").textContent = `AN ${r.an} · HN ${r.hn} · จำหน่าย ${r.discharge_at}`;
+  $("drawer-sub").textContent = `AN ${r.an} · HN ${r.hn} · จำหน่าย ${thaiDateTime(r.discharge_at)}`;
   const body = $("drawer-body");
   if (!body.children.length || body.dataset.an !== r.an) body.replaceChildren(el("p", { class: "muted" }, "กำลังโหลด…"));
   body.dataset.an = r.an;
@@ -94,7 +94,7 @@ async function openDrawer(r) {
     const data = await api("/api/aipn/detail", { an: r.an });
     if (state.current !== r.an) return;
 
-    const check = [info([["เลขบัตร", r.cid], ["สิทธิ", r.pttype], ["Admit", r.admit_at], ["จำหน่าย", r.discharge_at],
+    const check = [info([["เลขบัตร", r.cid], ["สิทธิ", r.pttype], ["Admit", thaiDateTime(r.admit_at)], ["จำหน่าย", thaiDateTime(r.discharge_at)],
       ["HospMain ที่จะส่ง", r.hmain || "(ว่าง)"], ["AuthCode", r.auth_code || "(ไม่มี)"], ["UPayPlan", r.pay_plan], ["CareAs", r.care_as]])];
     if (r.special || r.issues.length) {
       check.push(el("h3", {}, "ผลตรวจ"));
@@ -112,7 +112,7 @@ async function openDrawer(r) {
     const dx = [data.dx.length ? table(["ประเภท", "รหัส", "ชื่อโรค"], data.dx.map((d) => el("tr", {}, el("td", {}, d.type), el("td", { class: "mono" }, d.code), el("td", {}, d.name)))) : el("p", { class: "muted" }, "ไม่มีข้อมูลการวินิจฉัย")];
     const ops = [data.ops.length ? table(["รหัส", "ชื่อหัตถการ", "แพทย์", "เริ่ม", "สิ้นสุด"], data.ops.map((o) => {
       const f = o.line.split("|");
-      return el("tr", {}, el("td", { class: "mono" }, f[2]), el("td", {}, f[3]), el("td", {}, f[4]), el("td", { class: "mono" }, f[5].replace("T", " ")), el("td", { class: "mono" }, f[6].replace("T", " ")));
+      return el("tr", {}, el("td", { class: "mono" }, f[2]), el("td", {}, f[3]), el("td", {}, f[4]), el("td", { class: "mono" }, thaiDateTime(f[5])), el("td", { class: "mono" }, thaiDateTime(f[6])));
     })) : el("p", { class: "muted" }, "ไม่มีหัตถการ")];
 
     const amount = el("div", { class: "amount-bar" });
@@ -231,7 +231,7 @@ async function loadHistory() {
   try {
     const rows = await api("/api/aipn/exports");
     $("history").replaceChildren(rows.length ? table(["เวลา", "Session", "ประเภท", "จำนวน", "ยอดส่ง", "ไฟล์", "ผู้สร้าง"],
-      rows.map((r) => el("tr", {}, el("td", {}, r.created_at.replace("T", " ")), el("td", {}, r.session), el("td", {}, r.appeal || "ปกติ"),
+      rows.map((r) => el("tr", {}, el("td", {}, thaiDateTime(r.created_at)), el("td", {}, r.session), el("td", {}, r.appeal || "ปกติ"),
         el("td", {}, String(r.an_count)), el("td", {}, baht.format(Number(r.total))), el("td", {}, el("a", { href: `/api/aipn/exports/${r.id}/download` }, r.file)), el("td", {}, r.created_by || "-"))))
       : el("p", {}, "ยังไม่มีประวัติ"));
   } catch (err) { $("history").replaceChildren(el("p", {}, err.message)); }

@@ -139,7 +139,7 @@ function renderHistory(uploads) {
   $("history").replaceChildren(uploads.length ? el("div", { class: "table-wrap" }, el("table", {},
     el("thead", {}, el("tr", {}, ...["เวลา", "ไฟล์", "ชนิด", "ช่วงวันที่", "รายการ", "ยอดรวม", "ผู้นำเข้า"].map((h) => el("th", {}, h)))),
     el("tbody", {}, ...uploads.map((u) => el("tr", {},
-      el("td", {}, u.at.replace("T", " ")), el("td", {}, u.name), el("td", {}, u.kind === "payment" ? "รายงานการจ่าย" : "รายงานการส่งเบิก"),
+      el("td", {}, thaiDateTime(u.at)), el("td", {}, u.name), el("td", {}, u.kind === "payment" ? "รายงานการจ่าย" : "รายงานการส่งเบิก"),
       el("td", {}, `${toDmy(u.period_start)} – ${toDmy(u.period_end)}`), el("td", { class: "num" }, String(u.row_count)),
       el("td", { class: "num" }, money(u.total)), el("td", {}, u.created_by)))))) : el("p", { class: "hint" }, "ยังไม่มีการนำเข้า"));
 }

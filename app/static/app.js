@@ -8,6 +8,7 @@ const CATEGORIES = {
   error: ["Error", (v) => v.has_error, "error"],
   special: ["เคสพิเศษ", (v) => v.special, "special"],
   sent: ["ส่งแล้ว", (v) => v.already_sent, "sent"],
+  paid: ["ชดเชยแล้ว", (v) => Boolean(v.stm_no), "paid", (v) => v.stm_paid],
 };
 const LEVEL_CLASS = { error: "b-error", warn: "b-warn", warn_c: "b-c" };
 
@@ -50,7 +51,7 @@ function renderRows() {
       el("td", {}, statusCell(v)),
       el("td", { class: "mono" }, v.vn), el("td", { class: "mono" }, v.hn),
       el("td", { class: "name-cell", title: v.ptname }, v.ptname, el("span", { class: "sub" }, v.pttype)),
-      el("td", { class: "mono" }, v.visit_at), el("td", {}, v.pdx || el("span", { class: "muted" }, "—")),
+      el("td", { class: "mono" }, thaiDateTime(v.visit_at)), el("td", {}, v.pdx || el("span", { class: "muted" }, "—")),
       el("td", { class: "num" }, baht.format(Number(v.send_amount)), v.excluded_count ? el("span", { class: "excluded-note" }, `ไม่ส่ง ${v.excluded_count} รายการ`) : ""),
       el("td", { class: "num paid" }, v.stm_paid ? baht.format(Number(v.stm_paid)) : dash()),
       el("td", { class: "problems" }, problemText(problemsOf(v))),
@@ -91,7 +92,7 @@ async function openDrawer(v) {
   state.current = v.vn; renderRows();
   $("drawer").hidden = false; $("drawer-backdrop").hidden = false;
   $("drawer-title").textContent = v.ptname || `VN ${v.vn}`;
-  $("drawer-sub").textContent = `VN ${v.vn} · HN ${v.hn} · ${v.visit_at}`;
+  $("drawer-sub").textContent = `VN ${v.vn} · HN ${v.hn} · ${thaiDateTime(v.visit_at)}`;
   const body = $("drawer-body");
   body.replaceChildren(el("p", { class: "muted" }, "กำลังโหลด…"));
   try {
@@ -217,7 +218,7 @@ async function loadHistory() {
     const rows = await api("/api/exports");
     $("history").replaceChildren(rows.length ? el("table", {},
       el("thead", {}, el("tr", {}, ...["เวลา", "Session", "ประเภท", "จำนวน", "ยอดเบิก", "ไฟล์", "ผู้สร้าง"].map((t) => el("th", {}, t)))),
-      el("tbody", {}, ...rows.map((r) => el("tr", {}, el("td", {}, r.created_at.replace("T", " ")), el("td", {}, r.session), el("td", {}, r.tflag), el("td", {}, String(r.bill_count)),
+      el("tbody", {}, ...rows.map((r) => el("tr", {}, el("td", {}, thaiDateTime(r.created_at)), el("td", {}, r.session), el("td", {}, r.tflag), el("td", {}, String(r.bill_count)),
         el("td", {}, baht.format(Number(r.claim_total))), el("td", {}, el("a", { href: `/api/exports/${r.id}/download` }, r.file)), el("td", {}, r.created_by || "-"))))) : el("p", {}, "ยังไม่มีประวัติ"));
   } catch (err) { $("history").replaceChildren(el("p", {}, err.message)); }
 }
