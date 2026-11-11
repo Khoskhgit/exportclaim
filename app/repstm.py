@@ -7,6 +7,9 @@ REP comes as a ZIP of TIS-620 text files:
 STM comes as a ZIP of UTF-8 XML (plus .htm/.xsl copies for viewing):
   {hcode}_{acc}STMP_{period}.xml  header + one <TBill> per paid claim; <rid> is the REP number that accepted it
   {hcode}_{acc}SUMP_{period}.xml  the cover sheet: the same totals as STMP, so it is not stored separately
+CSMBS (ข้าราชการ, จาก สปสช. e-Claim) STM comes as an .xls (BIFF, needs xlrd):
+  STM_{hcode}_OP{yyyymm}_{nn}.xls  sheet "พึงรับ": a block per REP NO, one row per visit with SEQ NO (= VN) and
+                                   พึงรับทั้งหมด (the amount to be paid); it is stored as STM account "OFC".
 The patient's name and national ID in these files are not kept: VN and HN link back to HOSxP.
 """
 from __future__ import annotations
@@ -295,11 +298,78 @@ def parse_stm(data: bytes) -> Stm:
     return stm
 
 
+def _cell(sheet, row: int, col: int) -> str:
+    value = sheet.cell_value(row, col) if col < sheet.ncols else ""
+    if isinstance(value, float):
+        return str(int(value)) if value.is_integer() else repr(value)
+    return str(value or "").strip()
+
+
+def _ofc_datetime(value: str) -> str:
+    """'17/10 /2026 15:23:00' (Christian year) -> '2026-10-17T15:23:00'."""
+    match = re.match(r"(\d{1,2})\s*/\s*(\d{1,2})\s*/\s*(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?", value or "")
+    if not match:
+        return ""
+    d, m, y, hh, mm, ss = match.groups()
+    year = int(y) - 543 if int(y) > 2400 else int(y)
+    day = f"{year:04d}-{int(m):02d}-{int(d):02d}"
+    return f"{day}T{int(hh):02d}:{mm}:{ss or '00'}" if hh else day
+
+
+def parse_stm_ofc(data: bytes, name: str = "") -> Stm:
+    """The CSMBS (ข้าราชการ) OP statement .xls from NHSO e-Claim."""
+    try:
+        import xlrd
+    except ImportError:  # pragma: no cover - listed in requirements.txt
+        raise RepStmError("ต้องติดตั้ง xlrd ก่อน (pip install -r requirements.txt) จึงจะอ่าน STM ข้าราชการ (.xls) ได้") from None
+    try:
+        book = xlrd.open_workbook(file_contents=data)
+    except Exception as exc:
+        raise RepStmError(f"{name}: อ่านไฟล์ .xls ไม่ได้ ({exc})") from None
+    sheet = book.sheet_by_index(0)
+    head = {}
+    for row in range(min(sheet.nrows, 12)):
+        text = _cell(sheet, row, 0)
+        for label, key in (("เลขที่เอกสาร", "doc"), ("โรงพยาบาล", "hosp"), ("ออกรายงานวันที่", "issued")):
+            if text.startswith(label):
+                head[key] = text[len(label):].strip()
+    doc = head.get("doc", "").split()[0] if head.get("doc") else ""
+    found = re.match(r"(\d{5})_([A-Z]+?)(\d{6})_(\d+)$", doc)
+    if not found:
+        raise RepStmError(f"{name}: ไม่พบเลขที่เอกสาร STM ข้าราชการ (เช่น 10866_OP202610_02)")
+    hcode, _, period, _ = found.groups()
+    stm = Stm(stm_no=doc, hcode=hcode, account="OFC", period=period,
+              date_issue=_ofc_datetime(head.get("issued", ""))[:10])
+    total = 0.0
+    for row in range(sheet.nrows):
+        rep, seq, vn = _cell(sheet, row, 0), _cell(sheet, row, 1), _cell(sheet, row, 20)
+        if not (rep.isdigit() and seq.isdigit() and vn.isdigit()):
+            continue  # titles, the column headers repeated per REP, blank and note lines
+        amount = _money(_cell(sheet, row, 19))
+        an = _cell(sheet, row, 3)
+        stm.bills.append(StmBill(
+            seq=int(seq), station="", hmain="", hproc="", hcare=hcode, hn=_cell(sheet, row, 2), invno=vn, bf="",
+            pcode=_cell(sheet, row, 8), care="" if an in {"-", ""} else an, payplan="", bp="",
+            dttran=_ofc_datetime(_cell(sheet, row, 6)), copay="", cfh="", total=amount, extp="", rid=rep, cstat="",
+        ))
+        total += float(amount or 0)
+    if not stm.bills:
+        raise RepStmError(f"{name}: ไม่พบรายการในแผ่นงาน {sheet.name}")
+    days = sorted(b.dttran[:10] for b in stm.bills if b.dttran)
+    stm.date_start, stm.date_end = (days[0], days[-1]) if days else ("", "")
+    stm.count, stm.amount = len(stm.bills), f"{total:.2f}"
+    return stm
+
+
 # ----------------------------------------------------------------- files
 def _add(name: str, data: bytes, parsed: Parsed) -> None:
     base = name.replace("\\", "/").rsplit("/", 1)[-1]
     if base.lower().endswith(".zip"):
         _read_zip(base, data, parsed)
+        return
+    if base.lower().endswith(".xls"):
+        stm = parse_stm_ofc(data, base)
+        parsed.stms[stm.stm_no] = stm
         return
     match = NAME.match(base)
     if not match:
@@ -336,9 +406,9 @@ def _read_zip(name: str, data: bytes, parsed: Parsed) -> None:
 
 
 def parse_upload(name: str, data: bytes) -> Parsed:
-    """Read one uploaded file (a ZIP, a .BIL or an STMP .xml)."""
+    """Read one uploaded file (a ZIP, a .BIL, an STMP .xml or a CSMBS STM .xls)."""
     parsed = Parsed()
     _add(name, data, parsed)
     if not parsed.reps and not parsed.stms:
-        raise RepStmError(f"{name}: ไม่พบไฟล์ REP (SOCDBIL/SOCDDIS) หรือ STM (STMP) ที่อ่านได้")
+        raise RepStmError(f"{name}: ไม่พบไฟล์ REP (SOCDBIL/SOCDDIS), STM (STMP) หรือ STM ข้าราชการ (.xls) ที่อ่านได้")
     return parsed

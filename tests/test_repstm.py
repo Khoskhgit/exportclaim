@@ -163,3 +163,47 @@ def test_seq_restarts_for_each_station(tmp_path):
     with sqlite3.connect(path) as db:
         rows = db.execute("SELECT stm_no, station, seq FROM stm_bills ORDER BY stm_no, station").fetchall()
     assert rows == [("10866_SOGNSTMP_202610", "01", 1), ("10866_SOGNSTMP_202610", "09", 1), ("old", "01", 1)]
+
+
+def ofc_xls(rows):
+    """A CSMBS STM .xls laid out like the NHSO one: titles, a block per REP NO with headers repeated."""
+    xlwt = pytest.importorskip("xlwt")
+    book = xlwt.Workbook(encoding="utf-8")
+    sheet = book.add_sheet("พึงรับ")
+    lines = [["ออกรายงานวันที่ 08/11/2569 เวลา 14:57"], [], ["โรงพยาบาล 10866 รพ.คลองหาด"], [],
+             ["เลขที่เอกสาร 10866_OP202610_02"]]
+    for rep in dict.fromkeys(r[0] for r in rows):
+        lines += [[], [f"REP NO : {rep}"], [],
+                  ["REP", "ลำดับที่", "HN", "AN", "PID", "ชื่อ - สกุล", "วันเข้ารักษา", "วันจำหน่าย", "PROJCODE", "AdjRW",
+                   "เรียกเก็บ", "พรบ.", "พึงรับ"] + [""] * 6 + ["พึงรับทั้งหมด", "SEQ NO"]]
+        lines += [[float(rep), str(seq), hn, "-", PID, "ชื่อ", when, "", "", "0.0000", amount, 0.0] + [0.0] * 7
+                  + [amount, vn] for of, seq, hn, when, amount, vn in rows if of == rep]
+    lines += [[], ["", "หมายเหตุ", "PROJCODE : "]]
+    for r, line in enumerate(lines):
+        for c, value in enumerate(line):
+            sheet.write(r, c, value)
+    out = io.BytesIO()
+    book.save(out)
+    return out.getvalue()
+
+
+def test_ofc_stm_xls_is_read():
+    data = ofc_xls([("691000047", 1, "000004747", "17/10 /2026 15:23:00", 181.5, "691017152316"),
+                    ("691000047", 2, "000057092", "16/10 /2026 11:30:00", 187.0, "691016113002"),
+                    ("691000048", 3, "000010091", "10/10 /2026 23:50:49", 140.0, "691010235049")])
+    parsed = repstm.parse_upload("STM_10866_OP202610_02 - Copy (2).xls", data)
+    stm = parsed.stms["10866_OP202610_02"]
+    assert (stm.account, stm.period, stm.date_issue, stm.count, stm.amount) == ("OFC", "202610", "2026-11-08", 3, "508.50")
+    assert (stm.date_start, stm.date_end) == ("2026-10-10", "2026-10-17")
+    first = stm.bills[0]
+    assert (first.invno, first.hn, first.rid, first.total, first.dttran) == (
+        "691017152316", "000004747", "691000047", "181.50", "2026-10-17T15:23:00")
+    assert stm.bills[2].rid == "691000048" and PID not in str(stm)
+
+
+def test_ofc_stm_import_shows_in_vn_history(client):
+    data = ofc_xls([("691000048", 1, "000010091", "10/10 /2026 23:50:49", 140.0, "691010235049")])
+    response = client.post("/api/repstm/import?name=STM_10866_OP202610_02.xls", content=data)
+    assert response.status_code == 200, response.text
+    history = client.post("/api/repstm/vn", json={"vn": "691010235049"}).json()
+    assert history["stms"][0]["stm_no"] == "10866_OP202610_02" and history["stms"][0]["total"] == "140.00"
