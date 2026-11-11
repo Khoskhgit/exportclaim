@@ -81,7 +81,7 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
                 "date": f"{moment:%Y-%m-%d}" if moment else "", "pttype": f"{text(r.get('pttype'))}: {text(r.get('pttype_name'))}",
                 "maininscl": text(r.get("maininscl")), "pdx": text(r.get("pdx")), "claimcode": text(r.get("claimcode")),
                 "approve_required": bool(r.get("approve_required")), "claimcode_hosxp": text(r.get("claimcode_hosxp")),
-                "money": svc.money(r.get("money_hosxp")), "fdh_amount": svc.money(r.get("fdh_amount")) if r.get("fdh_amount") else "",
+                "money": svc.money(r.get("money_total")), "fdh_amount": svc.money(r.get("fdh_amount")) if r.get("fdh_amount") else "",
                 "errors": f["errors"], "warns": f["warns"], "status": st,
                 "excluded_count": sum(1 for s, _ in excluded if s == k),
                 "selectable": not f["errors"], "has_error": bool(f["errors"]), "has_warn": bool(f["warns"]),
@@ -121,7 +121,7 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
         items = q(f"""
         SELECT oo.icode, CONCAT_WS(' ',d.name,d.strength) name, inc.drg_chrgitem_id billmaud, MAX(drg.drg_chrgitem_name) billmaud_name,
           d.nhso_adp_code adp,
-          SUM(oo.qty) qty, SUM(oo.sum_price) amount,
+          SUM(oo.qty) qty, SUM(IFNULL(oo.qty,0)*IFNULL(oo.unitprice,0)) amount,
           MAX(EXISTS(SELECT 1 FROM opitemrece_noexport no WHERE no.seq=oo.{col} AND no.icode=oo.icode)) hosxp_noexport
         FROM opitemrece oo LEFT JOIN s_drugitems d ON d.icode=oo.icode LEFT JOIN income inc ON inc.income=oo.income
         LEFT JOIN drg_chrgitem drg ON drg.drg_chrgitem_id=inc.drg_chrgitem_id
