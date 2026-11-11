@@ -25,7 +25,7 @@ import io
 import re
 import zipfile
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 PAYMENT, REFUND, VOID = "PAYMENT", "REFUND", "VOID"
 MIN_FIELDS = 36
@@ -234,10 +234,13 @@ def _seconds(value) -> int | None:
     return int(h) * 3600 + int(m) * 60 + int(s or 0)
 
 
+LATE_NIGHT_UNTIL = 6 * 3600  # a swipe before 06:00 may pay for the previous evening's visit
+
+
 def assign(payments: list[dict], visits: list[dict], pttypes: tuple[str, ...]) -> dict[str, dict]:
     """Approve Code -> visit. A payment belongs to a visit of the same patient on its transaction date: under the
     approve right first, then the one whose cost equals the amount, then the nearest in time. A visit takes one
-    payment only.
+    payment only. A payment before 06:00 with no visit that day goes to a visit of the day before.
 
     visits: dicts with cid, vn, date (yyyy-mm-dd), time, income, pttype."""
     by_day: dict[tuple[str, str], list[dict]] = {}
@@ -247,10 +250,15 @@ def assign(payments: list[dict], visits: list[dict], pttypes: tuple[str, ...]) -
     used: set[str] = set()
     out: dict[str, dict] = {}
     for p in sorted(payments, key=lambda r: (r["txn_date"], r["txn_time"], r["appr_code"])):
+        at = _seconds(p["txn_time"])
         free = [v for v in by_day.get((p["cid"], p["txn_date"]), []) if str(v["vn"]) not in used]
+        if not free and at is not None and at < LATE_NIGHT_UNTIL:
+            # A card swiped just after midnight pays for the evening visit before it.
+            day_before = (date.fromisoformat(p["txn_date"]) - timedelta(days=1)).isoformat()
+            free = [v for v in by_day.get((p["cid"], day_before), []) if str(v["vn"]) not in used]
+            at += 24 * 3600
         if not free:
             continue
-        at = _seconds(p["txn_time"])
 
         def rank(v: dict):
             gap = _seconds(v.get("time"))

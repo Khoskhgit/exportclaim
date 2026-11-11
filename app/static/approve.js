@@ -1,5 +1,5 @@
 "use strict";
-const state = { rows: [], filter: "all", text: "", sort: { key: "txn_date", dir: "desc" } };
+const state = { rows: [], filter: "all", text: "", person: null, sort: { key: "txn_date", dir: "desc" } };
 const money = (v) => (v === "" || v === null || v === undefined ? "" : baht.format(Number(v)));
 const dash = () => el("span", { class: "muted" }, "—");
 const mismatch = (r) => r.state === "matched" && r.income !== "" && Math.abs(Number(r.income) - Number(r.amount)) >= 0.01;
@@ -38,7 +38,12 @@ function notes(r) {
 function visible() {
   const q = state.text.toLowerCase();
   const test = CATEGORIES[state.filter][1];
-  const list = state.rows.filter((r) => test(r) && (!q || `${r.vn} ${r.hn} ${r.ptname} ${r.appr_code} ${r.trans_ref}`.toLowerCase().includes(q)));
+  // A full CID is looked up on the server (the list holds it masked): keep that patient's codes and visits.
+  const person = state.person && state.person.cid === q.replace(/\D/g, "") ? state.person : null;
+  const match = (r) => person
+    ? person.codes.includes(r.appr_code) || (r.vn && person.vns.includes(r.vn))
+    : `${r.vn} ${r.hn} ${r.ptname} ${r.appr_code} ${r.trans_ref}`.toLowerCase().includes(q);
+  const list = state.rows.filter((r) => test(r) && (!q || match(r)));
   return sortRows(list, state.sort, ["amount", "income"]);
 }
 
@@ -132,7 +137,17 @@ async function connection() {
 
 $("search").addEventListener("submit", (e) => { e.preventDefault(); clearNotices(); load(); });
 $("show-all").onclick = () => { $("search").elements.start.value = ""; $("search").elements.end.value = ""; load(); };
-$("filter").addEventListener("input", (e) => { state.text = e.target.value; render(); });
+$("filter").addEventListener("input", async (e) => {
+  state.text = e.target.value;
+  const cid = state.text.replace(/\D/g, "");
+  if (/^\s*[\d-\s]{13,17}\s*$/.test(state.text) && cid.length === 13 && state.person?.cid !== cid) {
+    try {
+      const found = await api("/api/approve/find", { cid });
+      if (state.text.replace(/\D/g, "") === cid) state.person = { cid, ...found };
+    } catch (err) { state.person = null; }
+  }
+  render();
+});
 bindSort($("thead"), state.sort, render);
 setupPresets($("search"));
 setupDrop();

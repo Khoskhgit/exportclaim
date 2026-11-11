@@ -94,6 +94,15 @@ def test_payment_goes_to_the_right_visit():
     assert assign([row("x", B, "2026-11-09", "09:00", "1.00")], visits, ("21",)) == {}
 
 
+def test_payment_after_midnight_goes_to_the_evening_visit():
+    visits = [{"cid": B, "vn": "late", "date": "2026-10-10", "time": "23:50:49", "income": 140.0, "pttype": "21"}]
+    pay = row("364663559", B, "2026-10-11", "00:34:04", "140.00")
+    assert assign([pay], visits, ("21",))["364663559"]["vn"] == "late"
+    same_day = visits + [{"cid": B, "vn": "today", "date": "2026-10-11", "time": "00:20:00", "income": 140.0, "pttype": "21"}]
+    assert assign([pay], same_day, ("21",))["364663559"]["vn"] == "today"  # a visit that day still comes first
+    assert assign([row("x", B, "2026-10-11", "06:00:00", "140.00")], visits, ("21",)) == {}  # morning: not carried back
+
+
 class ApproveHosxp(FakeHosxp):
     def ofc_visits(self, start, end, cids=(), pttypes=()):
         return [
@@ -132,6 +141,10 @@ def test_import_and_list(client, tmp_path):
                 content=text_file(line(C, "20/10/2026", "09:00:00", "5.00", "Payment", "7", "7")))
     rows = {r["appr_code"] or r["vn"]: r for r in client.post("/api/approve/list", json={}).json()["rows"]}
     assert rows["691020090000"]["state"] == "missing" and rows["7"]["state"] == "no_visit"
+
+    found = client.post("/api/approve/find", json={"cid": A}).json()  # the filter box, given a full CID
+    assert "369484621" in found["codes"] and "691016082737" in found["vns"] and "369490258" not in found["codes"]
+    assert client.post("/api/approve/find", json={"cid": "123"}).status_code == 400
 
 
 def test_file_of_another_hospital_is_refused(client):

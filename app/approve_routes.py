@@ -7,7 +7,8 @@ from __future__ import annotations
 
 import hashlib
 import logging
-from datetime import date
+import re
+from datetime import date, timedelta
 from typing import Any, Iterable
 
 from fastapi import Body, FastAPI, HTTPException, Request
@@ -98,6 +99,20 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
         return {"name": name, "files": results, "skipped": skipped,
                 "again": f"เคยนำเข้าไฟล์นี้แล้วเมื่อ {before['at'].replace('T', ' ')}" if before else ""}
 
+    @app.post("/api/approve/find")
+    def find(body: dict = Body(...)):
+        """The Approve Codes and VNs of one patient, for searching the list by a full CID (the list shows it masked)."""
+        cid = re.sub(r"\D", "", text(body.get("cid")))
+        if len(cid) != 13:
+            raise HTTPException(400, "เลขบัตรต้องมี 13 หลัก")
+        rows = store.of_cids([cid])
+        vns: list[str] = []
+        try:
+            vns = [text(v["vn"]) for v in hosxp.ofc_visits("1900-01-01", "2999-12-31", cids={cid})]
+        except Exception:  # HOSxP down: the codes still find the bank rows
+            pass
+        return {"codes": sorted({r["appr_code"] for r in rows}), "vns": sorted(set(vns))}
+
     @app.post("/api/approve/list")
     def listing(body: dict = Body(...)):
         start, end = text(body.get("start")), text(body.get("end"))
@@ -116,7 +131,8 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
         db_error = ""
         if first and last:
             try:
-                visits = hosxp.ofc_visits(first, last, cids={r["cid"] for r in rows}, pttypes=settings.ofc_approve_pttypes)
+                before = (date.fromisoformat(first) - timedelta(days=1)).isoformat()  # past-midnight payments
+                visits = hosxp.ofc_visits(before, last, cids={r["cid"] for r in rows}, pttypes=settings.ofc_approve_pttypes)
             except Exception as exc:  # HOSxP down: still show what was imported
                 db_error = f"จับคู่กับ HOSxP ไม่ได้: {exc}"
         found, taken = approvals.match(history, visits)
@@ -154,7 +170,7 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
         used, covered = {v["vn"] for v in found.values()}, store.file_dates()
         for v in visits:
             if text(v.get("pttype")) not in settings.ofc_approve_pttypes or text(v["vn"]) in used \
-                    or str(v["vstdate"])[:10] not in covered:
+                    or str(v["vstdate"])[:10] not in covered or str(v["vstdate"])[:10] < first:
                 continue
             income = v.get("income")
             out.append({
