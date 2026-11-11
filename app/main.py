@@ -119,8 +119,8 @@ def create_app(settings: Settings | None = None, hosxp: Any = None, store: Store
     auth.register(app, settings, db, local, templates, **({"moph_fetch": moph_fetch} if moph_fetch else {}))
     aipn_routes.register(app, settings, aipn_db or AipnDb(db), local, templates)
     approvals = approve_routes.register(app, settings, db, local, templates)
-    nhso18_routes.register(app, settings, db, local, templates, approvals)
     results = repstm_routes.register(app, settings, local, templates)
+    nhso18_routes.register(app, settings, db, local, templates, approvals, results)
     dental_routes.register(app, settings, db, local, templates)
 
     def with_results(visits: list[dict]) -> list[dict]:

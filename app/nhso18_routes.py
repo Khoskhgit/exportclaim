@@ -35,7 +35,7 @@ def _mask(value: Any) -> str:
 
 
 def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templates: Jinja2Templates,
-             approvals: Any = None) -> None:
+             approvals: Any = None, results: Any = None) -> None:
     def q(sql: str) -> list[dict]:
         return hosxp._select(sql, [])
 
@@ -66,6 +66,7 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
         fdh_sent = local.fdh_sent(keys)
         eclaim_sent = local.eclaim_sent(keys)
         excluded = local.nhso18_excluded(keys)
+        imported = results.latest(keys) if results is not None else {}
         merge = nhso18.same_day_walkin(rows, svc.walkin_pttypes(q))
         firsts = set(merge.values())
         out = []
@@ -73,7 +74,7 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
             k = svc.key_of(r)
             f = found[k]
             label = "ส่ง FDH แล้ว" if k in fdh_sent else "ส่ง e-Claim แล้ว" if k in eclaim_sent else ""
-            st = svc.status(r, k in sent, label)
+            st = svc.status(r, k in sent, label, imported.get(k))
             moment = r.get("date")
             out.append({
                 "key": k, "kind": r["kind"], "vn": text(r.get("vn")), "an": text(r.get("an")), "hn": text(r.get("hn")),

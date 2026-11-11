@@ -143,3 +143,12 @@ def test_merge_walkin_files():
     assert out["IPD"] is data["IPD"]
     assert data["CHT"][0]["TOTAL"] == Decimal("100.00") and data["ODX"][1]["SEQ"] == "B"  # input not changed
     assert nhso18.merge_walkin(data, {}) is data
+
+
+def test_status_uses_imported_rep_and_stm():
+    from app import nhso18_service as svc
+    assert svc.status({}, False, "", {"rep_stat": "A", "rep_no": "691100023"}) == "REP ผ่าน (A)"
+    assert svc.status({}, False, "", {"rep_stat": "C"}) == "REP ไม่ผ่าน (C)"
+    assert svc.status({}, False, "", {"rep_stat": "A", "stm_no": "STM1"}) == "ชดเชยแล้ว"
+    assert svc.status({"rep_rep": "x"}, False, "", {"rep_stat": "C"}) == "ส่งแล้ว"
+    assert svc.status({}, True, "", None) == "ส่งออกแล้ว"

@@ -215,11 +215,17 @@ def checks(q: Select, rcm: str, rows: list[dict]) -> dict[str, dict]:
     return found
 
 
-def status(r: dict, local_sent: bool, sent_label: str = "") -> str:
-    if text(r.get("rep_invoice")):
+def status(r: dict, local_sent: bool, sent_label: str = "", result: dict | None = None) -> str:
+    """result: the newest REP/STM imported on the REP/STM page for this VN/AN (RepStmStore.latest)."""
+    result = result or {}
+    if text(r.get("rep_invoice")) or result.get("stm_no"):
         return "ชดเชยแล้ว"
     if text(r.get("rep_rep")):
         return "ส่งแล้ว"
+    if result.get("rep_stat") == "A":
+        return "REP ผ่าน (A)"
+    if result.get("rep_stat"):
+        return f"REP ไม่ผ่าน ({result['rep_stat']})"
     if text(r.get("fdh_status")):
         return text(r["fdh_status"])[:40]
     return sent_label or ("ส่งออกแล้ว" if local_sent else "")
