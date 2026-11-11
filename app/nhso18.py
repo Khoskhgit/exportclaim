@@ -22,6 +22,8 @@ ENCODING = "cp874"
 CRLF = "\r\n"
 MY_OFC = r"OFC|LGO|BKK|BMT|SRT|PVT"
 CHRONIC = r"DM:|HT:|CKD:|Asthma:|COPD:|IHD:|Cancer:|TB:|Chronic:"
+# An item's money is qty x unitprice, not HOSxP's sum_price (which may be rounded, or kept when qty was set to 0).
+AMOUNT = "(IFNULL(oo.qty,0)*IFNULL(oo.unitprice,0))"
 X_CODES = {"XXXXXX", "51999", "52999", "55999", "72999"}
 
 # Export4<file> tables from CreateTempFile: (column, kind, size). Kind: C char, D date, I int, N<places> decimal.
@@ -428,14 +430,14 @@ class Builder:
     def f_cht(self) -> list[dict]:
         rows = self.q(f"""
         SELECT o.vn seq, pt.cid, o.hn, NULL an, o.vstdate date, o.pttype,
-          SUM(oo.sum_price) total, SUM(IF(oo.paidst IN ('01','03'),oo.sum_price,0)) paid
+          SUM({AMOUNT}) total, SUM(IF(oo.paidst IN ('01','03'),{AMOUNT},0)) paid
         FROM {self.ex} ex JOIN ovst o ON o.vn=ex.vn
         LEFT JOIN patient pt ON pt.hn=o.hn
         LEFT JOIN opitemrece oo ON oo.vn=o.vn AND {self.noexport('oo', 'vn', True)}
         GROUP BY o.vn
         UNION ALL
         SELECT i.an seq, pt.cid, i.hn, i.an, i.dchdate date, i.pttype,
-          SUM(oo.sum_price) total, SUM(IF(oo.paidst IN ('01','03'),oo.sum_price,0)) paid
+          SUM({AMOUNT}) total, SUM(IF(oo.paidst IN ('01','03'),{AMOUNT},0)) paid
         FROM {self.ex} ex JOIN ipt i ON i.an=ex.vn
         LEFT JOIN patient pt ON pt.hn=i.hn
         LEFT JOIN opitemrece oo ON oo.an=i.an AND {self.noexport('oo', 'an', True)}
@@ -447,7 +449,7 @@ class Builder:
         rows = self.q(f"""
         SELECT seq, cid, hn, an, date, chrgitem, SUM(sum_price) amount FROM (
           SELECT o.vn seq, pt.cid, o.hn, NULL an, o.vstdate date,
-            IF(oo.paidst IN ('03'),chrgitem_code2,chrgitem_code1) chrgitem, oo.sum_price
+            IF(oo.paidst IN ('03'),chrgitem_code2,chrgitem_code1) chrgitem, {AMOUNT} sum_price
           FROM {self.ex} ex JOIN ovst o ON o.vn=ex.vn LEFT JOIN patient pt ON pt.hn=o.hn
           JOIN opitemrece oo ON oo.vn=o.vn
           LEFT JOIN income inc ON inc.income={home}
@@ -455,7 +457,7 @@ class Builder:
           WHERE {self.noexport('oo', 'vn', True)}
           UNION ALL
           SELECT i.an seq, pt.cid, i.hn, i.an, i.dchdate date,
-            IF(oo.paidst IN ('03'),chrgitem_code2,chrgitem_code1) chrgitem, oo.sum_price
+            IF(oo.paidst IN ('03'),chrgitem_code2,chrgitem_code1) chrgitem, {AMOUNT} sum_price
           FROM {self.ex} ex JOIN ipt i ON i.an=ex.vn LEFT JOIN patient pt ON pt.hn=i.hn
           JOIN opitemrece oo ON oo.an=i.an
           LEFT JOIN income inc ON inc.income={home}
@@ -501,12 +503,12 @@ class Builder:
 
     def f_adp(self) -> list[dict]:
         nurse, supply = self.code_lists()
-        item_cols = """
+        item_cols = f"""
           oo.rxdate dateopd, ex.maininscl, ex.projectcode, ex.demand, ex.pregno gravida, ex.ga ga_week, ex.lmp lmp, oo.paidst,
           inc.drg_chrgitem_id billmaud, IF(oo.paidst IN ('03'),chrgitem_code2,chrgitem_code1) chrgitem,
           oo.icode, CONCAT_WS(' ',d.name,d.strength) drugname, d.nhso_adp_type_id type, d.nhso_adp_code adp_code,
           fwf.fwf_item_code, adp.nhso_adp_code adp_master, adp.ucep, d.max_qty, d.stdprice,
-          oo.qty, oo.unitprice, oo.sum_price, ll.tmlt_code tmltcode"""
+          oo.qty, oo.unitprice, {AMOUNT} sum_price, ll.tmlt_code tmltcode"""
         joins = f"""
           JOIN s_drugitems d ON d.icode=oo.icode
           LEFT JOIN fwf_item fwf ON fwf.fwf_item_id=d.fwf_item_id
@@ -519,14 +521,14 @@ class Builder:
           IF(ex.projectcode='UCEP24' AND adp.ucep>0 AND caldatetime(oo.rxdate,oo.rxtime)<=DATE_ADD(caldatetime(o.vstdate,o.vsttime),INTERVAL 24 HOUR),'01',NULL) sp_item,
           NULLIF((SELECT ovst_functional_score FROM ovst_functional WHERE vn=o.vn ORDER BY ovst_functional_id DESC LIMIT 1),0) bi
         FROM {self.ex} ex LEFT JOIN ovst o ON o.vn=ex.vn JOIN opitemrece oo ON oo.vn=o.vn {joins}
-        WHERE (oo.sum_price<>0 OR d.nhso_adp_code IS NOT NULL) AND {self.noexport('oo', 'vn', False)}""")
+        WHERE ({AMOUNT}<>0 OR d.nhso_adp_code IS NOT NULL) AND {self.noexport('oo', 'vn', False)}""")
         ipd = self.q(f"""
         SELECT oo.an seq, oo.an, oo.hn, {item_cols},
           IF(ex.projectcode='UCEP24' AND adp.ucep>0 AND caldatetime(oo.rxdate,oo.rxtime)<=DATE_ADD(caldatetime(i.regdate,i.regtime),INTERVAL 24 HOUR),'01',NULL) sp_item,
           NULLIF(IFNULL((SELECT score FROM ipd_nurse_ass_adls_scale WHERE an=i.an ORDER BY ipd_nurse_ass_adls_scale_id DESC LIMIT 1),
             (SELECT ovst_functional_score FROM ovst_functional WHERE vn=i.vn ORDER BY ovst_functional_id DESC LIMIT 1)),0) bi
         FROM {self.ex} ex LEFT JOIN ipt i ON i.an=ex.vn JOIN opitemrece oo ON oo.an=i.an {joins}
-        WHERE (oo.sum_price<>0 OR d.nhso_adp_code IS NOT NULL) AND {self.noexport('oo', 'an', False)}""")
+        WHERE ({AMOUNT}<>0 OR d.nhso_adp_code IS NOT NULL) AND {self.noexport('oo', 'an', False)}""")
 
         income = []
         for r in opd + ipd:
@@ -730,7 +732,7 @@ class Builder:
                              "AND table_name='opitemrece' AND column_name='pa_no'"))
         drug_ned = lit_list(self.c.income_drug_ned) if self.c.income_drug_ned else "'XXX'"
         cols = f"""
-          oo.rxdate, oo.icode did, CONCAT_WS(' ',d.name,d.strength) didname, d.units unit, oo.qty, oo.sum_price,
+          oo.rxdate, oo.icode did, CONCAT_WS(' ',d.name,d.strength) didname, d.units unit, oo.qty, {AMOUNT} sum_price,
           oo.unitprice drugpric, oo.paidst,
           CASE WHEN ex.maininscl REGEXP 'NRD|NRH|FWF' AND fwf.fwf_item_code IS NOT NULL THEN fwf.fwf_item_code ELSE d.did END didstd,
           CASE WHEN oh.opitemrece_home_type_id IS NOT NULL THEN oh.opitemrece_home_type_id
@@ -811,11 +813,11 @@ class Builder:
                WHEN IFNULL(d.nhso_adp_code,'')<>'' THEN d.nhso_adp_code
                ELSE LPAD(inc.drg_chrgitem_id,5,'X') END"""
         part = f"""
-          SELECT oo.hn, {code} code, CONCAT_WS(' ',d.name,d.strength) name, oo.qty, oo.sum_price price, {{an}} an,
+          SELECT oo.hn, {code} code, CONCAT_WS(' ',d.name,d.strength) name, oo.qty, {AMOUNT} price, {{an}} an,
             {{seq}} seq, ex.maininscl inscl, oo.hos_guid
           FROM {self.ex} ex JOIN opitemrece oo ON oo.{{key}}=ex.vn JOIN s_drugitems d ON d.icode=oo.icode
           LEFT JOIN income inc ON inc.income=oo.income
-          WHERE oo.sum_price<>0 AND {self.noexport('oo', 'vn', False)}"""
+          WHERE {AMOUNT}<>0 AND {self.noexport('oo', 'vn', False)}"""
         raw = self.q(part.format(an="NULL", seq="oo.vn", key="vn") + " ORDER BY oo.vn, oo.hos_guid")
         raw += self.q(part.format(an="oo.an", seq="oo.an", key="an") + " ORDER BY oo.an, oo.hos_guid")
         groups: dict[tuple, dict] = {}

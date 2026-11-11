@@ -78,7 +78,7 @@ def search(q: Select, rcm: str, start: date | None, end: date | None, rights: Se
         SELECT o.vn, NULL an, o.hn, pt.cid, CONCAT(IFNULL(pt.pname,''),IFNULL(pt.fname,''),' ',IFNULL(pt.lname,'')) ptname,
           o.vstdate date, o.vsttime time, o.pttype, ptt.name pttype_name, seekhipdatas(o.pttype,0) maininscl,
           pttypeeclaim(o.pttype) pttype_eclaim, diagnosis('opd',o.vn,1) pdx, v.income money_hosxp,
-          (SELECT SUM(sum_price) FROM opitemrece WHERE vn=o.vn) money_total,
+          (SELECT SUM(IFNULL(qty,0)*IFNULL(unitprice,0)) FROM opitemrece WHERE vn=o.vn) money_total,
           (SELECT vp.claim_code FROM visit_pttype vp WHERE vp.vn=o.vn AND vp.pttype=o.pttype LIMIT 1) claimcode,
           {rep('vn', 'o.vn')} rep_rep, {paid('vn', 'o.vn')} rep_invoice,
           re.fdh_claim_status_message fdh_status, re.fdh_act_amt fdh_amount,
@@ -101,7 +101,7 @@ def search(q: Select, rcm: str, start: date | None, end: date | None, rights: Se
         SELECT NULL vn, i.an, i.hn, pt.cid, CONCAT(IFNULL(pt.pname,''),IFNULL(pt.fname,''),' ',IFNULL(pt.lname,'')) ptname,
           i.dchdate date, i.dchtime time, i.pttype, ptt.name pttype_name, seekhipdatas(i.pttype,0) maininscl,
           pttypeeclaim(i.pttype) pttype_eclaim, diagnosis('ipd',i.an,1) pdx, a.income money_hosxp,
-          (SELECT SUM(sum_price) FROM opitemrece WHERE an=i.an) money_total,
+          (SELECT SUM(IFNULL(qty,0)*IFNULL(unitprice,0)) FROM opitemrece WHERE an=i.an) money_total,
           (SELECT ip.claim_code FROM ipt_pttype ip WHERE ip.an=i.an AND ip.pttype=i.pttype LIMIT 1) claimcode,
           {rep('an', 'i.an')} rep_rep, {paid('an', 'i.an')} rep_invoice,
           re.fdh_claim_status_message fdh_status, re.fdh_act_amt fdh_amount, NULL discharge, NULL has_an
@@ -136,7 +136,7 @@ def checks(q: Select, rcm: str, rows: list[dict]) -> dict[str, dict]:
     has_catalog = bool(q(f"SELECT 1 FROM information_schema.tables WHERE table_schema='{rcm.strip('`')}' AND table_name='eclaim_drugcatalog'"))
     items_sql = lambda key, where: (f"SELECT oo.{key} k, CONCAT_WS(' ',oo.icode,d.name) item FROM opitemrece oo "
                                     f"JOIN drugitems d ON d.icode=oo.icode LEFT JOIN {rcm}.eclaim_drugcatalog dd ON dd.hospdrugcode=oo.icode "
-                                    f"WHERE oo.{key} IN ({{ids}}) AND oo.sum_price<>0 AND {where}")
+                                    f"WHERE oo.{key} IN ({{ids}}) AND oo.qty*oo.unitprice<>0 AND {where}")
     drug_missing = flag(items_sql("vn", "IFNULL(dd.hospdrugcode,'')=''"), items_sql("an", "IFNULL(dd.hospdrugcode,'')=''")) if has_catalog else {}
     tmt_wrong = flag(items_sql("vn", "IFNULL(d.tpu_code_list,'')<>IFNULL(dd.tmtid,'')"),
                      items_sql("an", "IFNULL(d.tpu_code_list,'')<>IFNULL(dd.tmtid,'')")) if has_catalog else {}
@@ -149,7 +149,7 @@ def checks(q: Select, rcm: str, rows: list[dict]) -> dict[str, dict]:
                            f"LEFT JOIN income inc ON inc.income=oo.income LEFT JOIN s_drugitems d ON d.icode=oo.icode "
                            f"WHERE oo.{key} IN ({{ids}}) AND inc.income IS NULL")
     inc_missing = flag(inc_sql("vn"), inc_sql("an"))
-    # The cost check adds up sum_price; an item with qty 0 still carries money and goes out as QTY 0 in ADP.
+    # Items are sent as qty x unitprice: one with qty 0 is sent as 0 although HOSxP charged its sum_price.
     qty_sql = lambda key: (f"SELECT oo.{key} k, CONCAT_WS(' ',oo.icode,d.name) item FROM opitemrece oo "
                            f"LEFT JOIN s_drugitems d ON d.icode=oo.icode "
                            f"WHERE oo.{key} IN ({{ids}}) AND IFNULL(oo.qty,0)=0 AND oo.sum_price<>0")
@@ -209,7 +209,7 @@ def checks(q: Select, rcm: str, rows: list[dict]) -> dict[str, dict]:
         if round(num(r.get("money_hosxp")), 2) != round(num(r.get("money_total")), 2):
             add(w, "MONEY_MISMATCH", "ยอดค่าใช้จ่ายไม่ตรงกับรายการ")
         if k in qty_zero:
-            add(w, "QTY_ZERO", "รายการจำนวน 0 แต่มียอดเงิน (แก้จำนวนใน HOSxP)", qty_zero[k])
+            add(w, "QTY_ZERO", "รายการจำนวน 0 ส่งเบิกเป็น 0 บาท แต่ HOSxP คิดเงิน (แก้จำนวนใน HOSxP)", qty_zero[k])
         if k in drug_missing:
             add(w, "DRUG_NOT_IN_CATALOG", "ไม่พบรหัสยาใน Drug Catalog e-Claim", drug_missing[k])
     return found
