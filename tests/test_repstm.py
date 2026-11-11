@@ -207,3 +207,45 @@ def test_ofc_stm_import_shows_in_vn_history(client):
     assert response.status_code == 200, response.text
     history = client.post("/api/repstm/vn", json={"vn": "691010235049"}).json()
     assert history["stms"][0]["stm_no"] == "10866_OP202610_02" and history["stms"][0]["total"] == "140.00"
+
+
+def ofc_rep_xls(rows):
+    """A CSMBS e-Claim REP .xls: a Detail sheet with titles, two header lines and one row per visit."""
+    xlwt = pytest.importorskip("xlwt")
+    book = xlwt.Workbook(encoding="utf-8")
+    sheet = book.add_sheet("Detail")
+    sheet.write(0, 0, "ออกรายงานวันที่ 11/11/2569 เวลา 09:48")
+    sheet.write(1, 15, "เลขที่เอกสาร eclaim_10866_OPCS_25691010_111902014")
+    sheet.write(3, 15, "โรงพยาบาล 10866 รพ.คลองหาด")
+    head = {0: "REP", 1: "ลำดับที่", 2: "TRAN_ID", 3: "HN", 5: "PID", 8: "วันเข้ารักษา", 10: "ชดเชยสุทธิ",
+            12: "Error Code", 29: "เรียกเก็บ", 56: "SEQ NO"}
+    for col, label in head.items():
+        sheet.write(5, col, label)
+    sheet.write(6, 10, "ค่ารักษา")
+    for r, (rep, line, when, paid, code, claimed, vn) in enumerate(rows, start=7):
+        for col, value in {0: rep, 1: float(line), 2: "829091203", 3: "000098590", 5: PID, 8: when, 10: paid,
+                           12: code, 29: claimed, 56: vn}.items():
+            sheet.write(r, col, value)
+    book.add_sheet("Summary")
+    out = io.BytesIO()
+    book.save(out)
+    return out.getvalue()
+
+
+def test_ofc_rep_xls_is_read_and_listed(client):
+    data = ofc_rep_xls([("691000025", 1, "08/10/2026 12:02:00", 65.0, "-", 65.0, "691008120216"),
+                        ("691000025", 14, "07/10/2026 07:55:00", 0.0, "565", 7057.75, "691007075513")])
+    rep = repstm.parse_upload("eclaim_10866_OPCS_25691010_111902014.xls", data).reps["691000025"]
+    assert (rep.account, rep.hcode, rep.issued_at, rep.sent, rep.passed, rep.failed) == ("OFC", "10866", "2026-11-11T09:48", 2, 1, 1)
+    assert rep.session == "eclaim_10866_OPCS_25691010_111902014" and PID not in str(rep)
+    failed = rep.bills[1]
+    assert (failed.stat, failed.codes, failed.invno, failed.claimamt, failed.dttran) == (
+        "C", "565", "691007075513", "7057.75", "2026-10-07T07:55")
+    assert rep.bills[0].stat == "A" and rep.bills[0].codes == ""
+
+    response = client.post("/api/repstm/import?name=eclaim_10866_OPCS_25691010_111902014.xls", content=data)
+    assert response.status_code == 200, response.text
+    listed = client.get("/api/repstm/list").json()["reps"]
+    assert listed[0]["rep_no"] == "691000025" and listed[0]["failed"] == 1
+    history = client.post("/api/repstm/vn", json={"vn": "691007075513"}).json()
+    assert history["status_stat"] == "C" and history["reps"][0]["codes"] == "565"

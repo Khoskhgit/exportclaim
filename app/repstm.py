@@ -7,7 +7,8 @@ REP comes as a ZIP of TIS-620 text files:
 STM comes as a ZIP of UTF-8 XML (plus .htm/.xsl copies for viewing):
   {hcode}_{acc}STMP_{period}.xml  header + one <TBill> per paid claim; <rid> is the REP number that accepted it
   {hcode}_{acc}SUMP_{period}.xml  the cover sheet: the same totals as STMP, so it is not stored separately
-CSMBS (ข้าราชการ, จาก สปสช. e-Claim) STM comes as an .xls (BIFF, needs xlrd):
+CSMBS (ข้าราชการ, จาก สปสช. e-Claim) REP and STM come as .xls (BIFF, needs xlrd), stored with account "OFC":
+  eclaim_{hcode}_OPCS_{date}_{no}.xls  sheet "Detail": one row per visit with REP, SEQ NO (= VN) and Error Code
   STM_{hcode}_OP{yyyymm}_{nn}.xls  sheet "พึงรับ": a block per REP NO, one row per visit with SEQ NO (= VN) and
                                    พึงรับทั้งหมด (the amount to be paid); it is stored as STM account "OFC".
 The patient's name and national ID in these files are not kept: VN and HN link back to HOSxP.
@@ -316,16 +317,68 @@ def _ofc_datetime(value: str) -> str:
     return f"{day}T{int(hh):02d}:{mm}:{ss or '00'}" if hh else day
 
 
-def parse_stm_ofc(data: bytes, name: str = "") -> Stm:
-    """The CSMBS (ข้าราชการ) OP statement .xls from NHSO e-Claim."""
+def _open_xls(data: bytes, name: str):
     try:
         import xlrd
     except ImportError:  # pragma: no cover - listed in requirements.txt
-        raise RepStmError("ต้องติดตั้ง xlrd ก่อน (pip install -r requirements.txt) จึงจะอ่าน STM ข้าราชการ (.xls) ได้") from None
+        raise RepStmError("ต้องติดตั้ง xlrd ก่อน (pip install -r requirements.txt) จึงจะอ่านไฟล์ e-Claim (.xls) ได้") from None
     try:
-        book = xlrd.open_workbook(file_contents=data)
+        return xlrd.open_workbook(file_contents=data)
     except Exception as exc:
         raise RepStmError(f"{name}: อ่านไฟล์ .xls ไม่ได้ ({exc})") from None
+
+
+def _labelled(sheet, label: str, rows: int = 8) -> str:
+    """The text after a label such as 'เลขที่เอกสาร' anywhere in the sheet's title rows."""
+    for row in range(min(sheet.nrows, rows)):
+        for col in range(sheet.ncols):
+            text = _cell(sheet, row, col)
+            if text.startswith(label):
+                return text[len(label):].strip()
+    return ""
+
+
+def parse_rep_ofc(data: bytes, name: str = "", book=None) -> list[Rep]:
+    """The CSMBS (ข้าราชการ) e-Claim REP .xls (eclaim_{hcode}_OPCS_....xls), sheet "Detail": one row per visit with
+    the REP number, TRAN_ID, SEQ NO (the VN), the net payout and an Error Code ('-' when it passed)."""
+    book = book or _open_xls(data, name)
+    sheet = book.sheet_by_name("Detail")
+    head = next((r for r in range(min(sheet.nrows, 12)) if _cell(sheet, r, 0) == "REP"), None)
+    if head is None:
+        raise RepStmError(f"{name}: ไม่พบหัวตาราง REP ในแผ่นงาน Detail")
+    cols = {_cell(sheet, head, c): c for c in range(sheet.ncols) if _cell(sheet, head, c)}
+    need = ("REP", "ลำดับที่", "TRAN_ID", "วันเข้ารักษา", "ชดเชยสุทธิ", "Error Code", "เรียกเก็บ", "SEQ NO")
+    if any(label not in cols for label in need):
+        raise RepStmError(f"{name}: คอลัมน์ในแผ่นงาน Detail ไม่ครบ ({', '.join(l for l in need if l not in cols)})")
+    session = _labelled(sheet, "เลขที่เอกสาร").split()[0] if _labelled(sheet, "เลขที่เอกสาร") else ""
+    hcode = (_labelled(sheet, "โรงพยาบาล").split() or [""])[0]
+    issued = be_datetime(_labelled(sheet, "ออกรายงานวันที่").replace("เวลา", ""))
+    reps: dict[str, Rep] = {}
+    for row in range(head + 1, sheet.nrows):
+        rep_no, line, vn = _cell(sheet, row, cols["REP"]), _cell(sheet, row, cols["ลำดับที่"]), _cell(sheet, row, cols["SEQ NO"])
+        if not (rep_no.isdigit() and line.isdigit() and vn.isdigit()):
+            continue  # the second header line, blank and note lines
+        rep = reps.setdefault(rep_no, Rep(rep_no=rep_no, hcode=hcode, account="OFC", session=session,
+                                          issued_at=issued, has_bil=True))
+        codes = _codes(_cell(sheet, row, cols["Error Code"]).replace("-", ""))
+        claimed = _money(_cell(sheet, row, cols["เรียกเก็บ"]))
+        rep.bills.append(RepBill(
+            line=int(line), stat="C" if codes else "A", station="", hcode=hcode, hmain="",
+            authcode=_cell(sheet, row, cols["TRAN_ID"]), dttran=_ofc_datetime(_cell(sheet, row, cols["วันเข้ารักษา"]))[:16],
+            invno=vn, bp="", amount=claimed, claimamt=claimed, codes=codes,
+        ))
+    if not reps:
+        raise RepStmError(f"{name}: ไม่พบรายการในแผ่นงาน Detail")
+    for rep in reps.values():
+        rep.sent = len(rep.bills)
+        rep.passed = sum(b.stat == "A" for b in rep.bills)
+        rep.failed = rep.sent - rep.passed
+    return list(reps.values())
+
+
+def parse_stm_ofc(data: bytes, name: str = "", book=None) -> Stm:
+    """The CSMBS (ข้าราชการ) OP statement .xls from NHSO e-Claim."""
+    book = book or _open_xls(data, name)
     sheet = book.sheet_by_index(0)
     head = {}
     for row in range(min(sheet.nrows, 12)):
@@ -368,8 +421,12 @@ def _add(name: str, data: bytes, parsed: Parsed) -> None:
         _read_zip(base, data, parsed)
         return
     if base.lower().endswith(".xls"):
-        stm = parse_stm_ofc(data, base)
-        parsed.stms[stm.stm_no] = stm
+        book = _open_xls(data, base)
+        if "Detail" in book.sheet_names():  # e-Claim REP; the STM's first sheet is "พึงรับ"
+            parsed.reps.update((rep.rep_no, rep) for rep in parse_rep_ofc(data, base, book))
+        else:
+            stm = parse_stm_ofc(data, base, book)
+            parsed.stms[stm.stm_no] = stm
         return
     match = NAME.match(base)
     if not match:
@@ -410,5 +467,5 @@ def parse_upload(name: str, data: bytes) -> Parsed:
     parsed = Parsed()
     _add(name, data, parsed)
     if not parsed.reps and not parsed.stms:
-        raise RepStmError(f"{name}: ไม่พบไฟล์ REP (SOCDBIL/SOCDDIS), STM (STMP) หรือ STM ข้าราชการ (.xls) ที่อ่านได้")
+        raise RepStmError(f"{name}: ไม่พบไฟล์ REP (SOCDBIL/SOCDDIS), STM (STMP) หรือ REP/STM ข้าราชการ (.xls) ที่อ่านได้")
     return parsed

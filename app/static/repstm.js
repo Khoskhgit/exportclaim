@@ -80,7 +80,7 @@ function renderLists() {
     el("td", { class: "num" }, String(r.sent || r.lines)), el("td", { class: "num" }, String(r.passed)),
     el("td", { class: "num" }, r.failed ? el("span", { class: "badge b-error" }, String(r.failed)) : "0"),
     el("td", { class: "num" }, money(r.passed_amount)), el("td", { class: "num" }, money(r.failed_amount)),
-    el("td", {}, [r.has_bil ? "BIL" : "", r.has_dis ? "DIS" : ""].filter(Boolean).join(" + "))));
+    el("td", {}, r.account === "OFC" ? "e-Claim ข้าราชการ" : [r.has_bil ? "BIL" : "", r.has_dis ? "DIS" : ""].filter(Boolean).join(" + "))));
   const stmRows = state.stms.map((s) => el("tr", { onclick: () => openStm(s.stm_no) },
     el("td", { class: "mono" }, s.stm_no), el("td", {}, s.account), el("td", { class: "mono" }, s.period),
     el("td", {}, `${toDmy(s.date_start)} – ${toDmy(s.date_end)}`), el("td", {}, toDmy(s.date_issue)), el("td", {}, toDmy(s.date_due)),

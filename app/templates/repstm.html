@@ -9,13 +9,13 @@
 <body class="no-footer">
 {% set active = "repstm" %}{% include "_top.html" %}
 <main>
-  <div class="page-head"><h2>REP / STM</h2><p>นำเข้าผลตอบรับ (REP) และใบชดเชย (STM) ของประกันสังคม และ STM ข้าราชการ (.xls) · ใช้แสดงสถานะในหน้า SSOP</p></div>
+  <div class="page-head"><h2>REP / STM</h2><p>นำเข้าผลตอบรับ (REP) และใบชดเชย (STM) ของประกันสังคม และ REP/STM ข้าราชการ e-Claim (.xls) · ใช้แสดงสถานะในหน้า SSOP</p></div>
 
   <section class="panel import-panel">
     <label id="drop" class="drop" for="files">
       <span class="drop-icon" aria-hidden="true">⇪</span>
       <strong>ลากไฟล์ ZIP มาวาง หรือคลิกเพื่อเลือกไฟล์</strong>
-      <span class="sub">REP: 10866_SOCDBIL_xxxxxxx.ZIP · STM: 10866_SOGNSTM_yyyymm.ZIP · STM ข้าราชการ: STM_10866_OPyyyymm_nn.xls · เลือกได้หลายไฟล์พร้อมกัน</span>
+      <span class="sub">REP: 10866_SOCDBIL_xxxxxxx.ZIP · STM: 10866_SOGNSTM_yyyymm.ZIP · ข้าราชการ: eclaim_10866_OPCS_….xls, STM_10866_OPyyyymm_nn.xls · เลือกได้หลายไฟล์พร้อมกัน</span>
       <input id="files" type="file" multiple accept=".zip,.ZIP,.bil,.BIL,.xml,.XML,.xls,.XLS" class="sr-only">
     </label>
     <ul id="import-log" class="import-log"></ul>
