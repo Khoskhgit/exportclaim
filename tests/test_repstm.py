@@ -217,14 +217,14 @@ def ofc_rep_xls(rows):
     sheet.write(0, 0, "ออกรายงานวันที่ 11/11/2569 เวลา 09:48")
     sheet.write(1, 15, "เลขที่เอกสาร eclaim_10866_OPCS_25691010_111902014")
     sheet.write(3, 15, "โรงพยาบาล 10866 รพ.คลองหาด")
-    head = {0: "REP", 1: "ลำดับที่", 2: "TRAN_ID", 3: "HN", 5: "PID", 8: "วันเข้ารักษา", 10: "ชดเชยสุทธิ",
+    head = {0: "REP", 1: "ลำดับที่", 2: "TRAN_ID", 3: "HN", 4: "AN", 5: "PID", 8: "วันเข้ารักษา", 10: "ชดเชยสุทธิ",
             12: "Error Code", 29: "เรียกเก็บ", 56: "SEQ NO"}
     for col, label in head.items():
         sheet.write(5, col, label)
     sheet.write(6, 10, "ค่ารักษา")
-    for r, (rep, line, when, paid, code, claimed, vn) in enumerate(rows, start=7):
-        for col, value in {0: rep, 1: float(line), 2: "829091203", 3: "000098590", 5: PID, 8: when, 10: paid,
-                           12: code, 29: claimed, 56: vn}.items():
+    for r, (rep, line, when, paid, code, claimed, vn, *an) in enumerate(rows, start=7):
+        for col, value in {0: rep, 1: float(line), 2: "829091203", 3: "000098590", 4: an[0] if an else "", 5: PID,
+                           8: when, 10: paid, 12: code, 29: claimed, 56: vn}.items():
             sheet.write(r, col, value)
     book.add_sheet("Summary")
     out = io.BytesIO()
@@ -249,3 +249,9 @@ def test_ofc_rep_xls_is_read_and_listed(client):
     assert listed[0]["rep_no"] == "691000025" and listed[0]["failed"] == 1
     history = client.post("/api/repstm/vn", json={"vn": "691007075513"}).json()
     assert history["status_stat"] == "C" and history["reps"][0]["codes"] == "565"
+
+
+def test_ofc_ipcs_rep_uses_the_an():
+    data = ofc_rep_xls([("690900008", 1, "14/07/2026 14:29:00", 3980.47, "-", 5118.0, "", "690001401")])
+    rep = repstm.parse_upload("eclaim_10866_IPCS_25690904_084523325.xls", data).reps["690900008"]
+    assert [(b.invno, b.stat, b.claimamt) for b in rep.bills] == [("690001401", "A", "5118.00")]

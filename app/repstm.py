@@ -8,7 +8,8 @@ STM comes as a ZIP of UTF-8 XML (plus .htm/.xsl copies for viewing):
   {hcode}_{acc}STMP_{period}.xml  header + one <TBill> per paid claim; <rid> is the REP number that accepted it
   {hcode}_{acc}SUMP_{period}.xml  the cover sheet: the same totals as STMP, so it is not stored separately
 CSMBS (ข้าราชการ, จาก สปสช. e-Claim) REP and STM come as .xls (BIFF, needs xlrd), stored with account "OFC":
-  eclaim_{hcode}_OPCS_{date}_{no}.xls  sheet "Detail": one row per visit with REP, SEQ NO (= VN) and Error Code
+  eclaim_{hcode}_{OPCS|IPCS}_{date}_{no}.xls  sheet "Detail": one row per visit with REP, SEQ NO (= VN; AN for
+                                       IPCS) and Error Code
   STM_{hcode}_OP{yyyymm}_{nn}.xls  sheet "พึงรับ": a block per REP NO, one row per visit with SEQ NO (= VN) and
                                    พึงรับทั้งหมด (the amount to be paid); it is stored as STM account "OFC".
 The patient's name and national ID in these files are not kept: VN and HN link back to HOSxP.
@@ -340,7 +341,8 @@ def _labelled(sheet, label: str, rows: int = 8) -> str:
 
 def parse_rep_ofc(data: bytes, name: str = "", book=None) -> list[Rep]:
     """The CSMBS (ข้าราชการ) e-Claim REP .xls (eclaim_{hcode}_OPCS_....xls), sheet "Detail": one row per visit with
-    the REP number, TRAN_ID, SEQ NO (the VN), the net payout and an Error Code ('-' when it passed)."""
+    the REP number, TRAN_ID, SEQ NO (the VN; inpatient IPCS rows have only the AN, which is used instead), the net
+    payout and an Error Code ('-' when it passed)."""
     book = book or _open_xls(data, name)
     sheet = book.sheet_by_name("Detail")
     head = next((r for r in range(min(sheet.nrows, 12)) if _cell(sheet, r, 0) == "REP"), None)
@@ -356,6 +358,8 @@ def parse_rep_ofc(data: bytes, name: str = "", book=None) -> list[Rep]:
     reps: dict[str, Rep] = {}
     for row in range(head + 1, sheet.nrows):
         rep_no, line, vn = _cell(sheet, row, cols["REP"]), _cell(sheet, row, cols["ลำดับที่"]), _cell(sheet, row, cols["SEQ NO"])
+        if not vn and "AN" in cols:
+            vn = _cell(sheet, row, cols["AN"])  # inpatient (IPCS) rows carry the AN instead of SEQ NO
         if not (rep_no.isdigit() and line.isdigit() and vn.isdigit()):
             continue  # the second header line, blank and note lines
         rep = reps.setdefault(rep_no, Rep(rep_no=rep_no, hcode=hcode, account="OFC", session=session,
