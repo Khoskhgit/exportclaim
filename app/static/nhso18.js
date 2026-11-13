@@ -55,11 +55,11 @@ function walkinTag(r) {
   if (r.walkin_group) return el("span", { class: "walkin-tag first", title: "Walk-in บัตรทองวันเดียวกัน visit อื่นรวมเข้ามาที่ VN นี้" }, "VN แรก (รวม walk-in)");
   return null;
 }
-// OFC/LGO visits keyed into Krungthai: the imported Approve Code is shown under the status.
+// OFC/LGO visits with an imported Krungthai Approve Code: the code goes under the status, or under "คีย์ KTB แล้ว" when not yet sent.
 function ktbTag(r) {
   if (!r.approve_required || !r.claimcode) return null;
-  return el("span", { class: "ktb-tag", title: "พบ Approve Code กรุงไทย (นำเข้าที่เมนู Approve Code)" },
-    el("span", { class: "ktb-label" }, "คีย์ KTB แล้ว"), el("span", { class: "ktb-code mono" }, r.claimcode));
+  return el("span", { class: "ktb-tag", title: "Approve Code กรุงไทย (นำเข้าที่เมนู Approve Code)" },
+    r.status ? null : el("span", { class: "ktb-label" }, "คีย์ KTB แล้ว"), el("span", { class: "ktb-code mono" }, r.claimcode));
 }
 function uucTag(r) {
   return r.uuc_set ? el("span", { class: "uuc-tag", title: "กำหนด UUC เองในโปรแกรมนี้ (ไม่แก้ HOSxP)" }, `UUC ${r.uuc_set} (กำหนดเอง)`) : null;
