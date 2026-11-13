@@ -989,8 +989,6 @@ def build_zip(rows: dict[str, list[dict]], hcode: str, output_root: Path, now: d
 
 
 # ---------------------------------------------------------------- context
-ADP_UUC = (r"30001|42330|42333|42338|42339|Cons01|Eva001|DRUGP|TELMED|STEMI1|STROK1|SPECC|^37550|30009|^2006|^2007|^13001|"
-           r"^15001|1B004|1B005|^AB00|^3001[0-7]|^1200[1-4]|^9000[1-5]|^DEN|^FP|^HERB|^HC0|^HD000|80008")
 
 
 @dataclass
@@ -1007,14 +1005,16 @@ class PttypeGroups:
 
 
 def opd_contexts(select: Callable[[str], list[dict]], vns: Sequence[str], groups: PttypeGroups, zone: str) -> list[Visit]:
-    """tmpExport rows for OPD visits (AddOPD + Data2Report + CheckUUC)."""
+    """tmpExport rows for OPD visits (AddOPD + Data2Report).
+
+    UUC is 1 (ใช้สิทธิ) unless the visit was marked "not claimed" in HOSxP (visit_pttype.request_funds='N', which the
+    old program wrote when UUC 2 was picked by hand). The old CheckUUC rule (in-CUP UCS = 2) is no longer used."""
     if not vns:
         return []
     vn_list = lit_list(vns)
     rows = select(f"""
     SELECT o.vn, o.hn, o.vstdate, o.an, seekhipdatas(o.pttype,0) maininscl, pttypeeclaim(o.pttype) pttype_eclaim,
       hospmain(o.vn) hospmain, v.pdx, timestampdiff(year,pt.birthday,o.vstdate) age,
-      seekexport(o.ovstost,'ovstost',NULL) discharge,
       CASE
         WHEN o.pttype IN ({lit_list(groups.oprefer)}) OR o.pttype IN ({lit_list(groups.referin)}) THEN 'OP Refer ข้ามจังหวัด'
         WHEN o.pttype IN ({lit_list(groups.cuprefer)}) THEN 'OP Refer ในจังหวัด'
@@ -1040,11 +1040,7 @@ def opd_contexts(select: Callable[[str], list[dict]], vns: Sequence[str], groups
       END projectcode,
       (SELECT d.nhso_adp_code FROM opitemrece oo LEFT JOIN s_drugitems d ON d.icode=oo.icode
         WHERE oo.vn=o.vn AND d.nhso_adp_type_id=5 LIMIT 1) project_item,
-      (SELECT IF(request_funds='N','2','') FROM visit_pttype WHERE vn=o.vn LIMIT 1) uuc_flag,
-      EXISTS(SELECT 1 FROM opitemrece oo JOIN s_drugitems d ON d.icode=oo.icode WHERE oo.vn=o.vn AND (
-        d.nhso_adp_code REGEXP '{ADP_UUC}' OR d.name REGEXP 'Clopido|streptoki|Tamoxifen|methadone'
-        OR d.nhso_adp_type_id IN (2,5)
-        OR (d.nhso_adp_code REGEXP '^14001' AND timestampdiff(year,pt.birthday,o.vstdate) BETWEEN 13 AND 45))) uuc_item
+      (SELECT IF(request_funds='N','2','') FROM visit_pttype WHERE vn=o.vn LIMIT 1) uuc_flag
     FROM ovst o
     LEFT JOIN patient pt ON pt.hn=o.hn
     LEFT JOIN vn_stat v ON v.vn=o.vn
@@ -1077,19 +1073,7 @@ def opd_contexts(select: Callable[[str], list[dict]], vns: Sequence[str], groups
             demand = ""
         elif project == "ER-EXT":
             demand = demand or "Normal"
-        uuc = "1"
-        if text(r.get("uuc_flag")):
-            uuc = text(r["uuc_flag"])
-        if text(r.get("an")):
-            uuc = "1"
-        elif text(r.get("pttype_eclaim")) in {"01", "02", "27"}:
-            uuc = "2"
-        if r.get("uuc_item"):
-            uuc = "1"
-        elif project or demand:
-            uuc = "1"
-        elif text(r.get("discharge")).startswith("2"):
-            uuc = "2"
+        uuc = "2" if text(r.get("uuc_flag")) == "2" else "1"
         ancid = first_anc.get(vn)
         anc_row = anc_rows.get(ancid, {})
         lmp = anc_row.get("lmp")

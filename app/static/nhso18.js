@@ -58,7 +58,7 @@ function walkinTag(r) {
 function uucTag(r) {
   return r.uuc_set ? el("span", { class: "uuc-tag", title: "กำหนด UUC เองในโปรแกรมนี้ (ไม่แก้ HOSxP)" }, `UUC ${r.uuc_set} (กำหนดเอง)`) : null;
 }
-// UUC 1 = ใช้สิทธิ / 2 = ไม่ใช้สิทธิ. "อัตโนมัติ" follows CheckUUC of the old program; the choice is kept in this app only.
+// UUC 1 = ใช้สิทธิ / 2 = ไม่ใช้สิทธิ. "อัตโนมัติ" is 1, or 2 when HOSxP has request_funds N; the choice is kept in this app only.
 function uucControl(r, data) {
   const box = el("div", { class: "uuc-box" });
   const draw = () => {
@@ -74,8 +74,8 @@ function uucControl(r, data) {
     box.replaceChildren(
       el("div", { class: "uuc-head" }, el("strong", {}, `UUC ที่จะส่ง: ${used || "—"}`), " ",
         el("span", { class: "muted" }, used === "1" ? "(ใช้สิทธิ)" : used === "2" ? "(ไม่ใช้สิทธิ)" : ""),
-        el("span", { class: "muted-note" }, ` ตามกฎของโปรแกรม = ${data.uuc_auto || "—"}`)),
-      el("div", { class: "uuc-buttons" }, choice("", "อัตโนมัติ"), choice("1", "1 ใช้สิทธิ"), choice("2", "2 ไม่ใช้สิทธิ")));
+        el("span", { class: "muted-note" }, data.uuc_auto === "2" ? " อัตโนมัติ = 2 เพราะ HOSxP ตั้งไม่ขอเบิกไว้ (request_funds N)" : ` อัตโนมัติ = ${data.uuc_auto || "—"}`)),
+      el("div", { class: "uuc-buttons" }, choice("", `อัตโนมัติ (${data.uuc_auto === "2" ? "ไม่ใช้สิทธิ" : "ใช้สิทธิ"})`), choice("1", "1 ใช้สิทธิ"), choice("2", "2 ไม่ใช้สิทธิ")));
   };
   draw();
   return box;

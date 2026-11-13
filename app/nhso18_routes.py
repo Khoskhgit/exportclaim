@@ -142,7 +142,7 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
         }
 
     def auto_uuc(key: str, kind: str) -> str:
-        """UUC the program's own rule (CheckUUC) gives this visit; IPD is always 1."""
+        """UUC this visit gets without a hand choice here: 1, or 2 when HOSxP marks it not claimed; IPD is always 1."""
         if kind == "IPD":
             return "1"
         config, groups = svc.load_setup(q, settings.hcode)

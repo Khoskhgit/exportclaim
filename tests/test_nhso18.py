@@ -159,3 +159,12 @@ def test_set_uuc_uses_the_hand_choice():
     visits = [Visit(vn="A", uuc="2"), Visit(vn="B", uuc="1"), Visit(vn="C", uuc="2")]
     set_uuc(visits, {"A": "1", "B": "2", "C": ""})
     assert [v.uuc for v in visits] == ["1", "2", "2"]
+
+
+def test_opd_uuc_is_1_unless_hosxp_marks_not_claimed():
+    from datetime import date
+    from app.nhso18 import PttypeGroups, opd_contexts
+    base = {"hn": "1", "vstdate": date(2026, 11, 2), "an": None, "maininscl": "UCS", "pttype_eclaim": "01", "hospmain": "10866"}
+    rows = [{**base, "vn": "A", "uuc_flag": ""}, {**base, "vn": "B", "uuc_flag": "2"}]
+    select = lambda sql: rows if "uuc_flag" in sql else []
+    assert [v.uuc for v in opd_contexts(select, ["A", "B"], PttypeGroups(), "09")] == ["1", "2"]
