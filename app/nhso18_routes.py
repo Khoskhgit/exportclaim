@@ -67,6 +67,7 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
         eclaim_sent = local.eclaim_sent(keys)
         excluded = local.nhso18_excluded(keys)
         uuc_set = local.nhso18_uuc(keys)
+        uuc_two = nhso18.not_claimed(q, [svc.key_of(r) for r in rows if r["kind"] != "IPD"])
         imported = results.latest(keys) if results is not None else {}
         merge = nhso18.same_day_walkin(rows, svc.walkin_pttypes(q))
         firsts = set(merge.values())
@@ -86,6 +87,7 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
                 "money": svc.money(r.get("money_total")), "fdh_amount": svc.money(r.get("fdh_amount")) if r.get("fdh_amount") else "",
                 "errors": f["errors"], "warns": f["warns"], "status": st,
                 "excluded_count": sum(1 for s, _ in excluded if s == k), "uuc_set": uuc_set.get(k, ""),
+                "uuc": uuc_set.get(k) or ("2" if k in uuc_two else "1"),
                 "selectable": not f["errors"], "has_error": bool(f["errors"]), "has_warn": bool(f["warns"]),
                 "already_sent": bool(st), "default_selected": not f["errors"] and not st,
                 "walkin_first": merge.get(k, ""), "walkin_group": merge.get(k) or (k if k in firsts else ""),

@@ -168,3 +168,11 @@ def test_opd_uuc_is_1_unless_hosxp_marks_not_claimed():
     rows = [{**base, "vn": "A", "uuc_flag": ""}, {**base, "vn": "B", "uuc_flag": "2"}]
     select = lambda sql: rows if "uuc_flag" in sql else []
     assert [v.uuc for v in opd_contexts(select, ["A", "B"], PttypeGroups(), "09")] == ["1", "2"]
+
+
+def test_not_claimed_reads_request_funds_n():
+    from app.nhso18 import not_claimed
+    seen = []
+    select = lambda sql: seen.append(sql) or [{"vn": "B"}]
+    assert not_claimed(select, ["A", "B"]) == {"B"} and "request_funds='N'" in seen[0]
+    assert not_claimed(select, []) == set() and len(seen) == 1

@@ -68,7 +68,7 @@ function uucControl(r, data) {
       onclick: async () => {
         try {
           await api("/api/nhso18/uuc", { key: r.key, uuc: value });
-          r.uuc_set = value; draw(); renderRows();
+          r.uuc_set = value; r.uuc = value || data.uuc_auto || r.uuc; draw(); renderRows();
         } catch (err) { notice(err.message); }
       } }, label);
     box.replaceChildren(
@@ -79,6 +79,12 @@ function uucControl(r, data) {
   };
   draw();
   return box;
+}
+// How many picked visits go as UUC 1 (ใช้สิทธิ) and 2 (ไม่ใช้สิทธิ), for the confirm dialogs.
+function uucSummary(list) {
+  const two = list.filter((r) => r.uuc === "2").length;
+  return [el("dt", {}, "UUC"), el("dd", {}, `1 ใช้สิทธิ ${count.format(list.length - two)} · `,
+    el("span", { class: two ? "danger-text" : "" }, `2 ไม่ใช้สิทธิ ${count.format(two)}`))];
 }
 function mergedText(result) { return result.merged ? ` · รวม walk-in ${result.merged} visit เข้ากับ VN แรก` : ""; }
 function selectedRows() { return state.rows.filter((r) => state.selected.has(r.key)); }
@@ -181,6 +187,7 @@ async function runExport() {
   const summary = el("dl", { class: "sum" },
     el("dt", {}, "OPD"), el("dd", {}, `${list.filter((r) => r.kind === "OPD").length} visit`),
     el("dt", {}, "IPD"), el("dd", {}, `${list.filter((r) => r.kind === "IPD").length} AN`),
+    ...uucSummary(list),
     el("dt", {}, "ค่าใช้จ่ายรวม"), el("dd", {}, `${baht.format(list.reduce((s, r) => s + Number(r.money), 0))} บาท`),
     el("dt", {}, "มีคำเตือน"), el("dd", {}, `${list.filter((r) => r.has_warn).length} รายการ`));
   if (!await confirmDialog("ยืนยันการสร้าง ZIP 18 แฟ้ม", [summary], "สร้าง ZIP")) return;
@@ -220,6 +227,7 @@ async function runFdh(prescreen) {
     el("dt", {}, "บัญชี FDH"), el("dd", {}, (state.fdhStatus && state.fdhStatus.fdh_user) || "ยังไม่ได้ตั้ง"),
     el("dt", {}, "OPD"), el("dd", {}, `${list.filter((r) => r.kind === "OPD").length} visit`),
     el("dt", {}, "IPD"), el("dd", {}, `${list.filter((r) => r.kind === "IPD").length} AN`),
+    ...uucSummary(list),
     el("dt", {}, "ค่าใช้จ่ายรวม"), el("dd", {}, `${baht.format(list.reduce((s, r) => s + Number(r.money), 0))} บาท`),
     el("dt", {}, "PHDB"), el("dd", {}, prescreen ? "ไม่ส่ง (PreScreen)" : $("fdh-phdb").checked ? "ส่งด้วย" : "ไม่ส่ง"));
   if (!await confirmDialog(`ยืนยัน${what}`, [summary], what)) return;
@@ -327,6 +335,7 @@ async function runEclaim() {
     el("dt", {}, "ปลายทาง"), el("dd", { class: "danger-text" }, "New e-Claim (ส่งจริง)"),
     el("dt", {}, "OPD"), el("dd", {}, `${list.filter((r) => r.kind === "OPD").length} visit`),
     el("dt", {}, "IPD"), el("dd", {}, `${list.filter((r) => r.kind === "IPD").length} AN`),
+    ...uucSummary(list),
     el("dt", {}, "ค่าใช้จ่ายรวม"), el("dd", {}, `${baht.format(list.reduce((s, r) => s + Number(r.money), 0))} บาท`),
     el("dt", {}, "สิทธิ"), el("dd", {}, inscl || "ทุกสิทธิ"),
     el("dt", {}, "นำเข้าซ้ำ"), el("dd", { class: dup ? "danger-text" : "" }, dup ? "ใช่" : "ไม่"));

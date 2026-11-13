@@ -1040,7 +1040,7 @@ def opd_contexts(select: Callable[[str], list[dict]], vns: Sequence[str], groups
       END projectcode,
       (SELECT d.nhso_adp_code FROM opitemrece oo LEFT JOIN s_drugitems d ON d.icode=oo.icode
         WHERE oo.vn=o.vn AND d.nhso_adp_type_id=5 LIMIT 1) project_item,
-      (SELECT IF(request_funds='N','2','') FROM visit_pttype WHERE vn=o.vn LIMIT 1) uuc_flag
+      (SELECT IF(MAX(request_funds='N'),'2','') FROM visit_pttype WHERE vn=o.vn) uuc_flag
     FROM ovst o
     LEFT JOIN patient pt ON pt.hn=o.hn
     LEFT JOIN vn_stat v ON v.vn=o.vn
@@ -1087,6 +1087,14 @@ def opd_contexts(select: Callable[[str], list[dict]], vns: Sequence[str], groups
         ))
     order = {vn: i for i, vn in enumerate(vns)}
     return sorted(out, key=lambda v: order.get(v.vn, 0))
+
+
+def not_claimed(select: Callable[[str], list[dict]], vns: Sequence[str]) -> set[str]:
+    """OPD visits HOSxP marks "not claimed" (visit_pttype.request_funds='N'): their automatic UUC is 2."""
+    if not vns:
+        return set()
+    return {text(r["vn"]) for r in select(
+        f"SELECT DISTINCT vn FROM visit_pttype WHERE request_funds='N' AND vn IN ({lit_list(vns)})")}
 
 
 def set_uuc(visits: Sequence[Visit], chosen: dict[str, str]) -> None:
