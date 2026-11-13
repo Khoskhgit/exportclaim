@@ -65,6 +65,7 @@
     <button id="export" class="primary big" type="button" disabled>สร้าง ZIP 18 แฟ้ม</button>
     <div id="fdh" class="fdh-group" hidden>
       <span class="fdh-title">FDH</span>
+      <button id="fdh-account" type="button" class="ghost fdh-account" title="บัญชี FDH ที่ใช้ส่ง"></button>
       <label class="fdh-zone">ปลายทาง<select id="fdh-zone"><option value="uat">UAT (ทดสอบ)</option><option value="prod">PROD (ส่งจริง)</option></select></label>
       <label class="inline"><input type="checkbox" id="fdh-phdb" checked> ส่งแฟ้ม PHDB ด้วย</label>
       <button id="fdh-test" type="button" class="ghost">ทดสอบเชื่อมต่อ</button>
@@ -96,6 +97,21 @@
     <button type="button" id="confirm-cancel" class="ghost">ยกเลิก</button>
     <button type="button" id="confirm-ok" class="primary">ยืนยัน</button>
   </div>
+</dialog>
+<dialog id="fdh-account-dialog">
+  <form id="fdh-account-form" method="dialog">
+    <h2>บัญชี FDH ของฉัน</h2>
+    <p class="muted-note">ใช้ส่ง FDH เมื่อเข้าสู่ระบบด้วยชื่อนี้ ไม่ว่าจะใช้เครื่องไหน ถ้าไม่ได้ตั้งจะใช้บัญชีกลางใน .env
+      โปรแกรมเก็บเฉพาะชื่อผู้ใช้และค่า hash ของรหัสผ่าน และจะลองขอ Token จาก FDH ก่อนบันทึก</p>
+    <p id="fdh-account-now" class="muted"></p>
+    <label>ชื่อผู้ใช้ FDH<input name="user" autocomplete="off" required></label>
+    <label>รหัสผ่าน FDH<input name="password" type="password" autocomplete="new-password" required></label>
+    <div class="dialog-actions">
+      <button type="button" id="fdh-account-clear" class="ghost">ลบบัญชีของฉัน</button>
+      <button type="button" id="fdh-account-cancel" class="ghost">ยกเลิก</button>
+      <button type="submit" id="fdh-account-save" class="primary">ตรวจและบันทึก</button>
+    </div>
+  </form>
 </dialog>
 <script src="/static/common.js?v={{ v }}"></script>
 <script src="/static/nhso18.js?v={{ v }}"></script>

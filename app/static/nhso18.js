@@ -217,6 +217,7 @@ async function runFdh(prescreen) {
   const what = prescreen ? "PreScreen" : "ส่ง FDH";
   const summary = el("dl", { class: "sum" },
     el("dt", {}, "ปลายทาง"), el("dd", { class: zone === "prod" ? "danger-text" : "" }, fdhZoneLabel(zone)),
+    el("dt", {}, "บัญชี FDH"), el("dd", {}, (state.fdhStatus && state.fdhStatus.fdh_user) || "ยังไม่ได้ตั้ง"),
     el("dt", {}, "OPD"), el("dd", {}, `${list.filter((r) => r.kind === "OPD").length} visit`),
     el("dt", {}, "IPD"), el("dd", {}, `${list.filter((r) => r.kind === "IPD").length} AN`),
     el("dt", {}, "ค่าใช้จ่ายรวม"), el("dd", {}, `${baht.format(list.reduce((s, r) => s + Number(r.money), 0))} บาท`),
@@ -258,18 +259,60 @@ async function loadFdhHistory() {
   if ($("fdh").hidden) { $("fdh-history").replaceChildren(el("p", { class: "muted" }, "ยังไม่ได้ตั้งค่า FDH")); return; }
   try {
     const rows = await api("/api/nhso18/fdh/history");
-    $("fdh-history").replaceChildren(rows.length ? table(["เวลา", "ปลายทาง", "ประเภท", "จำนวน", "ผล", "ข้อความ", "ผู้ส่ง"], rows.map((r) => el("tr", {},
+    $("fdh-history").replaceChildren(rows.length ? table(["เวลา", "ปลายทาง", "ประเภท", "จำนวน", "ผล", "ข้อความ", "ผู้ส่ง", "บัญชี FDH"], rows.map((r) => el("tr", {},
       el("td", {}, thaiDateTime(r.created_at)), el("td", {}, r.zone.toUpperCase()), el("td", {}, r.mode === "prescreen" ? "PreScreen" : "ส่ง"),
       el("td", {}, String(r.visit_count)), el("td", {}, el("span", { class: `badge ${r.ok ? "b-ok" : "b-error"}` }, r.ok ? "สำเร็จ" : "ไม่ผ่าน")),
-      el("td", { class: "problems" }, r.message), el("td", {}, r.created_by || "-")))) : el("p", {}, "ยังไม่มีประวัติ"));
+      el("td", { class: "problems" }, r.message), el("td", {}, r.created_by || "-"), el("td", { class: "mono" }, r.fdh_user || "-")))) : el("p", {}, "ยังไม่มีประวัติ"));
   } catch (err) { $("fdh-history").replaceChildren(el("p", {}, err.message)); }
 }
 
-async function setupFdh() {
+// Each login may keep its own FDH account (any machine); without one the .env account is used.
+function showFdhAccount(status) {
+  state.fdhStatus = status;
+  $("fdh").hidden = !status.ready && !status.can_set; $("fdh-off").hidden = !$("fdh").hidden;
+  const label = status.source === "own" ? `บัญชี: ${status.fdh_user} (ของฉัน)`
+    : status.source === "env" ? `บัญชี: ${status.fdh_user} (กลาง)` : "ตั้งบัญชี FDH";
+  $("fdh-account").textContent = label;
+  $("fdh-account").classList.toggle("missing", !status.ready);
+  $("fdh-account").disabled = !status.can_set;
+  $("fdh-account").title = status.can_set ? "ตั้งบัญชี FDH ของฉัน" : "ต้องเข้าสู่ระบบจึงจะตั้งบัญชีของตัวเองได้";
+}
+function openFdhAccount() {
+  const st = state.fdhStatus || {};
+  const form = $("fdh-account-form");
+  form.reset();
+  form.elements.user.value = st.source === "own" ? st.fdh_user : "";
+  $("fdh-account-now").textContent = st.source === "own" ? `ตอนนี้ใช้บัญชีของฉัน: ${st.fdh_user}`
+    : st.env_user ? `ตอนนี้ใช้บัญชีกลาง: ${st.env_user}` : "ยังไม่มีบัญชี FDH";
+  $("fdh-account-clear").hidden = st.source !== "own";
+  $("fdh-account-dialog").showModal();
+}
+async function saveFdhAccount(e) {
+  e.preventDefault();
+  const form = $("fdh-account-form"), button = $("fdh-account-save");
+  button.disabled = true; button.textContent = "กำลังตรวจกับ FDH…";
   try {
-    const status = await api("/api/nhso18/fdh/status");
-    $("fdh").hidden = !status.ready; $("fdh-off").hidden = status.ready;
-  } catch (err) { $("fdh-off").hidden = false; }
+    showFdhAccount(await api("/api/nhso18/fdh/account", { user: form.elements.user.value.trim(), password: form.elements.password.value }));
+    $("fdh-account-dialog").close();
+    notice(`บันทึกบัญชี FDH ${state.fdhStatus.fdh_user} แล้ว (ขอ Token ได้)`, "ok");
+  } catch (err) { $("fdh-account-now").textContent = err.message; }
+  finally { form.elements.password.value = ""; button.disabled = false; button.textContent = "ตรวจและบันทึก"; }
+}
+async function clearFdhAccount() {
+  try {
+    showFdhAccount(await api("/api/nhso18/fdh/account", { clear: true }));
+    $("fdh-account-dialog").close();
+    notice("ลบบัญชี FDH ของฉันแล้ว", "ok");
+  } catch (err) { $("fdh-account-now").textContent = err.message; }
+}
+
+async function setupFdh() {
+  try { showFdhAccount(await api("/api/nhso18/fdh/status")); }
+  catch (err) { $("fdh-off").hidden = false; }
+  $("fdh-account").onclick = openFdhAccount;
+  $("fdh-account-form").onsubmit = saveFdhAccount;
+  $("fdh-account-clear").onclick = clearFdhAccount;
+  $("fdh-account-cancel").onclick = () => $("fdh-account-dialog").close();
   const mark = () => $("fdh").classList.toggle("prod", fdhZone() === "prod");
   $("fdh-zone").onchange = mark; mark();
   loadFdhHistory();

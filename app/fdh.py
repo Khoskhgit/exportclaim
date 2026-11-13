@@ -138,17 +138,19 @@ def _field(data: dict, *names: str):
 
 class Client:
     def __init__(self, user: str, password: str, hcode: str, token_url: str, hash_key: str,
-                 user_agent: str = "EMR", timeout: float = 120, post: Callable = _post):
-        self.user, self.password, self.hcode = user, password, hcode
+                 user_agent: str = "EMR", timeout: float = 120, post: Callable = _post, hashed: str = ""):
+        """``hashed`` is a saved password_hash, used in place of ``password`` (a login's own FDH account)."""
+        self.user, self.password, self.hcode, self.hashed = user, password, hcode, hashed
         self.token_url, self.hash_key, self.user_agent, self.timeout = token_url.rstrip("/"), hash_key, user_agent, timeout
         self._post = post
 
     def token(self) -> str:
         """The old GetToken: a JWT on success, or JSON with a non-zero MessageCode."""
-        if not self.user or not self.password:
-            raise FdhError("ยังไม่ได้ตั้ง FDH_USER / FDH_PASSWORD ใน .env")
+        if not self.user or not (self.password or self.hashed):
+            raise FdhError("ยังไม่ได้ตั้งบัญชี FDH (ตั้งของตัวเองที่ปุ่ม \"บัญชี FDH\" หรือ FDH_USER / FDH_PASSWORD ใน .env)")
+        hashed = self.hashed or password_hash(self.password, self.hash_key)
         query = urllib.parse.urlencode({"Action": "get_moph_access_token", "user": self.user,
-                                        "password_hash": password_hash(self.password, self.hash_key), "hospital_code": self.hcode})
+                                        "password_hash": hashed, "hospital_code": self.hcode})
         status, body = self._post(f"{self.token_url}/token?{query}", b"", {"User-Agent": self.user_agent}, 30)
         data = _json(body)
         if data is not None:

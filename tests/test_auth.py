@@ -212,3 +212,30 @@ def test_moph_requests_name_the_program(monkeypatch):
     monkeypatch.setattr(auth.urllib.request, "urlopen", fake_open)
     auth._http_json("https://provider.id.th/x", body={})
     assert seen["ua"] == "EMR"
+
+
+def test_each_login_keeps_its_own_fdh_account(tmp_path, monkeypatch):
+    from app import fdh
+    tried = []
+
+    def token(self):
+        tried.append((self.user, self.password, self.hashed))
+        if self.hashed == fdh.password_hash("bad", self.hash_key):
+            raise fdh.FdhError("ขอ Token FDH ไม่ได้: User or password incorrect")
+        return "a.b.c"
+    monkeypatch.setattr(fdh.Client, "token", token)
+    client = make(tmp_path, fdh_user="central", fdh_password="pw")
+    login(client)
+    status = client.get("/api/nhso18/fdh/status").json()
+    assert (status["source"], status["fdh_user"], status["can_set"]) == ("env", "central", True)
+    assert client.post("/api/nhso18/fdh/account", json={"user": "nurse1", "password": "bad"}).status_code == 400
+    saved = client.post("/api/nhso18/fdh/account", json={"user": "nurse1", "password": "good"}).json()
+    assert (saved["source"], saved["fdh_user"]) == ("own", "nurse1")
+    store = Store(tmp_path / "s.sqlite3")
+    row = store.fdh_account("hosxp:nurse")
+    assert row["password_hash"] == fdh.password_hash("good", "$jwt@moph#") and "good" not in str(row)
+    # Another login on the same app still uses the central account.
+    other = make(tmp_path, fdh_user="central", fdh_password="pw")
+    assert other.get("/api/nhso18/fdh/status").status_code == 401
+    cleared = client.post("/api/nhso18/fdh/account", json={"clear": True}).json()
+    assert (cleared["source"], cleared["fdh_user"]) == ("env", "central") and store.fdh_account("hosxp:nurse") is None

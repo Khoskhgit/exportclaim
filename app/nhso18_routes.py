@@ -225,9 +225,26 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
         return {n.split(".")[0].upper(): max(c.count(b"\r\n") - 1, 0) for n, c in parts.items()}
 
     # ------------------------------------------------------------ FDH
-    def client() -> fdh.Client:
-        return fdh.Client(settings.fdh_user, settings.fdh_password, settings.hcode, settings.fdh_token_url,
-                          settings.fdh_hash_key, settings.moph_user_agent)
+    def login_of(request: Request) -> str:
+        """The login an FDH account belongs to: the session user id, e.g. hosxp:name or moph:id ("" when login is off)."""
+        user = getattr(request.state, "user", None)
+        return text(user["user_id"]) if user else ""
+
+    def account(request: Request) -> tuple[str, str, str]:
+        """(FDH user, saved password hash, source) for this login: its own account, else the one in .env."""
+        own = local.fdh_account(login_of(request)) if login_of(request) else None
+        if own:
+            return own["fdh_user"], own["password_hash"], "own"
+        if settings.fdh_user and settings.fdh_password:
+            return settings.fdh_user, "", "env"
+        return "", "", ""
+
+    def client(request: Request, fdh_user: str | None = None, hashed: str | None = None) -> fdh.Client:
+        if fdh_user is None:
+            fdh_user, hashed, _ = account(request)
+        password = settings.fdh_password if not hashed and fdh_user == settings.fdh_user else ""
+        return fdh.Client(fdh_user, password, settings.hcode, settings.fdh_token_url,
+                          settings.fdh_hash_key, settings.moph_user_agent, hashed=hashed or "")
 
     def zone_of(body: dict) -> str:
         zone = text(body.get("zone")) or "uat"
@@ -236,25 +253,50 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
         return zone
 
     @app.get("/api/nhso18/fdh/status")
-    def fdh_status():
-        return {"ready": bool(settings.fdh_user and settings.fdh_password), "zones": fdh.ZONES}
+    def fdh_status(request: Request):
+        fdh_user, _, source = account(request)
+        return {"ready": bool(source), "zones": fdh.ZONES, "fdh_user": fdh_user, "source": source,
+                "can_set": bool(login_of(request)), "env_user": settings.fdh_user if settings.fdh_password else ""}
+
+    @app.post("/api/nhso18/fdh/account")
+    def fdh_set_account(request: Request, body: dict = Body(...)):
+        """Save this login's own FDH account after FDH accepts it (only the password hash is kept)."""
+        login = login_of(request)
+        if not login:
+            raise HTTPException(400, "ต้องเข้าสู่ระบบก่อนจึงจะตั้งบัญชี FDH ของตัวเองได้")
+        if body.get("clear"):
+            local.set_fdh_account(login, None)
+            log.info("fdh account cleared login=%s", login)
+            return fdh_status(request)
+        fdh_user, password = text(body.get("user")), str(body.get("password") or "")
+        if not fdh_user or not password:
+            raise HTTPException(400, "ต้องกรอกชื่อผู้ใช้และรหัสผ่าน FDH")
+        hashed = fdh.password_hash(password, settings.fdh_hash_key)
+        try:
+            client(request, fdh_user, hashed).token()
+        except fdh.FdhError as exc:
+            raise HTTPException(400, str(exc)) from None
+        local.set_fdh_account(login, fdh_user, hashed)
+        log.info("fdh account set login=%s fdh_user=%s", login, fdh_user)
+        return fdh_status(request)
 
     @app.post("/api/nhso18/fdh/test")
-    def fdh_test(body: dict = Body(...)):
+    def fdh_test(request: Request, body: dict = Body(...)):
         zone = zone_of(body)
         try:
-            reply = client().test(zone)
+            reply = client(request).test(zone)
         except fdh.FdhError as exc:
             raise HTTPException(502, str(exc)) from None
         if not reply.ok:
             raise HTTPException(502, f"FDH ตอบกลับ: {reply.message}")
-        return {"message": f"เชื่อมต่อ FDH {zone.upper()} ได้ (Token OK)"}
+        return {"message": f"เชื่อมต่อ FDH {zone.upper()} ได้ (Token OK) ด้วยบัญชี {account(request)[0]}"}
 
     @app.post("/api/nhso18/fdh/send")
     def fdh_send(request: Request, body: dict = Body(...)):
         zone, prescreen = zone_of(body), bool(body.get("prescreen"))
-        if not settings.fdh_user or not settings.fdh_password:
-            raise HTTPException(400, "ยังไม่ได้ตั้ง FDH_USER / FDH_PASSWORD ใน .env")
+        fdh_user, hashed, source = account(request)
+        if not source:
+            raise HTTPException(400, "ยังไม่ได้ตั้งบัญชี FDH (ตั้งของตัวเองที่ปุ่ม \"บัญชี FDH\" หรือ FDH_USER / FDH_PASSWORD ใน .env)")
         if prescreen:
             body = {**body, "confirm_resend": True}  # PreScreen only checks; it never needs the resend question.
         built = build(body)
@@ -266,13 +308,15 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
         folder = save_copy(f"FDH_{zone}_{mode}", parts)
         user = auth.user_label(request)
         try:
-            reply = client().send(zone, parts, prescreen)
+            reply = client(request, fdh_user, hashed).send(zone, parts, prescreen)
         except fdh.FdhError as exc:
-            local.record_fdh_send(vns + ans, zone, mode, False, None, str(exc), str(folder), user)
+            local.record_fdh_send(vns + ans, zone, mode, False, None, str(exc), str(folder), user, fdh_user=fdh_user)
             raise HTTPException(502, str(exc)) from None
-        send_id = local.record_fdh_send(vns + ans, zone, mode, reply.ok, reply.http_status, reply.message, str(folder), user)
-        log.info("fdh %s zone=%s id=%s visits=%s ok=%s http=%s", mode, zone, send_id, len(vns) + len(ans), reply.ok, reply.http_status)
-        return {"id": send_id, "ok": reply.ok, "zone": zone, "mode": mode, "count": len(vns) + len(ans),
+        send_id = local.record_fdh_send(vns + ans, zone, mode, reply.ok, reply.http_status, reply.message, str(folder), user,
+                                        fdh_user=fdh_user)
+        log.info("fdh %s zone=%s id=%s visits=%s ok=%s http=%s fdh_user=%s", mode, zone, send_id, len(vns) + len(ans),
+                 reply.ok, reply.http_status, fdh_user)
+        return {"id": send_id, "ok": reply.ok, "zone": zone, "mode": mode, "fdh_user": fdh_user, "count": len(vns) + len(ans),
                 "merged": merged, "http_status": reply.http_status, "status": reply.status, "message": reply.message, "counts": line_counts(parts)}
 
     @app.get("/api/nhso18/fdh/history")

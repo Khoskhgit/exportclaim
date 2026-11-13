@@ -283,3 +283,12 @@ def test_nhso18_uuc_store(tmp_path):
     store.set_nhso18_uuc("A", "2")
     store.set_nhso18_uuc("B", None)
     assert store.nhso18_uuc(["A", "B"]) == {"A": "2"}
+
+
+def test_fdh_send_records_the_fdh_user(tmp_path):
+    store = Store(tmp_path / "s.sqlite3")
+    store.record_fdh_send(["A"], "uat", "send", True, 200, "ok", fdh_user="nurse1")
+    assert store.fdh_history()[0]["fdh_user"] == "nurse1"
+    store.set_fdh_account("hosxp:a", "u1", "H1")
+    store.set_fdh_account("hosxp:a", "u2", "H2")
+    assert (store.fdh_account("hosxp:a")["fdh_user"], store.fdh_account("hosxp:b")) == ("u2", None)

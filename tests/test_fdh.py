@@ -109,3 +109,10 @@ def test_too_big(monkeypatch):
     monkeypatch.setattr(fdh, "MAX_BYTES", 10)
     with pytest.raises(fdh.FdhError, match="50 MB"):
         make(FakePost((200, "aaa.bbb.ccc"))).send("uat", {"ins.txt": b"x" * 100})
+
+
+def test_token_with_saved_hash():
+    post = FakePost((200, "aaa.bbb.ccc"))
+    client = fdh.Client("nurse1", "", "10866", "https://fdh.moph.go.th", "$jwt@moph#", post=post, hashed="ABC123")
+    assert client.token() == "aaa.bbb.ccc"
+    assert "user=nurse1&password_hash=ABC123&" in post.calls[0][0]

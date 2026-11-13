@@ -65,6 +65,9 @@ CREATE TABLE IF NOT EXISTS nhso18_items (
 CREATE TABLE IF NOT EXISTS nhso18_uuc (
   seq TEXT PRIMARY KEY, uuc TEXT NOT NULL, set_by TEXT NOT NULL DEFAULT '', set_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS fdh_accounts (
+  login TEXT PRIMARY KEY, fdh_user TEXT NOT NULL, password_hash TEXT NOT NULL, updated_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS fdh_sends (
   id INTEGER PRIMARY KEY AUTOINCREMENT, created_at TEXT NOT NULL, zone TEXT NOT NULL, mode TEXT NOT NULL,
   visit_count INTEGER NOT NULL, ok INTEGER NOT NULL, http_status INTEGER, message TEXT NOT NULL DEFAULT '',
@@ -98,6 +101,9 @@ class Store:
                 columns = {r["name"] for r in db.execute(f"PRAGMA table_info({table})")}
                 if "created_by" not in columns:
                     db.execute(f"ALTER TABLE {table} ADD COLUMN created_by TEXT NOT NULL DEFAULT ''")
+            # Older databases: record which FDH user each send went out as.
+            if "fdh_user" not in {r["name"] for r in db.execute("PRAGMA table_info(fdh_sends)")}:
+                db.execute("ALTER TABLE fdh_sends ADD COLUMN fdh_user TEXT NOT NULL DEFAULT ''")
 
     def _db(self) -> sqlite3.Connection:
         db = sqlite3.connect(self.path)
@@ -367,15 +373,29 @@ class Store:
                 "SELECT DISTINCT k.seq FROM fdh_send_keys k JOIN fdh_sends s ON s.id=k.send_id "
                 "WHERE s.zone='prod' AND s.mode='send' AND s.ok=1") if r["seq"] in wanted}
 
+    def fdh_account(self, login: str) -> dict | None:
+        """The FDH user and password hash a login saved for itself (the plain password is never kept)."""
+        with self._db() as db:
+            row = db.execute("SELECT fdh_user, password_hash, updated_at FROM fdh_accounts WHERE login=?", (login,)).fetchone()
+        return dict(row) if row else None
+
+    def set_fdh_account(self, login: str, fdh_user: str | None, password_hash: str = "", now: datetime | None = None) -> None:
+        """Save a login's FDH account; ``fdh_user`` None removes it."""
+        with self._db() as db:
+            db.execute("DELETE FROM fdh_accounts WHERE login=?", (login,))
+            if fdh_user:
+                db.execute("INSERT INTO fdh_accounts (login, fdh_user, password_hash, updated_at) VALUES (?,?,?,?)",
+                           (login, fdh_user, password_hash, (now or datetime.now()).isoformat(timespec="seconds")))
+
     def record_fdh_send(self, seqs: Iterable[str], zone: str, mode: str, ok: bool, http_status: int | None, message: str,
-                        folder: str = "", created_by: str = "", now: datetime | None = None) -> int:
+                        folder: str = "", created_by: str = "", now: datetime | None = None, fdh_user: str = "") -> int:
         seqs = list(dict.fromkeys(seqs))
         with self._db() as db:
             cur = db.execute(
-                "INSERT INTO fdh_sends (created_at, zone, mode, visit_count, ok, http_status, message, folder, created_by) "
-                "VALUES (?,?,?,?,?,?,?,?,?)",
+                "INSERT INTO fdh_sends (created_at, zone, mode, visit_count, ok, http_status, message, folder, created_by, "
+                "fdh_user) VALUES (?,?,?,?,?,?,?,?,?,?)",
                 ((now or datetime.now()).isoformat(timespec="seconds"), zone, mode, len(seqs), int(ok), http_status,
-                 message[:1000], folder, created_by))
+                 message[:1000], folder, created_by, fdh_user))
             db.executemany("INSERT INTO fdh_send_keys (send_id, seq) VALUES (?,?)", [(cur.lastrowid, s) for s in seqs])
             return cur.lastrowid
 
@@ -408,7 +428,7 @@ class Store:
     def fdh_history(self, limit: int = 50) -> list[dict]:
         with self._db() as db:
             return [dict(r) for r in db.execute(
-                "SELECT id, created_at, zone, mode, visit_count, ok, http_status, message, created_by FROM fdh_sends "
+                "SELECT id, created_at, zone, mode, visit_count, ok, http_status, message, created_by, fdh_user FROM fdh_sends "
                 "ORDER BY id DESC LIMIT ?", (limit,))]
 
     def record_nhso18_export(self, zip_path: Path, seqs: Iterable[str], created_by: str = "", now: datetime | None = None) -> int:
