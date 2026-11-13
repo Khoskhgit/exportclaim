@@ -64,12 +64,13 @@ input[type=checkbox]:disabled{cursor:not-allowed}
 
 /* ------------------------------------------------------------- search */
 .search{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;padding:14px 16px;align-items:end}
+.search>*{min-width:0}
 .search .wide{grid-column:span 2}
 .search .actions-cell{display:flex;gap:8px;align-items:end;flex-wrap:wrap}
 .presets{display:flex;gap:6px;grid-column:1/-1;margin-top:-4px}
 .presets span{font-size:12px;color:var(--faint);align-self:center}
 .presets button{min-height:26px;padding:1px 10px;font-size:12px;border-radius:999px}
-.multi{position:relative}
+.multi{position:relative;min-width:0;max-width:100%}
 .multi summary{min-height:38px;padding:7px 30px 7px 10px;border:1px solid var(--line);border-radius:var(--radius-sm);cursor:pointer;font-weight:400;list-style:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2 4l4 4 4-4' fill='none' stroke='%235b6964' stroke-width='1.6'/%3E%3C/svg%3E") no-repeat right 10px center}
 .multi summary::-webkit-details-marker{display:none}
 .multi[open] summary{border-color:var(--accent);box-shadow:0 0 0 3px #0d6b5526}
