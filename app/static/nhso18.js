@@ -34,7 +34,7 @@ function renderRows() {
     const problems = [...r.errors, ...r.warns].map((i) => i.message);
     return el("tr", { class: state.current === r.key ? "current" : "", onclick: () => openDrawer(r) },
       el("td", { class: "check" }, box), el("td", {}, resultBadge(r)),
-      el("td", {}, r.status ? el("span", { class: "badge b-sent" }, r.status) : el("span", { class: "muted" }, "—"), walkinTag(r), uucTag(r)),
+      el("td", {}, r.status ? el("span", { class: "badge b-sent" }, r.status) : (r.approve_required && r.claimcode ? null : el("span", { class: "muted" }, "—")), ktbTag(r), walkinTag(r), uucTag(r)),
       el("td", {}, r.kind), el("td", { class: "mono" }, r.key), el("td", { class: "mono" }, r.hn),
       el("td", { class: "name-cell", title: r.ptname }, r.ptname, el("span", { class: "sub" }, r.pttype)),
       el("td", { class: "mono" }, toDmy(r.date)), el("td", {}, r.maininscl), el("td", {}, r.pdx || el("span", { class: "muted" }, "—")),
@@ -54,6 +54,12 @@ function walkinTag(r) {
   if (r.walkin_first) return el("span", { class: "walkin-tag", title: "Walk-in บัตรทองวันเดียวกัน ค่าใช้จ่ายรวมไปส่งกับ VN แรก" }, `รวมกับ ${r.walkin_first}`);
   if (r.walkin_group) return el("span", { class: "walkin-tag first", title: "Walk-in บัตรทองวันเดียวกัน visit อื่นรวมเข้ามาที่ VN นี้" }, "VN แรก (รวม walk-in)");
   return null;
+}
+// OFC/LGO visits keyed into Krungthai: the imported Approve Code is shown under the status.
+function ktbTag(r) {
+  if (!r.approve_required || !r.claimcode) return null;
+  return el("span", { class: "ktb-tag", title: "พบ Approve Code กรุงไทย (นำเข้าที่เมนู Approve Code)" },
+    el("span", { class: "ktb-label" }, "คีย์ KTB แล้ว"), el("span", { class: "ktb-code mono" }, r.claimcode));
 }
 function uucTag(r) {
   return r.uuc_set ? el("span", { class: "uuc-tag", title: "กำหนด UUC เองในโปรแกรมนี้ (ไม่แก้ HOSxP)" }, `UUC ${r.uuc_set} (กำหนดเอง)`) : null;

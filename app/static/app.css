@@ -134,6 +134,9 @@ th[aria-sort=descending] .sort-mark::after{content:"▼";opacity:1;color:var(--a
 .fdh-account.missing{color:var(--error)}
 #fdh-account-dialog form{display:grid;gap:10px;min-width:min(420px,80vw)}
 .uuc-tag{display:block;margin-top:2px;font-size:11px;color:var(--warn);white-space:nowrap}
+.ktb-tag{display:flex;flex-direction:column;margin-top:3px;line-height:1.25;white-space:nowrap}
+.ktb-tag .ktb-label{font-size:12px;font-weight:600;color:var(--ok)}
+.ktb-tag .ktb-code{font-size:11px;color:var(--muted)}
 .uuc-box{margin:0 0 10px;padding:10px 14px;border:1px solid var(--line);border-radius:var(--radius)}
 .uuc-head{margin-bottom:8px}
 .uuc-buttons{display:flex;flex-wrap:wrap;gap:6px}
