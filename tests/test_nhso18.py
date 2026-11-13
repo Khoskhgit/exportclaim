@@ -152,3 +152,10 @@ def test_status_uses_imported_rep_and_stm():
     assert svc.status({}, False, "", {"rep_stat": "A", "stm_no": "STM1"}) == "ชดเชยแล้ว"
     assert svc.status({"rep_rep": "x"}, False, "", {"rep_stat": "C"}) == "ส่งแล้ว"
     assert svc.status({}, True, "", None) == "ส่งออกแล้ว"
+
+
+def test_set_uuc_uses_the_hand_choice():
+    from app.nhso18 import Visit, set_uuc
+    visits = [Visit(vn="A", uuc="2"), Visit(vn="B", uuc="1"), Visit(vn="C", uuc="2")]
+    set_uuc(visits, {"A": "1", "B": "2", "C": ""})
+    assert [v.uuc for v in visits] == ["1", "2", "2"]

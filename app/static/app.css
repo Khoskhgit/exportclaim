@@ -129,6 +129,10 @@ th[aria-sort=descending] .sort-mark::after{content:"▼";opacity:1;color:var(--a
 .excluded-note{display:block;font-size:11px;color:var(--faint)}
 .walkin-tag{display:block;margin-top:2px;font-size:11px;color:var(--special);white-space:nowrap}
 .walkin-tag.first{color:var(--accent)}
+.uuc-tag{display:block;margin-top:2px;font-size:11px;color:var(--warn);white-space:nowrap}
+.uuc-box{margin:0 0 10px;padding:10px 14px;border:1px solid var(--line);border-radius:var(--radius)}
+.uuc-head{margin-bottom:8px}
+.uuc-buttons{display:flex;flex-wrap:wrap;gap:6px}
 
 /* ------------------------------------------------------- action bar */
 .actions{position:fixed;left:0;right:0;bottom:0;z-index:18;background:#ffffffee;backdrop-filter:blur(8px);border-top:1px solid var(--line);box-shadow:0 -6px 24px #10302614}

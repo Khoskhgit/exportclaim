@@ -267,3 +267,19 @@ def test_eclaim_routes_without_credentials(client):
     assert client.post("/api/nhso18/eclaim/send", json={"rows": [{"key": OK}]}).status_code == 400
     assert "NHSO_USER" in client.post("/api/nhso18/eclaim/test", json={}).json()["detail"]
     assert client.get("/api/nhso18/eclaim/history").json() == []
+
+
+def test_nhso18_uuc_set_and_clear(client):
+    assert client.post("/api/nhso18/uuc", json={"key": "691102061935", "uuc": "3"}).status_code == 400
+    assert client.post("/api/nhso18/uuc", json={"uuc": "1"}).status_code == 400
+    assert client.post("/api/nhso18/uuc", json={"key": "691102061935", "uuc": "1"}).json() == {"uuc_set": "1"}
+
+
+def test_nhso18_uuc_store(tmp_path):
+    store = Store(tmp_path / "s.sqlite3")
+    store.set_nhso18_uuc("A", "1", "tester")
+    store.set_nhso18_uuc("B", "2")
+    assert store.nhso18_uuc(["A", "B", "C"]) == {"A": "1", "B": "2"}
+    store.set_nhso18_uuc("A", "2")
+    store.set_nhso18_uuc("B", None)
+    assert store.nhso18_uuc(["A", "B"]) == {"A": "2"}

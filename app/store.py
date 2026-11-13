@@ -62,6 +62,9 @@ CREATE TABLE IF NOT EXISTS nhso18_export_keys (
 CREATE TABLE IF NOT EXISTS nhso18_items (
   seq TEXT NOT NULL, icode TEXT NOT NULL, PRIMARY KEY (seq, icode)
 );
+CREATE TABLE IF NOT EXISTS nhso18_uuc (
+  seq TEXT PRIMARY KEY, uuc TEXT NOT NULL, set_by TEXT NOT NULL DEFAULT '', set_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS fdh_sends (
   id INTEGER PRIMARY KEY AUTOINCREMENT, created_at TEXT NOT NULL, zone TEXT NOT NULL, mode TEXT NOT NULL,
   visit_count INTEGER NOT NULL, ok INTEGER NOT NULL, http_status INTEGER, message TEXT NOT NULL DEFAULT '',
@@ -336,6 +339,20 @@ class Store:
             db.execute("DELETE FROM nhso18_items WHERE seq=? AND icode=?", (seq, icode))
             if excluded:
                 db.execute("INSERT INTO nhso18_items (seq, icode) VALUES (?,?)", (seq, icode))
+
+    def nhso18_uuc(self, seqs: Iterable[str]) -> dict[str, str]:
+        """UUC chosen by hand for these visits (the old program's useright toggle), by VN / AN."""
+        wanted = set(seqs)
+        with self._db() as db:
+            return {r["seq"]: r["uuc"] for r in db.execute("SELECT seq, uuc FROM nhso18_uuc") if r["seq"] in wanted}
+
+    def set_nhso18_uuc(self, seq: str, uuc: str | None, set_by: str = "", now: datetime | None = None) -> None:
+        """Set UUC 1 or 2 for one visit; None goes back to the program's own rule."""
+        with self._db() as db:
+            db.execute("DELETE FROM nhso18_uuc WHERE seq=?", (seq,))
+            if uuc:
+                db.execute("INSERT INTO nhso18_uuc (seq, uuc, set_by, set_at) VALUES (?,?,?,?)",
+                           (seq, uuc, set_by, (now or datetime.now()).isoformat(timespec="seconds")))
 
     def nhso18_sent(self, seqs: Iterable[str]) -> set[str]:
         wanted = set(seqs)

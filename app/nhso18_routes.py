@@ -66,6 +66,7 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
         fdh_sent = local.fdh_sent(keys)
         eclaim_sent = local.eclaim_sent(keys)
         excluded = local.nhso18_excluded(keys)
+        uuc_set = local.nhso18_uuc(keys)
         imported = results.latest(keys) if results is not None else {}
         merge = nhso18.same_day_walkin(rows, svc.walkin_pttypes(q))
         firsts = set(merge.values())
@@ -84,7 +85,7 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
                 "approve_required": bool(r.get("approve_required")), "claimcode_hosxp": text(r.get("claimcode_hosxp")),
                 "money": svc.money(r.get("money_total")), "fdh_amount": svc.money(r.get("fdh_amount")) if r.get("fdh_amount") else "",
                 "errors": f["errors"], "warns": f["warns"], "status": st,
-                "excluded_count": sum(1 for s, _ in excluded if s == k),
+                "excluded_count": sum(1 for s, _ in excluded if s == k), "uuc_set": uuc_set.get(k, ""),
                 "selectable": not f["errors"], "has_error": bool(f["errors"]), "has_warn": bool(f["warns"]),
                 "already_sent": bool(st), "default_selected": not f["errors"] and not st,
                 "walkin_first": merge.get(k, ""), "walkin_group": merge.get(k) or (k if k in firsts else ""),
@@ -131,6 +132,7 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
         table = "iptdiag" if kind == "IPD" else "ovstdiag"
         dx = q(f"SELECT diagtype, icd10, icdname(icd10) name FROM {table} WHERE {col}={nhso18.lit(key)} ORDER BY diagtype, icd10")
         return {
+            "uuc_auto": auto_uuc(key, kind), "uuc_set": local.nhso18_uuc([key]).get(key, ""),
             "items": [{"icode": text(i["icode"]), "name": text(i["name"]), "billmaud": text(i["billmaud"]),
                        "billmaud_name": text(i.get("billmaud_name")), "adp": text(i["adp"]),
                        "qty": number(i["qty"]), "amount": svc.money(i["amount"]),
@@ -138,6 +140,25 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
                       for i in items],
             "dx": [{"type": text(d["diagtype"]), "code": text(d["icd10"]), "name": text(d["name"])} for d in dx],
         }
+
+    def auto_uuc(key: str, kind: str) -> str:
+        """UUC the program's own rule (CheckUUC) gives this visit; IPD is always 1."""
+        if kind == "IPD":
+            return "1"
+        config, groups = svc.load_setup(q, settings.hcode)
+        found = nhso18.opd_contexts(q, [key], groups, config.zone)
+        return found[0].uuc if found else ""
+
+    @app.post("/api/nhso18/uuc")
+    def set_uuc(request: Request, body: dict = Body(...)):
+        key, uuc = text(body.get("key")), text(body.get("uuc"))
+        if not key:
+            raise HTTPException(400, "ไม่ได้ระบุรายการ")
+        if uuc not in {"", "1", "2"}:
+            raise HTTPException(400, "UUC ต้องเป็น 1 หรือ 2")
+        local.set_nhso18_uuc(key, uuc or None, auth.user_label(request))
+        log.info("nhso18 uuc key=%s uuc=%s", key, uuc or "auto")
+        return {"uuc_set": uuc}
 
     @app.post("/api/nhso18/item")
     def item(body: dict = Body(...)):
@@ -172,6 +193,7 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
         visits = nhso18.opd_contexts(q, vns, groups, config.zone) + svc.ipd_contexts(q, ans, groups, odsmis)
         if not visits:
             raise HTTPException(400, "ไม่พบรายการที่เลือก")
+        nhso18.set_uuc(visits, local.nhso18_uuc(vns + ans))
         excluded = local.nhso18_excluded(vns + ans)
         data = nhso18.Builder(q, config, settings.rcm_db, ECLAIM_DB, excluded).run(visits)
         nhso18.set_permitno(data, {r["key"]: r["claimcode"] for r in reviewed if r["approve_required"]})

@@ -34,7 +34,7 @@ function renderRows() {
     const problems = [...r.errors, ...r.warns].map((i) => i.message);
     return el("tr", { class: state.current === r.key ? "current" : "", onclick: () => openDrawer(r) },
       el("td", { class: "check" }, box), el("td", {}, resultBadge(r)),
-      el("td", {}, r.status ? el("span", { class: "badge b-sent" }, r.status) : el("span", { class: "muted" }, "—"), walkinTag(r)),
+      el("td", {}, r.status ? el("span", { class: "badge b-sent" }, r.status) : el("span", { class: "muted" }, "—"), walkinTag(r), uucTag(r)),
       el("td", {}, r.kind), el("td", { class: "mono" }, r.key), el("td", { class: "mono" }, r.hn),
       el("td", { class: "name-cell", title: r.ptname }, r.ptname, el("span", { class: "sub" }, r.pttype)),
       el("td", { class: "mono" }, toDmy(r.date)), el("td", {}, r.maininscl), el("td", {}, r.pdx || el("span", { class: "muted" }, "—")),
@@ -54,6 +54,31 @@ function walkinTag(r) {
   if (r.walkin_first) return el("span", { class: "walkin-tag", title: "Walk-in บัตรทองวันเดียวกัน ค่าใช้จ่ายรวมไปส่งกับ VN แรก" }, `รวมกับ ${r.walkin_first}`);
   if (r.walkin_group) return el("span", { class: "walkin-tag first", title: "Walk-in บัตรทองวันเดียวกัน visit อื่นรวมเข้ามาที่ VN นี้" }, "VN แรก (รวม walk-in)");
   return null;
+}
+function uucTag(r) {
+  return r.uuc_set ? el("span", { class: "uuc-tag", title: "กำหนด UUC เองในโปรแกรมนี้ (ไม่แก้ HOSxP)" }, `UUC ${r.uuc_set} (กำหนดเอง)`) : null;
+}
+// UUC 1 = ใช้สิทธิ / 2 = ไม่ใช้สิทธิ. "อัตโนมัติ" follows CheckUUC of the old program; the choice is kept in this app only.
+function uucControl(r, data) {
+  const box = el("div", { class: "uuc-box" });
+  const draw = () => {
+    const used = r.uuc_set || data.uuc_auto;
+    const choice = (value, label) => el("button", { type: "button", class: (r.uuc_set || "") === value ? "primary" : "",
+      "aria-pressed": String((r.uuc_set || "") === value),
+      onclick: async () => {
+        try {
+          await api("/api/nhso18/uuc", { key: r.key, uuc: value });
+          r.uuc_set = value; draw(); renderRows();
+        } catch (err) { notice(err.message); }
+      } }, label);
+    box.replaceChildren(
+      el("div", { class: "uuc-head" }, el("strong", {}, `UUC ที่จะส่ง: ${used || "—"}`), " ",
+        el("span", { class: "muted" }, used === "1" ? "(ใช้สิทธิ)" : used === "2" ? "(ไม่ใช้สิทธิ)" : ""),
+        el("span", { class: "muted-note" }, ` ตามกฎของโปรแกรม = ${data.uuc_auto || "—"}`)),
+      el("div", { class: "uuc-buttons" }, choice("", "อัตโนมัติ"), choice("1", "1 ใช้สิทธิ"), choice("2", "2 ไม่ใช้สิทธิ")));
+  };
+  draw();
+  return box;
 }
 function mergedText(result) { return result.merged ? ` · รวม walk-in ${result.merged} visit เข้ากับ VN แรก` : ""; }
 function selectedRows() { return state.rows.filter((r) => state.selected.has(r.key)); }
@@ -110,6 +135,7 @@ async function openDrawer(r) {
         : [["ClaimCode", r.claimcode || "(ไม่มี)"]]),
       ["PDx", r.pdx], ["ค่าใช้จ่าย", `${baht.format(Number(r.money))} บาท`], ["สถานะ", r.status || "ยังไม่ส่ง"], ["ชดเชย FDH", r.fdh_amount ? `${baht.format(Number(r.fdh_amount))} บาท` : "—"]]
       .map(([k, v]) => el("div", {}, el("dt", {}, k), el("dd", {}, v || "—"))))];
+    check.push(uucControl(r, data));
     const issues = [...r.errors.map((i) => ({ ...i, level: "error" })), ...r.warns.map((i) => ({ ...i, level: "warn" }))];
     if (issues.length) {
       check.push(el("h3", {}, "ผลตรวจ"));

@@ -1105,6 +1105,13 @@ def opd_contexts(select: Callable[[str], list[dict]], vns: Sequence[str], groups
     return sorted(out, key=lambda v: order.get(v.vn, 0))
 
 
+def set_uuc(visits: Sequence[Visit], chosen: dict[str, str]) -> None:
+    """Use the UUC set by hand (the old program's useright toggle) in place of the CheckUUC result."""
+    for v in visits:
+        if chosen.get(v.vn) in {"1", "2"}:
+            v.uuc = chosen[v.vn]
+
+
 # ---------------------------------------------------------------- UCS walk-in
 # A UCS walk-in patient with more than one OP visit on the same day is claimed once: the later visits' items are
 # merged into the first visit. This is done only in the exported files; HOSxP is not changed.
