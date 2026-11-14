@@ -86,6 +86,7 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
                 "approve_required": bool(r.get("approve_required")), "claimcode_hosxp": text(r.get("claimcode_hosxp")),
                 "money": svc.money(r.get("money_total")), "fdh_amount": svc.money(r.get("fdh_amount")) if r.get("fdh_amount") else "",
                 "errors": f["errors"], "warns": f["warns"], "status": st,
+                "paid_amount": svc.paid_amount(r, st, imported.get(k)),
                 "excluded_count": sum(1 for s, _ in excluded if s == k), "uuc_set": uuc_set.get(k, ""),
                 "uuc": uuc_set.get(k) or ("2" if k in uuc_two else "1"),
                 "selectable": not f["errors"], "has_error": bool(f["errors"]), "has_warn": bool(f["warns"]),

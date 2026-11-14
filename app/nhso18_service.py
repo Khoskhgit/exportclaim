@@ -231,6 +231,15 @@ def status(r: dict, local_sent: bool, sent_label: str = "", result: dict | None 
     return sent_label or ("ส่งออกแล้ว" if local_sent else "")
 
 
+def paid_amount(r: dict, st: str, result: dict | None = None) -> str:
+    """For a paid visit: the imported STM total, else the amount FDH reports ("" when unknown or not paid)."""
+    if st != "ชดเชยแล้ว":
+        return ""
+    stm = (result or {}).get("stm_paid")
+    if stm:
+        return money(stm)
+    return money(r["fdh_amount"]) if text(r.get("fdh_amount")) else ""
+
 # ------------------------------------------------------------------ IPD context
 def ipd_contexts(q: Select, ans: Sequence[str], groups: PttypeGroups, odsmis: Iterable[str] = ()) -> list[Visit]:
     if not ans:

@@ -8,6 +8,7 @@ const CATEGORIES = {
   warn: ["มีคำเตือน", (r) => r.selectable && r.has_warn, "warn"],
   error: ["Error", (r) => r.has_error, "error"],
   sent: ["ส่งแล้ว", (r) => r.status, "sent"],
+  paid: ["ชดเชยแล้ว", (r) => r.status === "ชดเชยแล้ว", "paid", (r) => r.paid_amount],
 };
 
 function rank(r) { return r.has_error ? 2 : r.has_warn ? 1 : 0; }
