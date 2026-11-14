@@ -182,5 +182,6 @@ def test_paid_amount_prefers_stm_then_fdh():
     from app import nhso18_service as svc
     assert svc.paid_amount({"fdh_amount": 900}, "ชดเชยแล้ว", {"stm_paid": "1200.5"}) == "1200.50"
     assert svc.paid_amount({"fdh_amount": 900}, "ชดเชยแล้ว", {}) == "900.00"
+    assert svc.paid_amount({"rep_paid": 100.0, "fdh_amount": 900}, "ชดเชยแล้ว", {}) == "100.00"
     assert svc.paid_amount({}, "ชดเชยแล้ว", None) == ""
     assert svc.paid_amount({"fdh_amount": 900}, "ส่งแล้ว", {"stm_paid": "1200"}) == ""

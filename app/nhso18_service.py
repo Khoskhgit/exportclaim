@@ -65,6 +65,9 @@ def search(q: Select, rcm: str, start: date | None, end: date | None, rights: Se
                             if rep_ok else "NULL")
     paid = lambda key, col: (f"(SELECT GROUP_CONCAT(DISTINCT rep) FROM {rcm}.repeclaim WHERE {key}={col} AND IFNULL(errorcode,'')='')"
                              if eclaim_ok else "NULL")
+    # A VN can appear twice (the REP line and the statement line) with the same amount, so take the larger, not the sum.
+    paid_amt = lambda key, col: (f"(SELECT MAX(Compensated) FROM {rcm}.repeclaim WHERE {key}={col} AND IFNULL(errorcode,'')='')"
+                                 if eclaim_ok else "NULL")
     if opd and not an:
         if vn_list:
             where = f"o.vn IN ({lit_list(vn_list)})"
@@ -80,7 +83,7 @@ def search(q: Select, rcm: str, start: date | None, end: date | None, rights: Se
           pttypeeclaim(o.pttype) pttype_eclaim, diagnosis('opd',o.vn,1) pdx, v.income money_hosxp,
           (SELECT SUM(IFNULL(qty,0)*IFNULL(unitprice,0)) FROM opitemrece WHERE vn=o.vn) money_total,
           (SELECT vp.claim_code FROM visit_pttype vp WHERE vp.vn=o.vn AND vp.pttype=o.pttype LIMIT 1) claimcode,
-          {rep('vn', 'o.vn')} rep_rep, {paid('vn', 'o.vn')} rep_invoice,
+          {rep('vn', 'o.vn')} rep_rep, {paid('vn', 'o.vn')} rep_invoice, {paid_amt('vn', 'o.vn')} rep_paid,
           re.fdh_claim_status_message fdh_status, re.fdh_act_amt fdh_amount,
           seekexport(o.ovstost,'ovstost',NULL) discharge, o.an has_an
         FROM ovst o
@@ -103,7 +106,7 @@ def search(q: Select, rcm: str, start: date | None, end: date | None, rights: Se
           pttypeeclaim(i.pttype) pttype_eclaim, diagnosis('ipd',i.an,1) pdx, a.income money_hosxp,
           (SELECT SUM(IFNULL(qty,0)*IFNULL(unitprice,0)) FROM opitemrece WHERE an=i.an) money_total,
           (SELECT ip.claim_code FROM ipt_pttype ip WHERE ip.an=i.an AND ip.pttype=i.pttype LIMIT 1) claimcode,
-          {rep('an', 'i.an')} rep_rep, {paid('an', 'i.an')} rep_invoice,
+          {rep('an', 'i.an')} rep_rep, {paid('an', 'i.an')} rep_invoice, {paid_amt('an', 'i.an')} rep_paid,
           re.fdh_claim_status_message fdh_status, re.fdh_act_amt fdh_amount, NULL discharge, NULL has_an
         FROM ipt i
         LEFT JOIN patient pt ON pt.hn=i.hn LEFT JOIN an_stat a ON a.an=i.an LEFT JOIN pttype ptt ON ptt.pttype=i.pttype
@@ -232,13 +235,13 @@ def status(r: dict, local_sent: bool, sent_label: str = "", result: dict | None 
 
 
 def paid_amount(r: dict, st: str, result: dict | None = None) -> str:
-    """For a paid visit: the imported STM total, else the amount FDH reports ("" when unknown or not paid)."""
+    """For a paid visit: the imported STM total, else rcmdb repeclaim.Compensated, else FDH's amount ("" if none)."""
     if st != "ชดเชยแล้ว":
         return ""
-    stm = (result or {}).get("stm_paid")
-    if stm:
-        return money(stm)
-    return money(r["fdh_amount"]) if text(r.get("fdh_amount")) else ""
+    for value in ((result or {}).get("stm_paid"), r.get("rep_paid"), r.get("fdh_amount")):
+        if text(value):
+            return money(value)
+    return ""
 
 # ------------------------------------------------------------------ IPD context
 def ipd_contexts(q: Select, ans: Sequence[str], groups: PttypeGroups, odsmis: Iterable[str] = ()) -> list[Visit]:
