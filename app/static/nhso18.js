@@ -21,7 +21,7 @@ function visible() {
   const q = state.text.toLowerCase();
   const test = CATEGORIES[state.filter][1];
   const list = state.rows.filter((r) => test(r) && (!q || `${r.ptname} ${r.key} ${r.hn} ${r.pdx}`.toLowerCase().includes(q)));
-  return sortRows(list.map((r) => Object.assign(r, { rank: rank(r) })), state.sort, ["money", "rank"]);
+  return sortRows(list.map((r) => Object.assign(r, { rank: rank(r) })), state.sort, ["money", "rank", "paid_amount"]);
 }
 function renderChips() { renderCards($("summary"), CATEGORIES, state.rows, state.filter, (r) => r.money, (key) => { state.filter = key; render(); }); }
 
@@ -40,6 +40,7 @@ function renderRows() {
       el("td", { class: "name-cell", title: r.ptname }, r.ptname, el("span", { class: "sub" }, r.pttype)),
       el("td", { class: "mono" }, toDmy(r.date)), el("td", {}, r.maininscl), el("td", {}, r.pdx || el("span", { class: "muted" }, "—")),
       el("td", { class: "num" }, baht.format(Number(r.money)), r.excluded_count ? el("span", { class: "excluded-note" }, `ไม่ส่ง ${r.excluded_count} รายการ`) : ""),
+      el("td", { class: "num paid" }, r.paid_amount ? baht.format(Number(r.paid_amount)) : el("span", { class: "muted" }, "—")),
       el("td", { class: "problems" }, problemText(problems)));
   }));
   $("empty").hidden = list.length > 0;
