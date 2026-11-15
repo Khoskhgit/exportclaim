@@ -44,10 +44,17 @@ class Settings:
     hosp_main: tuple[str, ...] = ()
     dental_pttypes: tuple[str, ...] = ("29",)
     ofc_approve_pttypes: tuple[str, ...] = ("21",)
-    # PPFS 27) infant iron syrup: HOSxP keys it under the placeholder ADP 10000 ("NONE"); the code e-Claim expects
-    # (737414, given by the user) replaces 10000 in the ZIP. Set PPFS_IRON_CHILD_ADP to change it.
-    ppfs_iron_child_adp: str = "737414"
+    # PPFS 27) child iron: fees 3004084 (6-12 months) and 3004023 (2-5 years), keyed under the placeholder ADP 10000
+    # ("NONE"). The ZIP sends the code of the drug form given, as the user set: syrup 689697, tablets 776508.
     ppfs_iron_child_icodes: tuple[str, ...] = ("3004084",)
+    ppfs_iron_child2_icodes: tuple[str, ...] = ("3004023",)
+    ppfs_iron_syrup_adp: str = "689697"
+    ppfs_iron_tablet_adp: str = "776508"
+    # PPFS 26) child Hb/Hct screening (fees 3003783 6-12 months, 3004022 3-5 years): sent with the ADP 10000 HOSxP
+    # has, as the user set.
+    ppfs_anemia_child_adp: str = "10000"
+    ppfs_anemia_child_icodes: tuple[str, ...] = ("3003783",)
+    ppfs_anemia_child2_icodes: tuple[str, ...] = ("3004022",)
     default_doctor: str = ""
     default_usage_code: str = "0201"
     default_usage_name: str = DEFAULT_USAGE_NAME
@@ -139,8 +146,13 @@ def load_settings(env_file: Path | None = None) -> Settings:
         hosp_main=_csv(get("HOSP_MAIN")),
         dental_pttypes=_csv(get("DENTAL_PTTYPES")) or ("29",),
         ofc_approve_pttypes=_csv(get("OFC_APPROVE_PTTYPES")) or ("21",),
-        ppfs_iron_child_adp=(get("PPFS_IRON_CHILD_ADP") or "").strip() or "737414",
         ppfs_iron_child_icodes=_csv(get("PPFS_IRON_CHILD_ICODES")) or ("3004084",),
+        ppfs_iron_child2_icodes=_csv(get("PPFS_IRON_CHILD2_ICODES")) or ("3004023",),
+        ppfs_iron_syrup_adp=(get("PPFS_IRON_SYRUP_ADP") or "").strip() or "689697",
+        ppfs_iron_tablet_adp=(get("PPFS_IRON_TABLET_ADP") or "").strip() or "776508",
+        ppfs_anemia_child_adp=(get("PPFS_ANEMIA_CHILD_ADP") or "").strip() or "10000",
+        ppfs_anemia_child_icodes=_csv(get("PPFS_ANEMIA_CHILD_ICODES")) or ("3003783",),
+        ppfs_anemia_child2_icodes=_csv(get("PPFS_ANEMIA_CHILD2_ICODES")) or ("3004022",),
         default_doctor=get("DEFAULT_DOCTOR", ""),
         default_usage_code=get("DEFAULT_USAGE_CODE", "0201"),
         default_usage_name=get("DEFAULT_USAGE_NAME") or DEFAULT_USAGE_NAME,

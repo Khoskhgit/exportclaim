@@ -18,7 +18,7 @@ CODE = "14001"
 RATE = Decimal("80")
 AGE = (13, 45)
 TABLETS = 52
-IRON = "FERR|IRON|TRIFER|FOLIC"
+IRON = "FERR|(^|[^A-Za-z])IRON|TRIFER|FOLIC"  # not SPIRONOLACTONE
 
 VISIT_COLS = """o.vn, o.hn, o.vstdate, o.vsttime, o.an, o.pttype, ptt.name pttype_name,
           CONCAT(IFNULL(p.pname,''),p.fname,' ',p.lname) ptname, p.cid, p.nationality, p.sex, v.age_y"""

@@ -15,6 +15,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 
 from . import (auth, nhso18, nhso18_service as svc, ppfs, ppfs_anemia, ppfs_fluoride, ppfs_fp, ppfs_iron, ppfs_ironchild,
+               ppfs_anemiachild,
                ppfs_ncd, ppfs_pregtest)
 from .config import Settings
 from .store import Store
@@ -109,9 +110,13 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
         return hosxp._select(sql, [])
 
     def check(service: ppfs.Service, start: date, end: date) -> list[ppfs.Row]:
+        if service.key == "anemiachild":
+            band_list = ppfs_anemiachild.bands(settings)
+            data = ppfs_anemiachild.fetch(q, start, end, band_list)
+            return ppfs_anemiachild.check(data, band_list, store.sent(sorted({text(r["vn"]) for r in data["items"]})))
         if service.key == "ironchild":
-            data = ppfs_ironchild.fetch(q, start, end, settings.ppfs_iron_child_icodes)
-            return ppfs_ironchild.check(data, settings.ppfs_iron_child_adp,
+            data = ppfs_ironchild.fetch(q, start, end, ppfs_ironchild.bands(settings))
+            return ppfs_ironchild.check(data, ppfs_ironchild.bands(settings), ppfs_ironchild.form_codes(settings),
                                         store.sent(sorted({text(r["vn"]) for r in data["items"]})))
         if service.key == "fluoride":
             data = ppfs_fluoride.fetch(q, start, end)
@@ -168,16 +173,27 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
                        "amount": money(i["amount"])} for i in d["items"]],
             "dx": [{"type": text(x["diagtype"]), "code": text(x["icd10"]), "name": text(x["name"])} for x in d["dx"]],
             "nationality": f"{text(d['visit'].get('nationality'))} {text(d['visit'].get('nationality_name'))}".strip()}
-        if _service(body.get("service")).key == "ironchild":
-            d = ppfs_ironchild.detail(q, vn, settings.ppfs_iron_child_icodes)
+        if _service(body.get("service")).key == "anemiachild":
+            band_list = ppfs_anemiachild.bands(settings)
+            d = ppfs_anemiachild.detail(q, vn, band_list)
             if not d:
                 raise HTTPException(404, "ไม่พบ visit นี้ใน HOSxP")
             sent = store.sent(sorted({text(c["vn"]) for c in d["claims"]}))
-            return {**common(d), "adp": settings.ppfs_iron_child_adp, "claims": [
+            return {**common(d), "send_icodes": list(ppfs_anemiachild.all_icodes(band_list)), "claims": [
+                {"date": iso(c["vstdate"]), "vn": text(c["vn"]), "months": ppfs_ironchild.months_old(c),
+                 "qty": f"{float(c['qty'] or 0):g}", "amount": money(c["amount"]), "band": c["band"], "adp": c["adp"],
+                 "labs": {k: d["labs"].get(text(c["vn"]), {}).get(k, "") for k in ("Hb", "Hct")},
+                 "sent": sent.get((text(c["vn"]), c["adp"]), "")} for c in d["claims"]]}
+        if _service(body.get("service")).key == "ironchild":
+            d = ppfs_ironchild.detail(q, vn, ppfs_ironchild.bands(settings), ppfs_ironchild.form_codes(settings))
+            if not d:
+                raise HTTPException(404, "ไม่พบ visit นี้ใน HOSxP")
+            sent = store.sent(sorted({text(c["vn"]) for c in d["claims"]}))
+            return {**common(d), "send_icodes": list(ppfs_ironchild.all_icodes(ppfs_ironchild.bands(settings))), "claims": [
                 {"date": iso(c["vstdate"]), "vn": text(c["vn"]), "year": ppfs.fiscal_year(c["vstdate"]) + 543,
                  "months": ppfs_ironchild.months_old(c), "qty": f"{float(c['qty'] or 0):g}", "amount": money(c["amount"]),
                  "drug": d["iron"].get(text(c["vn"]), {}).get("name", ""),
-                 "sent": sent.get((text(c["vn"]), ppfs_ironchild.HOSXP_CODE), "")} for c in d["claims"]]}
+                 "band": c["band"], "form": c["form"], "adp": c["adp"], "sent": sent.get((text(c["vn"]), c["adp"]), "")} for c in d["claims"]]}
         if _service(body.get("service")).key == "fluoride":
             d = ppfs_fluoride.detail(q, vn)
             if not d:
@@ -293,25 +309,26 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
             claimed.setdefault(r.vn, set()).add(r.code)
         vns = list(claimed)
         # Leave out every other item of these visits, so CHT/CHA add up to the claimed PP items only.
-        # 27) shares HOSxP's placeholder ADP 10000 with other items, so it is kept by its own icodes.
-        only = settings.ppfs_iron_child_icodes if service.key == "ironchild" else None
-        excluded = {(text(i["vn"]), text(i["icode"])) for i in ppfs.visit_items(q, vns)
-                    if text(i.get("code")) not in claimed.get(text(i["vn"]), set()) or i.get("is_drug")
-                    or (only is not None and text(i["icode"]) not in only)}
+        if service.key in ("ironchild", "anemiachild"):
+            # 26) and 27) are keyed under HOSxP's placeholder ADP 10000, shared with other items: keep their fees by icode.
+            band_list = (ppfs_ironchild if service.key == "ironchild" else ppfs_anemiachild).bands(settings)
+            excluded = {(text(i["vn"]), text(i["icode"])) for i in ppfs.visit_items(q, vns)
+                        if text(i["icode"]) not in ppfs_ironchild.keep_icodes(band_list, claimed.get(text(i["vn"]), set()))}
+        else:
+            excluded = {(text(i["vn"]), text(i["icode"])) for i in ppfs.visit_items(q, vns)
+                        if text(i.get("code")) not in claimed.get(text(i["vn"]), set()) or i.get("is_drug")}
         config, groups = svc.load_setup(q, settings.hcode)
         visits = nhso18.opd_contexts(q, vns, groups, config.zone)
         if not visits:
             raise HTTPException(400, "ไม่พบ visit ที่เลือก")
         data = nhso18.Builder(q, config, settings.rcm_db, ECLAIM_DB, excluded).run(visits)
+        if service.key in ("ironchild", "anemiachild"):
+            ppfs_ironchild.rewrite_adp(data, claimed)  # 10000 -> the e-Claim code of the band
         data = ppfs.only_claimed(data, claimed)
         found = {(text(r["SEQ"]), text(r["CODE"])) for r in data["ADP"]}
         lost = [r.key for r in picked if (r.vn, r.code) not in found]
         if lost:
             raise HTTPException(400, f"สร้างแฟ้ม ADP ของ {lost[0].replace('|', ' รหัส ')} ไม่ได้ ตรวจรายการค่าบริการใน HOSxP")
-        if service.key == "ironchild":
-            if not settings.ppfs_iron_child_adp:
-                raise HTTPException(400, "ยังไม่ได้ตั้งรหัส ADP ของบริการ 27) (PPFS_IRON_CHILD_ADP ใน .env)")
-            ppfs_ironchild.rewrite_adp(data, set(vns), settings.ppfs_iron_child_adp)
         result = nhso18.build_zip(data, settings.hcode, settings.export_dir)
         items = [{"vn": r.vn, "code": r.code, "amount": f"{r.amount:.2f}"} for r in picked]
         export_id = store.record(service.key, result.zip_path, items, auth.user_label(request))
