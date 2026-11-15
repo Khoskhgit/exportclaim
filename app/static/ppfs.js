@@ -46,8 +46,12 @@ const COLUMNS = {
     ["ยาที่จ่าย (เม็ด)", "drug_qty", false, (r) => (r.extra.drug_name ? el("span", {}, r.extra.drug_qty, el("span", { class: "sub" }, r.extra.drug_name)) : dash())],
     ["เบิกในปีงบนี้แล้ว", "first", false, (r) => (r.extra.first ? el("span", {}, toDmy(r.extra.first), el("span", { class: "sub" }, `VN ${r.extra.first_vn}`)) : dash())],
   ],
+  fluoride: [
+    ["อายุ (ปี)", "age", true, (r) => (r.extra.age === null || r.extra.age === undefined ? dash() : String(r.extra.age))],
+    ["หัตถการทันตกรรม", "", false, (r) => (r.extra.dental.length ? el("span", {}, ...r.extra.dental.map((d) => el("span", { class: "sub" }, d))) : el("span", { class: "badge b-warn" }, "ไม่พบ"))],
+  ],
 };
-const COUNT_LABEL = { postnatal: "ครั้งที่", pregtest: "ครั้งที่ในปีงบ", fp: "สะสมในปีงบ", ncd: "ครั้งที่", anemia: "ครั้งที่", iron: "ครั้งที่ในปีงบ" };
+const COUNT_LABEL = { postnatal: "ครั้งที่", pregtest: "ครั้งที่ในปีงบ", fp: "สะสมในปีงบ", ncd: "ครั้งที่", anemia: "ครั้งที่", iron: "ครั้งที่ในปีงบ", fluoride: "ครั้งที่ในปีงบ" };
 function labText(labs) {
   const parts = Object.entries(labs || {});
   if (!parts.length) return dash();
@@ -58,7 +62,7 @@ function historyText(h, day) {
   const before = [["เบาหวาน", h.dm], ["ไขมัน E78", h.lipid], ["ยาลดไขมัน", h.statin]].filter(([, d]) => d && d <= day);
   return before.length ? el("span", {}, ...before.map(([k, d]) => el("span", { class: "sub" }, `${k} ${toDmy(d)}`))) : dash();
 }
-const countText = (r) => (!r.count ? dash() : service() === "fp" && r.extra.cap ? `${r.extra.year_total} / ${r.extra.cap} ${r.extra.cap_unit}` : String(r.count));
+const countText = (r) => (!r.count ? dash() : service() === "fluoride" ? `${r.count} / 2` : service() === "fp" && r.extra.cap ? `${r.extra.year_total} / ${r.extra.cap} ${r.extra.cap_unit}` : String(r.count));
 const service = () => $("service").value;
 
 function renderHead() {
@@ -209,7 +213,11 @@ async function openDrawer(r) {
     const data = await api("/api/ppfs/detail", { vn: r.vn, service: kind });
     if (state.current !== r.key) return;
     const b = data.birth;
-    const own = kind === "iron" ? [
+    const own = kind === "fluoride" ? [
+      ["อายุ", r.extra.age === null || r.extra.age === undefined ? "—" : `${r.extra.age} ปี`],
+      ["หัตถการทันตกรรม", r.extra.dental.join(", ") || "ไม่พบ"],
+      [`ครั้งที่ในปีงบ ${r.extra.year ? r.extra.year + 543 : ""}`, r.count ? `${r.count} จาก 2` : "—"],
+    ] : kind === "iron" ? [
       ["อายุ", r.extra.age === null || r.extra.age === undefined ? "—" : `${r.extra.age} ปี`],
       ["ยาที่จ่าย", r.extra.drug_name ? `${r.extra.drug_name} × ${r.extra.drug_qty} เม็ด` : "ไม่พบ"],
       [`เบิกในปีงบ ${r.extra.year ? r.extra.year + 543 : ""}`, r.extra.first ? `แล้วเมื่อ ${toDmy(r.extra.first)} (VN ${r.extra.first_vn})` : "ยังไม่เคย"],
@@ -242,12 +250,24 @@ async function openDrawer(r) {
       check.push(el("h3", {}, "ผลตรวจ"));
       check.push(el("ul", { class: "issues" }, ...issues.map((i) => el("li", { class: `issue ${i.level}` },
         el("div", { class: "issue-title" }, el("span", { class: `badge ${i.level === "error" ? "b-error" : "b-warn"}` }, i.level === "error" ? "Error" : "เตือน"), " ", i.message)))));
-      check.push(el("p", { class: "hint" }, kind === "iron" ? "เบิกได้คนละ 1 ครั้งต่อปีงบ อายุ 13–45 ปี เฉพาะหญิงไทย รายที่ไม่ตรงเงื่อนไขไม่ต้องส่ง" : kind === "anemia" ? "เบิกได้คนละ 1 ครั้ง อายุ 13–24 ปี เฉพาะหญิงไทย รายที่ไม่ตรงเงื่อนไขไม่ต้องส่ง" : kind === "ncd" ? "ผู้ที่มีประวัติรักษาโรคมาก่อน หรือเบิกไปแล้วในรอบ ไม่ใช่กลุ่มที่เบิกได้ ไม่ต้องส่ง" : kind === "fp" ? "แก้ข้อมูลใน HOSxP (คีย์ค่าบริการ 18… ให้ตรงกับยาที่จ่าย) แล้วกดค้นหาอีกครั้ง" : kind === "pregtest" ? "แก้ข้อมูลใน HOSxP (รายการค่าบริการ / รหัสวินิจฉัย / ผล lab) แล้วกดค้นหาอีกครั้ง"
+      check.push(el("p", { class: "hint" }, kind === "fluoride" ? "เบิกได้อายุ 25–59 ปี ไม่เกิน 2 ครั้งต่อปีงบ ถ้ายังไม่คีย์ 15001 ให้คีย์ใน HOSxP แล้วค้นหาใหม่" : kind === "iron" ? "เบิกได้คนละ 1 ครั้งต่อปีงบ อายุ 13–45 ปี เฉพาะหญิงไทย รายที่ไม่ตรงเงื่อนไขไม่ต้องส่ง" : kind === "anemia" ? "เบิกได้คนละ 1 ครั้ง อายุ 13–24 ปี เฉพาะหญิงไทย รายที่ไม่ตรงเงื่อนไขไม่ต้องส่ง" : kind === "ncd" ? "ผู้ที่มีประวัติรักษาโรคมาก่อน หรือเบิกไปแล้วในรอบ ไม่ใช่กลุ่มที่เบิกได้ ไม่ต้องส่ง" : kind === "fp" ? "แก้ข้อมูลใน HOSxP (คีย์ค่าบริการ 18… ให้ตรงกับยาที่จ่าย) แล้วกดค้นหาอีกครั้ง" : kind === "pregtest" ? "แก้ข้อมูลใน HOSxP (รายการค่าบริการ / รหัสวินิจฉัย / ผล lab) แล้วกดค้นหาอีกครั้ง"
         : "แก้ข้อมูลใน HOSxP (บันทึกหลังคลอด / วันคลอด / รายการค่าบริการ) แล้วกดค้นหาอีกครั้ง"));
     } else check.push(el("div", { class: "all-good" }, "✓ ผ่านการตรวจทั้งหมด พร้อมส่ง"));
 
     const post = [];
-    if (kind === "iron") {
+    if (kind === "fluoride") {
+      post.push(el("h3", {}, "การเคลือบฟลูออไรด์ (15001) ทั้งหมดของผู้ป่วย"));
+      post.push(data.claims.length ? table(["ปีงบ", "วันที่", "VN", "หัตถการทันตกรรม", { label: "ยอด", num: true }, "ส่งออก"],
+        data.claims.map((c, i) => {
+          const nth = data.claims.slice(0, i + 1).filter((x) => x.year === c.year && Number(x.qty) > 0).length;
+          return el("tr", { class: c.vn === r.vn ? "current" : "" },
+            el("td", {}, nth > 2 ? el("span", { class: "badge b-error" }, `${c.year} (ครั้งที่ ${nth})`) : `${c.year} (ครั้งที่ ${nth})`),
+            el("td", { class: "mono" }, toDmy(c.date)), el("td", { class: "mono" }, c.vn), el("td", {}, c.dental.join(", ") || "—"),
+            el("td", { class: "num" }, money(c.amount)), el("td", {}, c.sent ? thaiDateTime(c.sent) : "—"));
+        }))
+        : el("p", { class: "muted" }, "ยังไม่เคยคีย์ 15001"));
+      post.push(el("p", { class: "muted-note" }, "เบิกได้ไม่เกิน 2 ครั้งต่อคนต่อปีงบประมาณ (ต.ค.–ก.ย.) ครั้งที่ 3 ขึ้นไปเป็นป้ายสีแดง"));
+    } else if (kind === "iron") {
       post.push(el("h3", {}, "การรับยาเม็ดเสริมธาตุเหล็ก (14001) ทั้งหมดของผู้ป่วย"));
       post.push(data.claims.length ? table(["ปีงบ", "วันที่", "VN", "ยาที่จ่าย", { label: "เม็ด", num: true }, { label: "ยอด", num: true }, "ส่งออก"],
         data.claims.map((c, i) => {
@@ -334,7 +354,8 @@ async function openDrawer(r) {
       }))];
     body.replaceChildren(...tabs([
       { id: "check", label: "สรุปและผลตรวจ", badge: issues.length || undefined, alert: r.errors.length > 0, content: check },
-      kind === "iron" ? { id: "iron", label: "ประวัติรับยา", badge: data.claims.length || undefined, content: post }
+      kind === "fluoride" ? { id: "fluoride", label: "ประวัติเคลือบฟลูออไรด์", badge: data.claims.length || undefined, content: post }
+        : kind === "iron" ? { id: "iron", label: "ประวัติรับยา", badge: data.claims.length || undefined, content: post }
         : kind === "anemia" ? { id: "anemia", label: "ประวัติคัดกรอง", badge: data.claims.length || undefined, content: post }
         : kind === "ncd" ? { id: "ncd", label: "ประวัติคัดกรอง", badge: data.claims.length || undefined, content: post }
         : kind === "fp" ? { id: "fp", label: "ประวัติวางแผนครอบครัว", badge: data.history.length || undefined, content: post }
