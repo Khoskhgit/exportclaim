@@ -12,6 +12,31 @@ const CATEGORIES = {
   sent: ["ส่งแล้ว", (r) => Boolean(r.sent), "sent"],
 };
 const selectable = (r) => !r.errors.length;
+
+// Columns that differ by service: [header, sort key, numeric, cell].
+const uptBadge = (v) => !v ? dash() : el("span", { class: `badge ${/pos/i.test(v) ? "b-warn" : "b-ok"}` }, v);
+const COLUMNS = {
+  postnatal: [
+    ["วันคลอด", "labor_date", false, (r) => (r.labor_date ? toDmy(r.labor_date) : dash())],
+    ["หลังคลอด (วัน)", "days", true, (r) => (r.days === null ? dash() : String(r.days))],
+  ],
+  pregtest: [
+    ["อายุ (ปี)", "age", true, (r) => (r.extra.age === null || r.extra.age === undefined ? dash() : String(r.extra.age))],
+    ["ผล UPT", "upt", false, (r) => uptBadge(r.extra.upt)],
+    ["Z32", "z32", false, (r) => (r.extra.z32 ? "✓" : dash())],
+  ],
+};
+const COUNT_LABEL = { postnatal: "ครั้งที่", pregtest: "ครั้งที่ในปี" };
+const service = () => $("service").value;
+
+function renderHead() {
+  const th = (label, key, num) => el("th", { class: num ? "num" : "", ...(key ? { "data-sort": key } : {}) }, label);
+  $("thead").replaceChildren(el("tr", {}, el("th", { class: "check" }, el("span", { class: "sr-only" }, "เลือก")),
+    th("ผลตรวจ", "rank"), th("วันที่", "date"), th("VN", "vn"), th("HN", "hn"), th("ชื่อ", "ptname"),
+    ...(COLUMNS[service()] || []).map(([label, key, num]) => th(label, key, num)),
+    th("รายการ", "code"), th(COUNT_LABEL[service()] || "ครั้งที่", "count", true), th("ยอด", "amount", true), th("ปัญหาที่พบ")));
+  bindSort($("thead"), state.sort, render);
+}
 const rank = (r) => (r.errors.length ? 2 : r.warnings.length ? 1 : 0);
 
 function resultBadge(r) {
@@ -28,7 +53,7 @@ function visible() {
   const q = state.text.toLowerCase();
   const test = CATEGORIES[state.filter][1];
   const list = state.rows.filter((r) => test(r) && (!q || `${r.ptname} ${r.vn} ${r.hn}`.toLowerCase().includes(q)));
-  return sortRows(list.map((r) => Object.assign(r, { rank: rank(r) })), state.sort, ["amount", "rank", "days", "count"]);
+  return sortRows(list.map((r) => Object.assign(r, r.extra, { rank: rank(r) })), state.sort, ["amount", "rank", "days", "count", "age"]);
 }
 
 function render() {
@@ -46,8 +71,7 @@ function render() {
       el("td", {}, resultBadge(r), r.sent ? el("span", { class: "badge b-sent sent-tag", title: `ส่งออกเมื่อ ${thaiDateTime(r.sent)}` }, "ส่งแล้ว") : null),
       el("td", { class: "mono" }, toDmy(r.date)), el("td", { class: "mono" }, r.vn), el("td", { class: "mono" }, r.hn),
       el("td", { class: "name-cell", title: r.ptname }, r.ptname, el("span", { class: "sub" }, r.pttype)),
-      el("td", { class: "mono" }, r.labor_date ? toDmy(r.labor_date) : dash()),
-      el("td", { class: "num" }, r.days === null ? dash() : String(r.days)),
+      ...(COLUMNS[service()] || []).map(([, , num, cell]) => el("td", { class: num ? "num" : "mono" }, cell(r))),
       el("td", {}, itemLabel(r)),
       el("td", { class: "num" }, r.count ? String(r.count) : dash()),
       el("td", { class: "num" }, money(r.amount)),
@@ -74,7 +98,7 @@ function renderPicked() {
   $("picked").replaceChildren(...list.map((r) => el("li", { class: "picked-item" },
     el("div", { class: "picked-main" },
       el("strong", {}, r.ptname), el("span", { class: "mono" }, ` VN ${r.vn} · HN ${r.hn} · ${toDmy(r.date)}`),
-      el("span", { class: "sub" }, `${r.code} ${r.code_name}${r.window_label ? ` · ช่วงวันที่ ${r.window_label}` : ""}${r.count ? ` · ครั้งที่ ${r.count}` : ""}${r.warnings.length ? ` · ⚠ ${r.warnings.map((w) => w.message).join(", ")}` : ""}`)),
+      el("span", { class: "sub" }, `${r.code} ${r.code_name}${r.window_label ? ` · ช่วงวันที่ ${r.window_label}` : ""}${r.count ? ` · ${COUNT_LABEL[service()] || "ครั้งที่"} ${r.count}` : ""}${r.warnings.length ? ` · ⚠ ${r.warnings.map((w) => w.message).join(", ")}` : ""}`)),
     el("span", { class: "num picked-amount" }, money(r.amount)),
     el("button", { type: "button", class: "ghost picked-remove", "aria-label": `เอา ${r.vn} ${r.code} ออก`, onclick: () => toggle(r.key, false) }, "เอาออก"))));
   $("picked-empty").hidden = list.length > 0;
@@ -149,28 +173,44 @@ async function openDrawer(r) {
   const body = $("drawer-body");
   body.replaceChildren(el("p", { class: "muted" }, "กำลังโหลด…"));
   try {
-    const data = await api("/api/ppfs/detail", { vn: r.vn });
+    const kind = service();
+    const data = await api("/api/ppfs/detail", { vn: r.vn, service: kind });
     if (state.current !== r.key) return;
     const b = data.birth;
-    const check = [info([
-      ["เลขบัตร", r.cid], ["สิทธิ", r.pttype], ["สัญชาติ", data.nationality],
-      ["รายการที่เบิก", `${r.code} ${r.code_name}`], ["ยอดเบิก", `${money(r.amount)} บาท (อัตรา ${money(r.rate)})`],
+    const own = kind === "pregtest" ? [
+      ["อายุ", r.extra.age === null || r.extra.age === undefined ? "—" : `${r.extra.age} ปี`], ["ผล UPT", r.extra.upt || "ไม่พบ"],
+      ["รหัส Z32", r.extra.z32 ? "มี" : "ไม่มี"], [`ครั้งที่ในปี ${r.extra.year ? r.extra.year + 543 : ""}`, r.count ? `${r.count} จาก 4` : "—"],
+    ] : [
       ["วันคลอด", r.labor_date ? toDmy(r.labor_date) : "ไม่พบ"], ["หลังคลอด", r.days === null ? "—" : `${r.days} วัน${r.window_label ? ` (ช่วง ${r.window_label})` : ""}`],
       ["ครั้งที่ (ต่อการคลอด)", r.count ? String(r.count) : "—"],
       ["บันทึกตรวจหลังคลอด", r.care_no ? `ครั้งที่ ${r.care_no} · ${toDmy(r.care_date)}` : "ไม่มี"],
-      ["สถานะ", r.sent ? `ส่งออกแล้ว ${thaiDateTime(r.sent)}` : "ยังไม่ส่ง"]])];
+    ];
+    const check = [info([
+      ["เลขบัตร", r.cid], ["สิทธิ", r.pttype], ["สัญชาติ", data.nationality],
+      ["รายการที่เบิก", `${r.code} ${r.code_name}`], ["ยอดเบิก", `${money(r.amount)} บาท (อัตรา ${money(r.rate)})`],
+      ...own, ["สถานะ", r.sent ? `ส่งออกแล้ว ${thaiDateTime(r.sent)}` : "ยังไม่ส่ง"]])];
     const issues = [...r.errors.map((i) => ({ ...i, level: "error" })), ...r.warnings.map((i) => ({ ...i, level: "warn" }))];
     if (issues.length) {
       check.push(el("h3", {}, "ผลตรวจ"));
       check.push(el("ul", { class: "issues" }, ...issues.map((i) => el("li", { class: `issue ${i.level}` },
         el("div", { class: "issue-title" }, el("span", { class: `badge ${i.level === "error" ? "b-error" : "b-warn"}` }, i.level === "error" ? "Error" : "เตือน"), " ", i.message)))));
-      check.push(el("p", { class: "hint" }, "แก้ข้อมูลใน HOSxP (บันทึกหลังคลอด / วันคลอด / รายการค่าบริการ) แล้วกดค้นหาอีกครั้ง"));
+      check.push(el("p", { class: "hint" }, kind === "pregtest" ? "แก้ข้อมูลใน HOSxP (รายการค่าบริการ / รหัสวินิจฉัย / ผล lab) แล้วกดค้นหาอีกครั้ง"
+        : "แก้ข้อมูลใน HOSxP (บันทึกหลังคลอด / วันคลอด / รายการค่าบริการ) แล้วกดค้นหาอีกครั้ง"));
     } else check.push(el("div", { class: "all-good" }, "✓ ผ่านการตรวจทั้งหมด พร้อมส่ง"));
 
     const post = [];
-    post.push(b ? info([["ครรภ์ที่", b.preg_no], ["LMP", b.lmp ? toDmy(b.lmp) : ""], ["วันคลอด", toDmy(b.labor_date)],
+    if (kind === "pregtest") {
+      post.push(el("h3", {}, `ทดสอบการตั้งครรภ์ (30014) ของปี ${data.year + 543}`));
+      post.push(data.tests.length ? table(["#", "วันที่", "VN", "ผล UPT", { label: "จำนวน", num: true }, { label: "ยอด", num: true }, "ส่งออก"],
+        data.tests.map((t, i) => el("tr", { class: t.vn === r.vn ? "current" : "" }, el("td", {}, i < 4 ? String(i + 1) : el("span", { class: "badge b-error" }, String(i + 1))),
+          el("td", { class: "mono" }, toDmy(t.date)), el("td", { class: "mono" }, t.vn), el("td", {}, uptBadge(t.upt)),
+          el("td", { class: "num" }, t.qty), el("td", { class: "num" }, money(t.amount)), el("td", {}, t.sent ? thaiDateTime(t.sent) : "—"))))
+        : el("p", { class: "muted" }, "ยังไม่มีการคีย์ 30014 ในปีนี้"));
+      post.push(el("p", { class: "muted-note" }, "เบิกได้ไม่เกิน 4 ครั้งต่อปีปฏิทิน ครั้งที่ 5 ขึ้นไปส่งไม่ได้"));
+    } else post.push(b ? info([["ครรภ์ที่", b.preg_no], ["LMP", b.lmp ? toDmy(b.lmp) : ""], ["วันคลอด", toDmy(b.labor_date)],
       ["วิธีคลอด", b.labour_type], ["สถานที่คลอด", b.hospcode]])
       : el("p", { class: "hint" }, "ไม่พบวันคลอดของผู้ป่วยนี้ใน HOSxP (person_anc.labor_date) ให้บันทึกการคลอดในทะเบียนฝากครรภ์ก่อน"));
+    if (kind !== "pregtest") {
     post.push(el("h3", {}, "บันทึกตรวจหลังคลอด (person_anc_preg_care)"));
     post.push(data.cares.length ? table(["วันที่", { label: "วันที่หลังคลอด", num: true }, { label: "ครั้งที่", num: true }, "สถานที่", "VN"],
       data.cares.map((c) => el("tr", { class: c.vn === r.vn ? "current" : "" }, el("td", { class: "mono" }, toDmy(c.date)),
@@ -187,10 +227,11 @@ async function openDrawer(r) {
     post.push(el("h3", {}, "ยาธาตุเหล็ก/โฟลิก/ไอโอดีน ที่จ่ายใน visit นี้"));
     post.push(data.iron.length ? table(["ยา", { label: "จำนวน", num: true }], data.iron.map((i) => el("tr", {}, el("td", {}, i.name), el("td", { class: "num" }, i.qty))))
       : el("p", { class: "muted" }, "ไม่พบ"));
+    }
 
     const dx = [data.dx.length ? table(["ประเภท", "รหัส", "ชื่อโรค"], data.dx.map((d) => el("tr", {}, el("td", {}, d.type), el("td", { class: "mono" }, d.code), el("td", {}, d.name)))) : el("p", { class: "muted" }, "ไม่มีข้อมูล")];
     const claimed = new Set(state.rows.filter((x) => x.vn === r.vn).map((x) => x.code));
-    const costs = [el("p", { class: "muted-note" }, "ZIP PPFS ส่งเฉพาะรายการ 30015 / 30016 รายการอื่นของ visit ไม่ถูกส่ง"),
+    const costs = [el("p", { class: "muted-note" }, `ZIP PPFS ส่งเฉพาะรายการ ${[...claimed].join(" / ")} รายการอื่นของ visit ไม่ถูกส่ง`),
       table(["ส่ง", "รายการ", "ADP", { label: "จำนวน", num: true }, { label: "รวม", num: true }], data.items.map((i) => {
         const sent = claimed.has(i.adp);
         return el("tr", { class: sent ? "" : "excluded" }, el("td", {}, sent ? el("span", { class: "badge b-ok" }, "ส่ง") : el("span", { class: "muted" }, "ไม่ส่ง")),
@@ -198,7 +239,8 @@ async function openDrawer(r) {
       }))];
     body.replaceChildren(...tabs([
       { id: "check", label: "สรุปและผลตรวจ", badge: issues.length || undefined, alert: r.errors.length > 0, content: check },
-      { id: "postnatal", label: "หลังคลอด", badge: data.claims.length || undefined, content: post },
+      kind === "pregtest" ? { id: "tests", label: "ประวัติทดสอบ", badge: data.tests.length || undefined, content: post }
+        : { id: "postnatal", label: "หลังคลอด", badge: data.claims.length || undefined, content: post },
       { id: "dx", label: "การวินิจฉัย", badge: data.dx.length, content: dx },
       { id: "cost", label: "ค่าใช้จ่าย", badge: data.items.length, content: costs },
     ]));
@@ -237,7 +279,7 @@ async function connection() {
 }
 
 $("search").addEventListener("submit", (e) => { e.preventDefault(); search(); });
-$("service").addEventListener("change", () => { state.rows = []; state.selected.clear(); renderRules(); render(); });
+$("service").addEventListener("change", () => { state.rows = []; state.selected.clear(); state.sort.key = "date"; state.sort.dir = "asc"; renderRules(); renderHead(); render(); });
 $("filter").addEventListener("input", (e) => { state.text = e.target.value; render(); });
 $("select-ready").onclick = () => { visible().filter((r) => selectable(r) && !r.warnings.length && !r.sent).forEach((r) => state.selected.add(r.key)); render(); };
 $("select-none").onclick = () => { state.selected.clear(); render(); };
@@ -245,7 +287,7 @@ $("export").onclick = exportZip;
 $("drawer-close").onclick = closeDrawer;
 $("drawer-backdrop").onclick = closeDrawer;
 document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("drawer").hidden && !$("confirm").open) closeDrawer(); });
-bindSort($("thead"), state.sort, render);
+renderHead();
 setupPresets($("search"));
 (() => { const today = new Date(); $("search").elements.start.value = isoDate(new Date(today.getFullYear(), today.getMonth(), 1)); $("search").elements.end.value = isoDate(today); })();
 loadServices();

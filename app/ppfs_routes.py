@@ -14,7 +14,7 @@ from fastapi import Body, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 
-from . import auth, nhso18, nhso18_service as svc, ppfs
+from . import auth, nhso18, nhso18_service as svc, ppfs, ppfs_pregtest
 from .config import Settings
 from .store import Store
 from .validate import text
@@ -90,14 +90,14 @@ def _service(value: Any) -> ppfs.Service:
 
 
 def _out(row: ppfs.Row) -> dict:
-    name, rate = ppfs.SERVICES["postnatal"].codes[row.code]
+    name, rate = ppfs.code_name(row.code)
     return {
         "key": row.key, "vn": row.vn, "code": row.code, "code_name": name, "rate": str(rate), "hn": row.hn,
         "date": row.date, "time": row.time, "ptname": row.ptname, "cid": row.cid[-4:].rjust(len(row.cid), "x") if row.cid else "",
         "pttype": row.pttype, "labor_date": row.labor_date, "days": row.days, "window": row.window,
         "window_label": ppfs.WINDOWS.get(row.window, "") if row.window else "", "count": row.count,
         "qty": f"{row.qty:g}", "amount": f"{row.amount:.2f}", "item_name": row.item_name, "care_no": row.care_no,
-        "care_date": row.care_date, "sent": row.sent, "errors": row.errors, "warnings": row.warnings,
+        "care_date": row.care_date, "sent": row.sent, "extra": row.extra, "errors": row.errors, "warnings": row.warnings,
     }
 
 
@@ -108,6 +108,10 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
         return hosxp._select(sql, [])
 
     def check(service: ppfs.Service, start: date, end: date) -> list[ppfs.Row]:
+        if service.key == "pregtest":
+            data = ppfs_pregtest.fetch(q, start, end)
+            vns = sorted({text(r["vn"]) for r in data["items"] + data["unbilled"]})
+            return ppfs_pregtest.check(data, store.sent(vns))
         data = ppfs.fetch(q, start, end)
         vns = sorted({text(r["vn"]) for r in data["items"] + data["cares"]})
         return ppfs.postnatal(data, store.sent(vns))
@@ -137,18 +141,31 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
         vn = text(body.get("vn"))
         if not vn:
             raise HTTPException(400, "ไม่ได้ระบุ VN")
+        iso = lambda v: v.isoformat()[:10] if hasattr(v, "isoformat") else text(v)
+        money = lambda v: f"{float(v or 0):.2f}"
+        common = lambda d: {
+            "items": [{"icode": text(i["icode"]), "name": text(i["name"]), "adp": text(i["adp"]), "qty": f"{float(i['qty'] or 0):g}",
+                       "amount": money(i["amount"])} for i in d["items"]],
+            "dx": [{"type": text(x["diagtype"]), "code": text(x["icd10"]), "name": text(x["name"])} for x in d["dx"]],
+            "nationality": f"{text(d['visit'].get('nationality'))} {text(d['visit'].get('nationality_name'))}".strip()}
+        if _service(body.get("service")).key == "pregtest":
+            d = ppfs_pregtest.detail(q, vn)
+            if not d:
+                raise HTTPException(404, "ไม่พบ visit นี้ใน HOSxP")
+            sent = store.sent(sorted({text(t["vn"]) for t in d["tests"]}))
+            return {**common(d), "year": d["year"], "upt": d["upt"].get(vn, ""),
+                    "tests": [{"date": iso(t["vstdate"]), "vn": text(t["vn"]), "qty": f"{float(t['qty'] or 0):g}",
+                               "amount": money(t["amount"]), "upt": d["upt"].get(text(t["vn"]), ""),
+                               "sent": sent.get((text(t["vn"]), ppfs.PREGTEST), "")} for t in d["tests"]]}
         d = ppfs.detail(q, vn)
         if not d:
             raise HTTPException(404, "ไม่พบ visit นี้ใน HOSxP")
-        iso = lambda v: v.isoformat()[:10] if hasattr(v, "isoformat") else text(v)
-        money = lambda v: f"{float(v or 0):.2f}"
         claim_vns = sorted({text(c["vn"]) for c in d["claims"]})
         sent = store.sent(claim_vns)
         birth = d["birth"]
         start = birth and birth.get("labor_date")
-        visit = d["visit"]
         return {
-            "nationality": f"{text(visit.get('nationality'))} {text(visit.get('nationality_name'))}".strip(),
+            **common(d),
             "birth": {"preg_no": text(birth.get("preg_no")), "lmp": iso(birth.get("lmp")), "labor_date": iso(start),
                       "labour_type": text(birth.get("labour_type")), "hospcode": text(birth.get("labour_hospcode"))} if birth else None,
             "cares": [{"date": iso(c["care_date"]), "care_no": c["care_no"], "vn": text(c["vn"]), "place": text(c["place"]),
@@ -158,9 +175,6 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
                         "window": ppfs.WINDOWS.get(ppfs.window((c["vstdate"] - start).days), "") if start else "",
                         "sent": sent.get((text(c["vn"]), text(c["code"])), "")} for c in d["claims"]],
             "iron": [{"name": text(i["name"]), "qty": f"{float(i['qty'] or 0):g}"} for i in d["iron"]],
-            "items": [{"icode": text(i["icode"]), "name": text(i["name"]), "adp": text(i["adp"]), "qty": f"{float(i['qty'] or 0):g}",
-                       "amount": money(i["amount"])} for i in d["items"]],
-            "dx": [{"type": text(x["diagtype"]), "code": text(x["icd10"]), "name": text(x["name"])} for x in d["dx"]],
         }
 
     @app.post("/api/ppfs/export")

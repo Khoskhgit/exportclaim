@@ -1,6 +1,7 @@
 """PP Fee Schedule (PPFS) items claimed from สปสช. through the e-Claim program, for patients of every right.
 
-Each service type is one entry of SERVICES (the page's drop-down). For now there is one:
+Each service type is one entry of SERVICES (the page's drop-down). The postnatal rules are here; the others have a
+module of their own (ppfs_pregtest).
 
 7) การตรวจหลังคลอด - Thai women after giving birth, all rights:
    ADP 30015 ตรวจหลังคลอด, 150 baht, at most 3 times per birth, one in each window counted from the day after the
@@ -14,6 +15,8 @@ What HOSxP holds:
    person_anc.labor_date                                   the birth (ipt_labour is not used at this hospital)
 
 The birth an item belongs to is the patient's latest labor_date on or before the visit.
+
+8) บริการทดสอบการตั้งครรภ์ - see ppfs_pregtest.
 """
 from __future__ import annotations
 
@@ -26,7 +29,7 @@ from .nhso18 import lit, lit_list
 from .validate import text
 
 ERROR, WARN = "error", "warn"
-CHECK, DRUG = "30015", "30016"
+CHECK, DRUG, PREGTEST = "30015", "30016", "30014"
 
 
 @dataclass(frozen=True)
@@ -45,6 +48,14 @@ SERVICES = {
             "กลุ่มเป้าหมาย: หญิงหลังคลอดคนไทย ทุกสิทธิการรักษาพยาบาล",
             "ตรวจหลังคลอด (ADP 30015) 150 บาท/ครั้ง ไม่เกิน 3 ครั้ง: วันที่ 1–7, 8–15 และ 16–42 นับถัดจากวันคลอด",
             "ยาเสริมธาตุเหล็ก กรดโฟลิก ไอโอดีน (ADP 30016) ครั้งละ 3 เดือน (90 เม็ด) 135 บาท/ครั้ง ไม่เกิน 2 ครั้งต่อการคลอด",
+        )),
+    "pregtest": Service(
+        key="pregtest", label="8) บริการทดสอบการตั้งครรภ์",
+        codes={PREGTEST: ("ทดสอบการตั้งครรภ์", Decimal("75"))},
+        rules=(
+            "กลุ่มเป้าหมาย: หญิงวัยเจริญพันธุ์ที่สงสัยตั้งครรภ์หรือประจำเดือนไม่มาตามกำหนด ทุกสิทธิการรักษาพยาบาล",
+            "ตรวจปัสสาวะทดสอบการตั้งครรภ์ หรือชุดทดสอบการตั้งครรภ์ด้วยตัวเอง (ADP 30014) 75 บาท/ครั้ง",
+            "ไม่เกิน 4 ครั้งต่อปี (นับตามปีปฏิทิน ม.ค.–ธ.ค.)",
         )),
 }
 WINDOWS = {1: "1–7", 2: "8–15", 3: "16–42"}
@@ -193,11 +204,19 @@ class Row:
     care_no: int | None = None
     care_date: str = ""
     sent: str = ""
+    extra: dict = field(default_factory=dict)  # columns of one service only (age, UPT result, …)
     errors: list[dict] = field(default_factory=list)
     warnings: list[dict] = field(default_factory=list)
 
     def add(self, level: str, code: str, message: str) -> None:
         (self.errors if level == ERROR else self.warnings).append({"code": code, "message": message})
+
+
+def code_name(code: str) -> tuple[str, Decimal]:
+    for service in SERVICES.values():
+        if code in service.codes:
+            return service.codes[code]
+    return code, Decimal("0")
 
 
 def _birth_of(births: dict[str, list[date]], hn: str, day: date | None) -> date | None:
@@ -254,7 +273,7 @@ def postnatal(data: dict, sent: dict[tuple[str, str], str] | None = None) -> lis
         row.labor_date = birth.isoformat() if birth else ""
         row.days = (day - birth).days if birth and day else None
         row.window = window(row.days)
-        name, rate = SERVICES["postnatal"].codes[code]
+        name, rate = code_name(code)
         billed = row.qty > 0
 
         if text(r.get("nationality")) != "99":
