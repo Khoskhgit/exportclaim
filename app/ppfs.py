@@ -125,6 +125,52 @@ def visit_items(q: Select, vns: Iterable[str]) -> list[dict]:
         WHERE oo.vn IN ({lit_list(vns)})""")
 
 
+
+def detail(q: Select, vn: str) -> dict:
+    """What the drawer shows for one visit: the birth, every postnatal record and claim of that birth, the iron
+    drugs, the diagnoses and every billed item of the visit."""
+    visit = (q(f"""
+        SELECT o.vn, o.hn, o.vstdate, o.vsttime, o.an, o.pttype, ptt.name pttype_name, p.nationality, p.birthday,
+          (SELECT n.name FROM nationality n WHERE n.nationality=p.nationality) nationality_name
+        FROM ovst o JOIN patient p ON p.hn=o.hn LEFT JOIN pttype ptt ON ptt.pttype=o.pttype
+        WHERE o.vn={lit(vn)}""") or [None])[0]
+    if visit is None:
+        return {}
+    hn, day = text(visit["hn"]), _day(visit["vstdate"])
+    births = q(f"""
+        SELECT a.person_anc_id, a.preg_no, a.lmp, a.labor_date, a.labour_hospcode,
+          (SELECT t.person_labour_type_name FROM person_labour_type t WHERE t.person_labour_type_id=a.labour_type_id) labour_type
+        FROM person p JOIN person_anc a ON a.person_id=p.person_id
+        WHERE p.patient_hn={lit(hn)} AND a.labor_date IS NOT NULL ORDER BY a.labor_date""")
+    own = (q(f"SELECT person_anc_id FROM person_anc_preg_care WHERE vn={lit(vn)} LIMIT 1") or [{}])[0].get("person_anc_id")
+    birth = next((b for b in births if own and b["person_anc_id"] == own), None) \
+        or max((b for b in births if day and _day(b["labor_date"]) <= day), key=lambda b: _day(b["labor_date"]), default=None)
+    cares, claims = [], []
+    if birth is not None:
+        start = _day(birth["labor_date"])
+        later = [_day(b["labor_date"]) for b in births if _day(b["labor_date"]) > start]
+        stop = min(later) if later else None
+        cares = q(f"""
+            SELECT c.care_date, c.preg_care_number care_no, c.vn, l.anc_preg_care_location_name place
+            FROM person_anc_preg_care c LEFT JOIN anc_preg_care_location l ON l.anc_preg_care_location_id=c.anc_preg_care_location_id
+            WHERE c.person_anc_id={lit(birth["person_anc_id"])} ORDER BY c.care_date""")
+        claims = q(f"""
+            SELECT o.vn, o.vstdate, d.nhso_adp_code code, SUM(oo.qty) qty, SUM(IFNULL(oo.qty,0)*IFNULL(oo.unitprice,0)) amount
+            FROM ovst o JOIN opitemrece oo ON oo.vn=o.vn JOIN s_drugitems d ON d.icode=oo.icode
+            WHERE o.hn={lit(hn)} AND o.vstdate>={lit(start)} {f"AND o.vstdate<{lit(stop)}" if stop else ""}
+              AND d.nhso_adp_code IN ({lit_list([CHECK, DRUG])})
+            GROUP BY o.vn, d.nhso_adp_code ORDER BY o.vstdate, o.vn, d.nhso_adp_code""")
+    iron = q(f"""
+        SELECT CONCAT_WS(' ',di.name,di.strength) name, SUM(oo.qty) qty FROM opitemrece oo JOIN drugitems di ON di.icode=oo.icode
+        WHERE oo.vn={lit(vn)} AND CONCAT_WS(' ',di.name,di.generic_name) REGEXP {lit(IRON)} GROUP BY oo.icode""")
+    items = q(f"""
+        SELECT oo.icode, CONCAT_WS(' ',d.name,d.strength) name, d.nhso_adp_code adp, SUM(oo.qty) qty,
+          SUM(IFNULL(oo.qty,0)*IFNULL(oo.unitprice,0)) amount
+        FROM opitemrece oo LEFT JOIN s_drugitems d ON d.icode=oo.icode WHERE oo.vn={lit(vn)}
+        GROUP BY oo.icode ORDER BY d.nhso_adp_code IS NULL, oo.icode""")
+    dx = q(f"SELECT diagtype, icd10, icdname(icd10) name FROM ovstdiag WHERE vn={lit(vn)} ORDER BY diagtype, icd10")
+    return {"visit": visit, "birth": birth, "cares": cares, "claims": claims, "iron": iron, "items": items, "dx": dx}
+
 # ------------------------------------------------------------------ rules
 @dataclass
 class Row:

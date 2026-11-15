@@ -132,6 +132,37 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
             raise HTTPException(400, "ค้นได้ครั้งละไม่เกิน 1 ปี")
         return {"service": service.key, "rows": [_out(r) for r in check(service, start, end)]}
 
+    @app.post("/api/ppfs/detail")
+    def detail(body: dict = Body(...)):
+        vn = text(body.get("vn"))
+        if not vn:
+            raise HTTPException(400, "ไม่ได้ระบุ VN")
+        d = ppfs.detail(q, vn)
+        if not d:
+            raise HTTPException(404, "ไม่พบ visit นี้ใน HOSxP")
+        iso = lambda v: v.isoformat()[:10] if hasattr(v, "isoformat") else text(v)
+        money = lambda v: f"{float(v or 0):.2f}"
+        claim_vns = sorted({text(c["vn"]) for c in d["claims"]})
+        sent = store.sent(claim_vns)
+        birth = d["birth"]
+        start = birth and birth.get("labor_date")
+        visit = d["visit"]
+        return {
+            "nationality": f"{text(visit.get('nationality'))} {text(visit.get('nationality_name'))}".strip(),
+            "birth": {"preg_no": text(birth.get("preg_no")), "lmp": iso(birth.get("lmp")), "labor_date": iso(start),
+                      "labour_type": text(birth.get("labour_type")), "hospcode": text(birth.get("labour_hospcode"))} if birth else None,
+            "cares": [{"date": iso(c["care_date"]), "care_no": c["care_no"], "vn": text(c["vn"]), "place": text(c["place"]),
+                       "days": (c["care_date"] - start).days if start and c["care_date"] else None} for c in d["cares"]],
+            "claims": [{"date": iso(c["vstdate"]), "vn": text(c["vn"]), "code": text(c["code"]), "qty": f"{float(c['qty'] or 0):g}",
+                        "amount": money(c["amount"]), "days": (c["vstdate"] - start).days if start else None,
+                        "window": ppfs.WINDOWS.get(ppfs.window((c["vstdate"] - start).days), "") if start else "",
+                        "sent": sent.get((text(c["vn"]), text(c["code"])), "")} for c in d["claims"]],
+            "iron": [{"name": text(i["name"]), "qty": f"{float(i['qty'] or 0):g}"} for i in d["iron"]],
+            "items": [{"icode": text(i["icode"]), "name": text(i["name"]), "adp": text(i["adp"]), "qty": f"{float(i['qty'] or 0):g}",
+                       "amount": money(i["amount"])} for i in d["items"]],
+            "dx": [{"type": text(x["diagtype"]), "code": text(x["icd10"]), "name": text(x["name"])} for x in d["dx"]],
+        }
+
     @app.post("/api/ppfs/export")
     def export(request: Request, body: dict = Body(...)):
         service = _service(body.get("service"))

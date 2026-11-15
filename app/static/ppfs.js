@@ -1,6 +1,6 @@
 "use strict";
 // รายการ PPFS: pick a service type, check the visits, pick items into the list, build the 18-file ZIP for e-Claim.
-const state = { rows: [], services: [], selected: new Set(), filter: "all", text: "", sort: { key: "date", dir: "asc" } };
+const state = { rows: [], services: [], selected: new Set(), filter: "all", text: "", current: null, sort: { key: "date", dir: "asc" } };
 const money = (v) => baht.format(Number(v || 0));
 const dash = () => el("span", { class: "muted" }, "—");
 
@@ -38,10 +38,11 @@ function render() {
   $("rows").replaceChildren(...list.map((r) => {
     const box = el("input", { type: "checkbox", checked: state.selected.has(r.key), disabled: !selectable(r),
       title: selectable(r) ? "เลือกส่ง" : "รายการนี้ส่งไม่ได้", "aria-label": `เลือก ${r.vn} ${r.code}`,
-      onchange: (e) => { toggle(r.key, e.target.checked); } });
+      onclick: (e) => e.stopPropagation(), onchange: (e) => { toggle(r.key, e.target.checked); } });
     const problems = [...r.errors, ...r.warnings].map((i) => i.message);
-    return el("tr", { class: state.selected.has(r.key) ? "picked" : "" },
-      el("td", { class: "check" }, box),
+    const cls = [state.selected.has(r.key) ? "picked" : "", state.current === r.key ? "current" : ""].join(" ").trim();
+    return el("tr", { class: cls, onclick: () => openDrawer(r), title: "คลิกเพื่อดูรายละเอียด" },
+      el("td", { class: "check", onclick: (e) => e.stopPropagation() }, box),
       el("td", {}, resultBadge(r), r.sent ? el("span", { class: "badge b-sent sent-tag", title: `ส่งออกเมื่อ ${thaiDateTime(r.sent)}` }, "ส่งแล้ว") : null),
       el("td", { class: "mono" }, toDmy(r.date)), el("td", { class: "mono" }, r.vn), el("td", { class: "mono" }, r.hn),
       el("td", { class: "name-cell", title: r.ptname }, r.ptname, el("span", { class: "sub" }, r.pttype)),
@@ -134,6 +135,77 @@ async function exportZip() {
   } finally { $("export").textContent = "สร้าง ZIP 18 แฟ้ม (e-Claim)"; renderPicked(); }
 }
 
+// ------------------------------------------------------------- detail drawer (like the 18-file page)
+function table(headers, rows) {
+  return el("table", {}, el("thead", {}, el("tr", {}, ...headers.map((h) => el("th", { class: h.num ? "num" : "" }, h.label || h)))), el("tbody", {}, ...rows));
+}
+const info = (pairs) => el("dl", { class: "info-grid" }, ...pairs.map(([k, v]) => el("div", {}, el("dt", {}, k), el("dd", {}, v || "—"))));
+
+async function openDrawer(r) {
+  state.current = r.key; render();
+  $("drawer").hidden = false; $("drawer-backdrop").hidden = false;
+  $("drawer-title").textContent = r.ptname || r.vn;
+  $("drawer-sub").textContent = `VN ${r.vn} · HN ${r.hn} · ${toDmy(r.date)}${r.time ? ` ${r.time.slice(0, 5)}` : ""} · ${r.code} ${r.code_name}`;
+  const body = $("drawer-body");
+  body.replaceChildren(el("p", { class: "muted" }, "กำลังโหลด…"));
+  try {
+    const data = await api("/api/ppfs/detail", { vn: r.vn });
+    if (state.current !== r.key) return;
+    const b = data.birth;
+    const check = [info([
+      ["เลขบัตร", r.cid], ["สิทธิ", r.pttype], ["สัญชาติ", data.nationality],
+      ["รายการที่เบิก", `${r.code} ${r.code_name}`], ["ยอดเบิก", `${money(r.amount)} บาท (อัตรา ${money(r.rate)})`],
+      ["วันคลอด", r.labor_date ? toDmy(r.labor_date) : "ไม่พบ"], ["หลังคลอด", r.days === null ? "—" : `${r.days} วัน${r.window_label ? ` (ช่วง ${r.window_label})` : ""}`],
+      ["ครั้งที่ (ต่อการคลอด)", r.count ? String(r.count) : "—"],
+      ["บันทึกตรวจหลังคลอด", r.care_no ? `ครั้งที่ ${r.care_no} · ${toDmy(r.care_date)}` : "ไม่มี"],
+      ["สถานะ", r.sent ? `ส่งออกแล้ว ${thaiDateTime(r.sent)}` : "ยังไม่ส่ง"]])];
+    const issues = [...r.errors.map((i) => ({ ...i, level: "error" })), ...r.warnings.map((i) => ({ ...i, level: "warn" }))];
+    if (issues.length) {
+      check.push(el("h3", {}, "ผลตรวจ"));
+      check.push(el("ul", { class: "issues" }, ...issues.map((i) => el("li", { class: `issue ${i.level}` },
+        el("div", { class: "issue-title" }, el("span", { class: `badge ${i.level === "error" ? "b-error" : "b-warn"}` }, i.level === "error" ? "Error" : "เตือน"), " ", i.message)))));
+      check.push(el("p", { class: "hint" }, "แก้ข้อมูลใน HOSxP (บันทึกหลังคลอด / วันคลอด / รายการค่าบริการ) แล้วกดค้นหาอีกครั้ง"));
+    } else check.push(el("div", { class: "all-good" }, "✓ ผ่านการตรวจทั้งหมด พร้อมส่ง"));
+
+    const post = [];
+    post.push(b ? info([["ครรภ์ที่", b.preg_no], ["LMP", b.lmp ? toDmy(b.lmp) : ""], ["วันคลอด", toDmy(b.labor_date)],
+      ["วิธีคลอด", b.labour_type], ["สถานที่คลอด", b.hospcode]])
+      : el("p", { class: "hint" }, "ไม่พบวันคลอดของผู้ป่วยนี้ใน HOSxP (person_anc.labor_date) ให้บันทึกการคลอดในทะเบียนฝากครรภ์ก่อน"));
+    post.push(el("h3", {}, "บันทึกตรวจหลังคลอด (person_anc_preg_care)"));
+    post.push(data.cares.length ? table(["วันที่", { label: "วันที่หลังคลอด", num: true }, { label: "ครั้งที่", num: true }, "สถานที่", "VN"],
+      data.cares.map((c) => el("tr", { class: c.vn === r.vn ? "current" : "" }, el("td", { class: "mono" }, toDmy(c.date)),
+        el("td", { class: "num" }, c.days === null ? "—" : String(c.days)), el("td", { class: "num" }, c.care_no ? String(c.care_no) : "—"),
+        el("td", {}, c.place || "—"), el("td", { class: "mono" }, c.vn || el("span", { class: "muted" }, "ไม่มี VN (ไม่เบิก)")))))
+      : el("p", { class: "muted" }, "ไม่มีบันทึก"));
+    post.push(el("h3", {}, "รายการ 30015 / 30016 ที่คีย์ใน HOSxP ของการคลอดนี้"));
+    post.push(data.claims.length ? table(["วันที่", "VN", "รายการ", { label: "หลังคลอด", num: true }, "ช่วง", { label: "ยอด", num: true }, "ส่งออก"],
+      data.claims.map((c) => el("tr", { class: c.vn === r.vn && c.code === r.code ? "current" : "" }, el("td", { class: "mono" }, toDmy(c.date)),
+        el("td", { class: "mono" }, c.vn), el("td", {}, `${c.code} ${c.code === "30015" ? "ตรวจหลังคลอด" : "ยาธาตุเหล็ก"}`),
+        el("td", { class: "num" }, c.days === null ? "—" : `${c.days} วัน`), el("td", {}, c.window || (c.code === "30015" ? "เกิน 42 วัน" : "—")),
+        el("td", { class: "num" }, money(c.amount)), el("td", {}, c.sent ? thaiDateTime(c.sent) : "—"))))
+      : el("p", { class: "muted" }, "ไม่มีรายการ"));
+    post.push(el("h3", {}, "ยาธาตุเหล็ก/โฟลิก/ไอโอดีน ที่จ่ายใน visit นี้"));
+    post.push(data.iron.length ? table(["ยา", { label: "จำนวน", num: true }], data.iron.map((i) => el("tr", {}, el("td", {}, i.name), el("td", { class: "num" }, i.qty))))
+      : el("p", { class: "muted" }, "ไม่พบ"));
+
+    const dx = [data.dx.length ? table(["ประเภท", "รหัส", "ชื่อโรค"], data.dx.map((d) => el("tr", {}, el("td", {}, d.type), el("td", { class: "mono" }, d.code), el("td", {}, d.name)))) : el("p", { class: "muted" }, "ไม่มีข้อมูล")];
+    const claimed = new Set(state.rows.filter((x) => x.vn === r.vn).map((x) => x.code));
+    const costs = [el("p", { class: "muted-note" }, "ZIP PPFS ส่งเฉพาะรายการ 30015 / 30016 รายการอื่นของ visit ไม่ถูกส่ง"),
+      table(["ส่ง", "รายการ", "ADP", { label: "จำนวน", num: true }, { label: "รวม", num: true }], data.items.map((i) => {
+        const sent = claimed.has(i.adp);
+        return el("tr", { class: sent ? "" : "excluded" }, el("td", {}, sent ? el("span", { class: "badge b-ok" }, "ส่ง") : el("span", { class: "muted" }, "ไม่ส่ง")),
+          el("td", {}, i.name), el("td", { class: "mono" }, i.adp || "—"), el("td", { class: "num" }, i.qty), el("td", { class: "num" }, money(i.amount)));
+      }))];
+    body.replaceChildren(...tabs([
+      { id: "check", label: "สรุปและผลตรวจ", badge: issues.length || undefined, alert: r.errors.length > 0, content: check },
+      { id: "postnatal", label: "หลังคลอด", badge: data.claims.length || undefined, content: post },
+      { id: "dx", label: "การวินิจฉัย", badge: data.dx.length, content: dx },
+      { id: "cost", label: "ค่าใช้จ่าย", badge: data.items.length, content: costs },
+    ]));
+  } catch (err) { body.replaceChildren(el("p", {}, err.message)); }
+}
+function closeDrawer() { $("drawer").hidden = true; $("drawer-backdrop").hidden = true; state.current = null; render(); }
+
 async function loadHistory() {
   try {
     const rows = await api("/api/ppfs/exports");
@@ -170,6 +242,9 @@ $("filter").addEventListener("input", (e) => { state.text = e.target.value; rend
 $("select-ready").onclick = () => { visible().filter((r) => selectable(r) && !r.warnings.length && !r.sent).forEach((r) => state.selected.add(r.key)); render(); };
 $("select-none").onclick = () => { state.selected.clear(); render(); };
 $("export").onclick = exportZip;
+$("drawer-close").onclick = closeDrawer;
+$("drawer-backdrop").onclick = closeDrawer;
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("drawer").hidden && !$("confirm").open) closeDrawer(); });
 bindSort($("thead"), state.sort, render);
 setupPresets($("search"));
 (() => { const today = new Date(); $("search").elements.start.value = isoDate(new Date(today.getFullYear(), today.getMonth(), 1)); $("search").elements.end.value = isoDate(today); })();
