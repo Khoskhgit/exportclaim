@@ -14,7 +14,7 @@ from fastapi import Body, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 
-from . import auth, nhso18, nhso18_service as svc, ppfs, ppfs_fp, ppfs_ncd, ppfs_pregtest
+from . import auth, nhso18, nhso18_service as svc, ppfs, ppfs_anemia, ppfs_fp, ppfs_ncd, ppfs_pregtest
 from .config import Settings
 from .store import Store
 from .validate import text
@@ -108,6 +108,9 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
         return hosxp._select(sql, [])
 
     def check(service: ppfs.Service, start: date, end: date) -> list[ppfs.Row]:
+        if service.key == "anemia":
+            data = ppfs_anemia.fetch(q, start, end)
+            return ppfs_anemia.check(data, store.sent(sorted({text(r["vn"]) for r in data["items"]})))
         if service.key == "ncd":
             data = ppfs_ncd.fetch(q, start, end)
             return ppfs_ncd.check(data, store.sent(sorted({text(r["vn"]) for r in data["items"]})))
@@ -154,6 +157,15 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
                        "amount": money(i["amount"])} for i in d["items"]],
             "dx": [{"type": text(x["diagtype"]), "code": text(x["icd10"]), "name": text(x["name"])} for x in d["dx"]],
             "nationality": f"{text(d['visit'].get('nationality'))} {text(d['visit'].get('nationality_name'))}".strip()}
+        if _service(body.get("service")).key == "anemia":
+            d = ppfs_anemia.detail(q, vn)
+            if not d:
+                raise HTTPException(404, "ไม่พบ visit นี้ใน HOSxP")
+            sent = store.sent(sorted({text(c["vn"]) for c in d["claims"]}))
+            return {**common(d), "claims": [
+                {"date": iso(c["vstdate"]), "vn": text(c["vn"]), "qty": f"{float(c['qty'] or 0):g}", "amount": money(c["amount"]),
+                 "labs": {k: d["labs"].get(text(c["vn"]), {}).get(k, "") for k in ppfs_anemia.LABS.values()},
+                 "sent": sent.get((text(c["vn"]), ppfs_anemia.CODE), "")} for c in d["claims"]]}
         if _service(body.get("service")).key == "ncd":
             d = ppfs_ncd.detail(q, vn)
             if not d:

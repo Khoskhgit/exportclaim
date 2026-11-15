@@ -36,8 +36,13 @@ const COLUMNS = {
     ["ประวัติการรักษา", "", false, (r) => historyText(r.extra.history, r.date)],
     ["เบิกครั้งก่อน", "last", false, (r) => (r.extra.last ? el("span", {}, toDmy(r.extra.last), el("span", { class: "sub" }, `VN ${r.extra.last_vn}`)) : dash())],
   ],
+  anemia: [
+    ["อายุ (ปี)", "age", true, (r) => (r.extra.age === null || r.extra.age === undefined ? dash() : String(r.extra.age))],
+    ["ผล Hb / Hct", "", false, (r) => labText(r.extra.labs)],
+    ["เคยคัดกรองแล้ว", "first", false, (r) => (r.extra.first ? el("span", {}, toDmy(r.extra.first), el("span", { class: "sub" }, `VN ${r.extra.first_vn}`)) : dash())],
+  ],
 };
-const COUNT_LABEL = { postnatal: "ครั้งที่", pregtest: "ครั้งที่ในปีงบ", fp: "สะสมในปีงบ", ncd: "ครั้งที่" };
+const COUNT_LABEL = { postnatal: "ครั้งที่", pregtest: "ครั้งที่ในปีงบ", fp: "สะสมในปีงบ", ncd: "ครั้งที่", anemia: "ครั้งที่" };
 function labText(labs) {
   const parts = Object.entries(labs || {});
   if (!parts.length) return dash();
@@ -199,7 +204,11 @@ async function openDrawer(r) {
     const data = await api("/api/ppfs/detail", { vn: r.vn, service: kind });
     if (state.current !== r.key) return;
     const b = data.birth;
-    const own = kind === "ncd" ? [
+    const own = kind === "anemia" ? [
+      ["อายุ", r.extra.age === null || r.extra.age === undefined ? "—" : `${r.extra.age} ปี`],
+      ["ผล lab", Object.entries(r.extra.labs).map(([k, v]) => `${k} ${v || "(ไม่มี)"}`).join(" · ") || "—"],
+      ["เคยคัดกรองแล้ว", r.extra.first ? `${toDmy(r.extra.first)} (VN ${r.extra.first_vn})` : "ยังไม่เคย"],
+    ] : kind === "ncd" ? [
       ["อายุ", r.extra.age === null || r.extra.age === undefined ? "—" : `${r.extra.age} ปี`],
       ["ผล lab", Object.entries(r.extra.labs).map(([k, v]) => `${k} ${v || "(ไม่มี)"}`).join(" · ") || "—"],
       ["เบิกครั้งก่อน", r.extra.last ? `${toDmy(r.extra.last)} (VN ${r.extra.last_vn})` : "ไม่เคย"],
@@ -224,12 +233,20 @@ async function openDrawer(r) {
       check.push(el("h3", {}, "ผลตรวจ"));
       check.push(el("ul", { class: "issues" }, ...issues.map((i) => el("li", { class: `issue ${i.level}` },
         el("div", { class: "issue-title" }, el("span", { class: `badge ${i.level === "error" ? "b-error" : "b-warn"}` }, i.level === "error" ? "Error" : "เตือน"), " ", i.message)))));
-      check.push(el("p", { class: "hint" }, kind === "ncd" ? "ผู้ที่มีประวัติรักษาโรคมาก่อน หรือเบิกไปแล้วในรอบ ไม่ใช่กลุ่มที่เบิกได้ ไม่ต้องส่ง" : kind === "fp" ? "แก้ข้อมูลใน HOSxP (คีย์ค่าบริการ 18… ให้ตรงกับยาที่จ่าย) แล้วกดค้นหาอีกครั้ง" : kind === "pregtest" ? "แก้ข้อมูลใน HOSxP (รายการค่าบริการ / รหัสวินิจฉัย / ผล lab) แล้วกดค้นหาอีกครั้ง"
+      check.push(el("p", { class: "hint" }, kind === "anemia" ? "เบิกได้คนละ 1 ครั้ง อายุ 13–24 ปี เฉพาะหญิงไทย รายที่ไม่ตรงเงื่อนไขไม่ต้องส่ง" : kind === "ncd" ? "ผู้ที่มีประวัติรักษาโรคมาก่อน หรือเบิกไปแล้วในรอบ ไม่ใช่กลุ่มที่เบิกได้ ไม่ต้องส่ง" : kind === "fp" ? "แก้ข้อมูลใน HOSxP (คีย์ค่าบริการ 18… ให้ตรงกับยาที่จ่าย) แล้วกดค้นหาอีกครั้ง" : kind === "pregtest" ? "แก้ข้อมูลใน HOSxP (รายการค่าบริการ / รหัสวินิจฉัย / ผล lab) แล้วกดค้นหาอีกครั้ง"
         : "แก้ข้อมูลใน HOSxP (บันทึกหลังคลอด / วันคลอด / รายการค่าบริการ) แล้วกดค้นหาอีกครั้ง"));
     } else check.push(el("div", { class: "all-good" }, "✓ ผ่านการตรวจทั้งหมด พร้อมส่ง"));
 
     const post = [];
-    if (kind === "ncd") {
+    if (kind === "anemia") {
+      post.push(el("h3", {}, "การคัดกรองโลหิตจาง (13001) ทั้งหมดของผู้ป่วย"));
+      post.push(data.claims.length ? table(["#", "วันที่", "VN", "ผล Hb / Hct", { label: "ยอด", num: true }, "ส่งออก"],
+        data.claims.map((c, i) => el("tr", { class: c.vn === r.vn ? "current" : "" }, el("td", {}, i ? el("span", { class: "badge b-error" }, String(i + 1)) : "1"),
+          el("td", { class: "mono" }, toDmy(c.date)), el("td", { class: "mono" }, c.vn), el("td", {}, labText(c.labs)),
+          el("td", { class: "num" }, money(c.amount)), el("td", {}, c.sent ? thaiDateTime(c.sent) : "—"))))
+        : el("p", { class: "muted" }, "ไม่มีรายการ"));
+      post.push(el("p", { class: "muted-note" }, "เบิกได้คนละ 1 ครั้ง ครั้งที่ 2 ขึ้นไปส่งไม่ได้"));
+    } else if (kind === "ncd") {
       const f = data.first;
       post.push(el("h3", {}, "เริ่มรักษาเมื่อ (จาก HOSxP)"));
       post.push(info([["เบาหวาน (E10–E14)", f.dm ? toDmy(f.dm) : "ไม่พบ"], ["ไขมันในเลือดสูง (E78)", f.lipid ? toDmy(f.lipid) : "ไม่พบ"],
@@ -297,7 +314,8 @@ async function openDrawer(r) {
       }))];
     body.replaceChildren(...tabs([
       { id: "check", label: "สรุปและผลตรวจ", badge: issues.length || undefined, alert: r.errors.length > 0, content: check },
-      kind === "ncd" ? { id: "ncd", label: "ประวัติคัดกรอง", badge: data.claims.length || undefined, content: post }
+      kind === "anemia" ? { id: "anemia", label: "ประวัติคัดกรอง", badge: data.claims.length || undefined, content: post }
+        : kind === "ncd" ? { id: "ncd", label: "ประวัติคัดกรอง", badge: data.claims.length || undefined, content: post }
         : kind === "fp" ? { id: "fp", label: "ประวัติวางแผนครอบครัว", badge: data.history.length || undefined, content: post }
         : kind === "pregtest" ? { id: "tests", label: "ประวัติทดสอบ", badge: data.tests.length || undefined, content: post }
         : { id: "postnatal", label: "หลังคลอด", badge: data.claims.length || undefined, content: post },
