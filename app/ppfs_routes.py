@@ -14,7 +14,7 @@ from fastapi import Body, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 
-from . import auth, nhso18, nhso18_service as svc, ppfs, ppfs_anemia, ppfs_fp, ppfs_ncd, ppfs_pregtest
+from . import auth, nhso18, nhso18_service as svc, ppfs, ppfs_anemia, ppfs_fp, ppfs_iron, ppfs_ncd, ppfs_pregtest
 from .config import Settings
 from .store import Store
 from .validate import text
@@ -108,6 +108,9 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
         return hosxp._select(sql, [])
 
     def check(service: ppfs.Service, start: date, end: date) -> list[ppfs.Row]:
+        if service.key == "iron":
+            data = ppfs_iron.fetch(q, start, end)
+            return ppfs_iron.check(data, store.sent(sorted({text(r["vn"]) for r in data["items"]})))
         if service.key == "anemia":
             data = ppfs_anemia.fetch(q, start, end)
             return ppfs_anemia.check(data, store.sent(sorted({text(r["vn"]) for r in data["items"]})))
@@ -157,6 +160,17 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
                        "amount": money(i["amount"])} for i in d["items"]],
             "dx": [{"type": text(x["diagtype"]), "code": text(x["icd10"]), "name": text(x["name"])} for x in d["dx"]],
             "nationality": f"{text(d['visit'].get('nationality'))} {text(d['visit'].get('nationality_name'))}".strip()}
+        if _service(body.get("service")).key == "iron":
+            d = ppfs_iron.detail(q, vn)
+            if not d:
+                raise HTTPException(404, "ไม่พบ visit นี้ใน HOSxP")
+            sent = store.sent(sorted({text(c["vn"]) for c in d["claims"]}))
+            return {**common(d), "drug_icodes": [text(i["icode"]) for i in d["items"] if i.get("is_drug")], "claims": [
+                {"date": iso(c["vstdate"]), "vn": text(c["vn"]), "year": ppfs.fiscal_year(c["vstdate"]) + 543,
+                 "qty": f"{float(c['qty'] or 0):g}", "amount": money(c["amount"]),
+                 "drug": d["iron"].get(text(c["vn"]), {}).get("name", ""),
+                 "tablets": f"{d['iron'][text(c['vn'])]['qty']:g}" if text(c["vn"]) in d["iron"] else "",
+                 "sent": sent.get((text(c["vn"]), ppfs_iron.CODE), "")} for c in d["claims"]]}
         if _service(body.get("service")).key == "anemia":
             d = ppfs_anemia.detail(q, vn)
             if not d:
