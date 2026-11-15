@@ -401,9 +401,10 @@ def postnatal(data: dict, sent: dict[tuple[str, str], str] | None = None) -> lis
 
 
 def only_claimed(data: dict[str, list[dict]], claimed: dict[str, set[str]]) -> dict[str, list[dict]]:
-    """Keep the 18 files to the PP items being claimed: ADP rows of those codes, no drug, lab or accident rows."""
+    """Keep the 18 files to the PP items being sent: ADP rows of those codes, no lab or accident rows. Drugs the user
+    ticked stay in DRU (the others were left out of the build already)."""
     out = dict(data)
     out["ADP"] = [r for r in data.get("ADP", []) if text(r.get("CODE")) in claimed.get(text(r.get("SEQ")), set())]
-    for name in ("DRU", "LAB", "AER"):
+    for name in ("LAB", "AER"):
         out[name] = []
     return out

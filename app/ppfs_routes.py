@@ -33,6 +33,10 @@ CREATE TABLE IF NOT EXISTS ppfs_export_items (
   export_id INTEGER NOT NULL, vn TEXT NOT NULL, code TEXT NOT NULL, amount TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS ppfs_export_items_vn ON ppfs_export_items(vn, code);
+CREATE TABLE IF NOT EXISTS ppfs_items (
+  service TEXT NOT NULL, vn TEXT NOT NULL, icode TEXT NOT NULL, include INTEGER NOT NULL, updated_at TEXT NOT NULL,
+  PRIMARY KEY (service, vn, icode)
+);
 """
 
 
@@ -64,6 +68,22 @@ class PpfsStore:
                         f"ON e.id=i.export_id WHERE i.vn IN ({','.join('?' * len(part))}) GROUP BY i.vn, i.code", part):
                     out[(r["vn"], r["code"])] = r["at"]
         return out
+
+    def choices(self, service: str, vns: list[str]) -> dict[tuple[str, str], bool]:
+        """Items the user ticked or unticked by hand in the cost tab: (vn, icode) -> send."""
+        out: dict[tuple[str, str], bool] = {}
+        with self._db() as db:
+            for start in range(0, len(vns), 500):
+                part = vns[start:start + 500]
+                for r in db.execute(f"SELECT vn, icode, include FROM ppfs_items WHERE service=? AND vn IN ({','.join('?' * len(part))})",
+                                    [service, *part]):
+                    out[(r["vn"], r["icode"])] = bool(r["include"])
+        return out
+
+    def set_choice(self, service: str, vn: str, icode: str, include: bool) -> None:
+        with self._db() as db:
+            db.execute("INSERT OR REPLACE INTO ppfs_items (service, vn, icode, include, updated_at) VALUES (?,?,?,?,?)",
+                       (service, vn, icode, int(include), datetime.now().isoformat(timespec="seconds")))
 
     def history(self, limit: int = 50) -> list[dict]:
         with self._db() as db:
@@ -108,6 +128,26 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
 
     def q(sql: str) -> list[dict]:
         return hosxp._select(sql, [])
+
+    def send_plan(service: ppfs.Service, claimed: dict[str, set[str]]) -> dict[str, dict[str, dict]]:
+        """vn -> icode -> {"send", "locked", "default"}: what goes into the ZIP for each billed item of the visits.
+
+        The claimed fee is always sent (locked). Anything else is left out unless the user ticks it in the cost tab;
+        for 27) the iron drug given is ticked by default, as the user asked."""
+        vns = sorted(claimed)
+        items = ppfs.visit_items(q, vns)
+        special = {"ironchild": ppfs_ironchild, "anemiachild": ppfs_anemiachild}.get(service.key)
+        fee_icodes = set(special.all_icodes(special.bands(settings))) if special else set()
+        extra = ppfs_ironchild.iron_icodes(q, vns) if service.key == "ironchild" else {}
+        chosen = store.choices(service.key, vns)
+        plan: dict[str, dict[str, dict]] = {}
+        for i in items:
+            vn, icode = text(i["vn"]), text(i["icode"])
+            fee = icode in fee_icodes if special else (text(i.get("code")) in claimed.get(vn, set()) and not i.get("is_drug"))
+            default = fee or icode in extra.get(vn, set())
+            send = True if fee else chosen.get((vn, icode), default)
+            plan.setdefault(vn, {})[icode] = {"send": send, "locked": fee, "default": default}
+        return plan
 
     def check(service: ppfs.Service, start: date, end: date) -> list[ppfs.Row]:
         if service.key == "anemiachild":
@@ -163,6 +203,16 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
 
     @app.post("/api/ppfs/detail")
     def detail(body: dict = Body(...)):
+        out = _detail(body)
+        service, vn = _service(body.get("service")), text(body.get("vn"))
+        codes = {text(c) for c in body.get("codes") or []}
+        plan = send_plan(service, {vn: codes}).get(vn, {})
+        for i in out.get("items", []):
+            p = plan.get(i["icode"], {"send": False, "locked": False, "default": False})
+            i.update(send=p["send"], locked=p["locked"], default=p["default"])
+        return out
+
+    def _detail(body: dict) -> dict:
         vn = text(body.get("vn"))
         if not vn:
             raise HTTPException(400, "ไม่ได้ระบุ VN")
@@ -282,6 +332,15 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
             "iron": [{"name": text(i["name"]), "qty": f"{float(i['qty'] or 0):g}"} for i in d["iron"]],
         }
 
+    @app.post("/api/ppfs/item")
+    def item_choice(body: dict = Body(...)):
+        service = _service(body.get("service"))
+        vn, icode = text(body.get("vn")), text(body.get("icode"))
+        if not vn or not icode:
+            raise HTTPException(400, "ข้อมูลไม่ครบ")
+        store.set_choice(service.key, vn, icode, bool(body.get("include")))
+        return {"ok": True}
+
     @app.post("/api/ppfs/export")
     def export(request: Request, body: dict = Body(...)):
         service = _service(body.get("service"))
@@ -309,22 +368,21 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
             claimed.setdefault(r.vn, set()).add(r.code)
         vns = list(claimed)
         # Leave out every other item of these visits, so CHT/CHA add up to the claimed PP items only.
-        if service.key in ("ironchild", "anemiachild"):
-            # 26) and 27) are keyed under HOSxP's placeholder ADP 10000, shared with other items: keep their fees by icode.
-            band_list = (ppfs_ironchild if service.key == "ironchild" else ppfs_anemiachild).bands(settings)
-            excluded = {(text(i["vn"]), text(i["icode"])) for i in ppfs.visit_items(q, vns)
-                        if text(i["icode"]) not in ppfs_ironchild.keep_icodes(band_list, claimed.get(text(i["vn"]), set()))}
-        else:
-            excluded = {(text(i["vn"]), text(i["icode"])) for i in ppfs.visit_items(q, vns)
-                        if text(i.get("code")) not in claimed.get(text(i["vn"]), set()) or i.get("is_drug")}
+        # Only the claimed fees and what the user ticked in the cost tab go into the ZIP (CHT/CHA add up to those).
+        plan = send_plan(service, claimed)
+        excluded = {(vn, icode) for vn, entries in plan.items() for icode, p in entries.items() if not p["send"]}
+        ticked = {vn: {text(i.get("code")) for i in ppfs.visit_items(q, [vn]) if text(i.get("code"))
+                       and plan.get(vn, {}).get(text(i["icode"]), {}).get("send") and not plan[vn][text(i["icode"])]["locked"]}
+                  for vn in vns}
         config, groups = svc.load_setup(q, settings.hcode)
         visits = nhso18.opd_contexts(q, vns, groups, config.zone)
         if not visits:
             raise HTTPException(400, "ไม่พบ visit ที่เลือก")
         data = nhso18.Builder(q, config, settings.rcm_db, ECLAIM_DB, excluded).run(visits)
         if service.key in ("ironchild", "anemiachild"):
-            ppfs_ironchild.rewrite_adp(data, claimed)  # 10000 -> the e-Claim code of the band
-        data = ppfs.only_claimed(data, claimed)
+            rate = ppfs_ironchild.RATE if service.key == "ironchild" else ppfs_anemiachild.RATE
+            ppfs_ironchild.rewrite_adp(data, claimed, rate)  # 10000 -> the e-Claim code chosen for the visit
+        data = ppfs.only_claimed(data, {vn: claimed[vn] | ticked.get(vn, set()) for vn in vns})
         found = {(text(r["SEQ"]), text(r["CODE"])) for r in data["ADP"]}
         lost = [r.key for r in picked if (r.vn, r.code) not in found]
         if lost:

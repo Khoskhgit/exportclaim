@@ -69,3 +69,7 @@ def test_the_zip_sends_the_chosen_code():
                      {"SEQ": "v1", "CODE": "30011"}]}
     rewrite_adp(built, {"v1": {"689697"}, "v2": {"776508"}})
     assert [r["CODE"] for r in built["ADP"]] == ["689697", "776508", "10000", "30011"]
+    # A ticked vaccine also under 10000 keeps its code: only the fee's rate is rewritten.
+    built = {"ADP": [{"SEQ": "v1", "CODE": "10000", "RATE": "50.00"}, {"SEQ": "v1", "CODE": "10000", "RATE": "20.00"}]}
+    rewrite_adp(built, {"v1": {"689697"}}, Decimal("50"))
+    assert [r["CODE"] for r in built["ADP"]] == ["689697", "10000"]

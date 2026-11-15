@@ -70,4 +70,5 @@ def test_sent_and_the_zip_keeps_only_the_claimed_items():
     built = {"ADP": [{"SEQ": "v1", "CODE": CHECK}, {"SEQ": "v1", "CODE": "30011"}, {"SEQ": "v2", "CODE": CHECK}],
              "DRU": [{"SEQ": "v1"}], "LAB": [{"SEQ": "v1"}], "OPD": [{"SEQ": "v1"}]}
     out = ppfs.only_claimed(built, {"v1": {CHECK}})
-    assert out["ADP"] == [{"SEQ": "v1", "CODE": CHECK}] and out["DRU"] == out["LAB"] == [] and out["OPD"] == [{"SEQ": "v1"}]
+    assert out["ADP"] == [{"SEQ": "v1", "CODE": CHECK}] and out["LAB"] == [] and out["OPD"] == [{"SEQ": "v1"}]
+    assert out["DRU"] == [{"SEQ": "v1"}]  # drugs left in the build were ticked by the user

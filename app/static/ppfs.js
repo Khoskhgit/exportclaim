@@ -222,7 +222,7 @@ async function openDrawer(r) {
   body.replaceChildren(el("p", { class: "muted" }, "กำลังโหลด…"));
   try {
     const kind = service();
-    const data = await api("/api/ppfs/detail", { vn: r.vn, service: kind });
+    const data = await api("/api/ppfs/detail", { vn: r.vn, service: kind, codes: state.rows.filter((x) => x.vn === r.vn).map((x) => x.code) });
     if (state.current !== r.key) return;
     const b = data.birth;
     const own = kind === "anemiachild" ? [
@@ -392,11 +392,29 @@ async function openDrawer(r) {
 
     const dx = [data.dx.length ? table(["ประเภท", "รหัส", "ชื่อโรค"], data.dx.map((d) => el("tr", {}, el("td", {}, d.type), el("td", { class: "mono" }, d.code), el("td", {}, d.name)))) : el("p", { class: "muted" }, "ไม่มีข้อมูล")];
     const claimed = new Set(state.rows.filter((x) => x.vn === r.vn).map((x) => x.code));
-    const costs = [el("p", { class: "muted-note" }, `ZIP PPFS ส่งเฉพาะรายการ ${[...claimed].join(" / ")} รายการอื่นของ visit ไม่ถูกส่ง`),
+    // Tick what goes into the ZIP with the claimed fee (the fee itself is always sent); kept per visit in this app.
+    const sentTotal = el("p", { class: "muted-note" });
+    const showTotal = () => {
+      const on = data.items.filter((i) => i.send);
+      sentTotal.textContent = `ส่ง ${on.length} รายการ รวม ${money(on.reduce((s, i) => s + Number(i.amount), 0))} บาท (CHT/CHA ใน ZIP เท่ากับยอดนี้)`;
+    };
+    showTotal();
+    const costs = [el("p", { class: "muted-note" }, `ค่าบริการ ${[...claimed].join(" / ")} ส่งเสมอ · ติ๊กรายการอื่นที่ต้องการส่งไปด้วย (เช่น ยาที่จ่าย) ยาที่ติ๊กจะอยู่ในแฟ้ม DRU ไม่แก้ข้อมูลใน HOSxP`),
+      sentTotal,
       table(["ส่ง", "รายการ", "ADP", { label: "จำนวน", num: true }, { label: "รวม", num: true }], data.items.map((i) => {
-        const sent = data.send_icodes ? data.send_icodes.includes(i.icode) : claimed.has(i.adp) && !(data.drug_icodes || []).includes(i.icode);
-        return el("tr", { class: sent ? "" : "excluded" }, el("td", {}, sent ? el("span", { class: "badge b-ok" }, "ส่ง") : el("span", { class: "muted" }, "ไม่ส่ง")),
-          el("td", {}, i.name), el("td", { class: "mono" }, i.adp || "—"), el("td", { class: "num" }, i.qty), el("td", { class: "num" }, money(i.amount)));
+        const row = el("tr", { class: i.send ? "" : "excluded" });
+        const box = el("input", { type: "checkbox", checked: i.send, disabled: i.locked, "aria-label": `ส่ง ${i.name}`,
+          title: i.locked ? "ค่าบริการที่เบิก ส่งเสมอ" : i.default ? "ส่งโดยค่าเริ่มต้น" : "",
+          onchange: async (e) => {
+            try {
+              await api("/api/ppfs/item", { service: kind, vn: r.vn, icode: i.icode, include: e.target.checked });
+              i.send = e.target.checked; row.classList.toggle("excluded", !i.send); showTotal();
+            } catch (err) { e.target.checked = !e.target.checked; notice(err.message); }
+          } });
+        row.append(el("td", { class: "check" }, box),
+          el("td", {}, i.name, i.locked ? el("span", { class: "sub" }, "ค่าบริการที่เบิก") : i.default ? el("span", { class: "sub" }, "ส่งโดยค่าเริ่มต้น") : null),
+          el("td", { class: "mono" }, i.adp || "—"), el("td", { class: "num" }, i.qty), el("td", { class: "num" }, money(i.amount)));
+        return row;
       }))];
     body.replaceChildren(...tabs([
       { id: "check", label: "สรุปและผลตรวจ", badge: issues.length || undefined, alert: r.errors.length > 0, content: check },

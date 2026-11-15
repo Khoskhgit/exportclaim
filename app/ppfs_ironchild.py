@@ -192,12 +192,32 @@ def keep_icodes(band_list: list[Band], codes: set[str]) -> set[str]:
     return {i for b in band_list if not b.adp or b.adp in codes for i in b.icodes}
 
 
-def rewrite_adp(data: dict[str, list[dict]], claimed: dict[str, set[str]]) -> None:
-    """Send the e-Claim code chosen for each visit in place of HOSxP's placeholder 10000."""
+def rewrite_adp(data: dict[str, list[dict]], claimed: dict[str, set[str]], rate: Decimal | None = None) -> None:
+    """Send the e-Claim code chosen for each visit in place of HOSxP's placeholder 10000. With a rate, only the row of
+    the fee is changed: another item the user ticked may also carry 10000 (a vaccine) at another rate."""
     for r in data.get("ADP", []):
         codes = claimed.get(text(r.get("SEQ")), set())
-        if text(r.get("CODE")) == HOSXP_CODE and len(codes) == 1:
+        if text(r.get("CODE")) != HOSXP_CODE or len(codes) != 1:
+            continue
+        try:
+            same_rate = rate is None or Decimal(str(r.get("RATE") or 0)) == rate
+        except ArithmeticError:
+            same_rate = False
+        if same_rate:
             r["CODE"] = next(iter(codes))
+
+
+def iron_icodes(q: Select, vns: list[str]) -> dict[str, set[str]]:
+    """VN -> the iron drugs (syrup or tablets) given, which 27) sends with the fee by default."""
+    if not vns:
+        return {}
+    out: dict[str, set[str]] = {}
+    for r in q(f"""
+            SELECT DISTINCT oo.vn, oo.icode, di.dosageform FROM opitemrece oo JOIN drugitems di ON di.icode=oo.icode
+            WHERE oo.vn IN ({lit_list(vns)}) AND CONCAT_WS(' ',di.name,di.generic_name) REGEXP {lit(IRON)}"""):
+        if _form(text(r.get("dosageform"))):
+            out.setdefault(text(r["vn"]), set()).add(text(r["icode"]))
+    return out
 
 
 def detail(q: Select, vn: str, band_list: list[Band], codes: dict[str, str]) -> dict:
