@@ -10,7 +10,7 @@
    FP003_3  ยาเม็ดคุมกำเนิดฉุกเฉิน         50 baht a pack, at most 2 packs a year
    (condoms have no item in HOSxP yet, so they are not here)
 
-The year is the calendar year, as for the pregnancy test. In HOSxP the drug (e.g. DMPA) and the service fee
+The year is the fiscal year (October-September), as for every PPFS limit. In HOSxP the drug (e.g. DMPA) and the service fee
 ("18ฉีดยาคุมกำเนิด") carry the same ADP code: only the fee, a non-drug item, is claimed; the drug is shown beside it.
 """
 from __future__ import annotations
@@ -19,7 +19,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 from .nhso18 import lit, lit_list
-from .ppfs import ERROR, SELF_PAID, WARN, Row, Select, _day, _money, self_paid_error
+from .ppfs import ERROR, SELF_PAID, WARN, Row, Select, _day, _money, fiscal_range, fiscal_year, self_paid_error
 from .validate import text
 
 PILL_C, PILL_S, EC, INJECT, IUD, IMPLANT, REMOVE = "FP003_1", "FP003_2", "FP003_3", "FP003_4", "FP001", "FP002_1", "FP002_2"
@@ -65,7 +65,7 @@ def fetch(q: Select, start: date, end: date) -> dict:
     history = q(f"""
         SELECT oo.vn, o.hn, o.vstdate, d.nhso_adp_code code, SUM(oo.qty) qty
         FROM ovst o JOIN opitemrece oo ON oo.vn=o.vn JOIN s_drugitems d ON d.icode=oo.icode
-        WHERE o.hn IN ({lit_list(hns)}) AND o.vstdate BETWEEN {lit(date(start.year, 1, 1))} AND {lit(date(end.year, 12, 31))}
+        WHERE o.hn IN ({lit_list(hns)}) AND o.vstdate BETWEEN {lit(fiscal_range(fiscal_year(start))[0])} AND {lit(fiscal_range(fiscal_year(end))[1])}
           AND d.nhso_adp_code IN ({codes}) AND NOT EXISTS(SELECT 1 FROM drugitems di WHERE di.icode=oo.icode)
         GROUP BY oo.vn, d.nhso_adp_code HAVING SUM(oo.qty)>0""") if hns else []
     births = q(f"""
@@ -102,14 +102,14 @@ def check(data: dict, sent: dict[tuple[str, str], str] | None = None) -> list[Ro
             row.amount += _money(r.get("amount"))
             row.self_paid |= text(r.get("paidst")) == SELF_PAID
 
-    # Running totals of each yearly cap, from every fee billed in HOSxP that calendar year.
+    # Running totals of each yearly cap, from every fee billed in HOSxP that fiscal year.
     running: dict[tuple[str, str], Decimal] = {}
     done: dict[tuple[str, int, tuple], list[tuple[date, str, str, Decimal]]] = {}
     for h in data["history"]:
         day, code = _day(h["vstdate"]), text(h["code"])
         cap = _cap(code)
         if day and cap:
-            done.setdefault((text(h["hn"]), day.year, cap[0]), []).append((day, text(h["vn"]), code, Decimal(str(h["qty"] or 0))))
+            done.setdefault((text(h["hn"]), fiscal_year(day), cap[0]), []).append((day, text(h["vn"]), code, Decimal(str(h["qty"] or 0))))
     for (hn, _, _), entries in done.items():
         total = Decimal("0")
         for day, vn, code, qty in sorted(entries):
@@ -132,7 +132,7 @@ def check(data: dict, sent: dict[tuple[str, str], str] | None = None) -> list[Ro
         cap = _cap(code)
         total = running.get((vn, code))
         row.extra = {"age": int(age) if age is not None else None, "unit": unit, "fee_qty": f"{row.qty:g}",
-                     "drug_qty": f"{drug_qty:g}" if drug_qty else "", "drug_name": drug_name, "year": day.year if day else None,
+                     "drug_qty": f"{drug_qty:g}" if drug_qty else "", "drug_name": drug_name, "year": fiscal_year(day) if day else None,
                      "year_total": f"{total:g}" if total is not None else "", "cap": cap[1] if cap else None,
                      "cap_unit": cap[2] if cap else ""}
         row.count = int(total) if total is not None else None
@@ -150,7 +150,7 @@ def check(data: dict, sent: dict[tuple[str, str], str] | None = None) -> list[Ro
         if billed and code in PER_VISIT and row.qty > PER_VISIT[code]:
             row.add(ERROR, "PER_VISIT", f"{row.qty:g} แผงต่อครั้ง เกิน {PER_VISIT[code]} แผง")
         if billed and cap and total is not None and total > cap[1]:
-            row.add(ERROR, "OVER_YEAR", f"สะสมปี {day.year + 543} เป็น {total:g} {cap[2]} เกิน {cap[1]} {cap[2]}")
+            row.add(ERROR, "OVER_YEAR", f"สะสมปีงบ {fiscal_year(day) + 543} เป็น {total:g} {cap[2]} เกิน {cap[1]} {cap[2]}")
         if age is not None and not AGE[0] <= int(age) <= AGE[1]:
             row.add(WARN, "AGE", f"อายุ {int(age)} ปี อยู่นอกวัยเจริญพันธุ์ ({AGE[0]}–{AGE[1]} ปี)")
         if billed and code == PILL_S:
@@ -170,21 +170,22 @@ def check(data: dict, sent: dict[tuple[str, str], str] | None = None) -> list[Ro
 
 
 def detail(q: Select, vn: str) -> dict:
-    """The drawer of one visit: every family planning fee and drug of the patient in that calendar year."""
+    """The drawer of one visit: every family planning fee and drug of the patient in that fiscal year."""
     visit = (q(f"""
         SELECT o.vn, o.hn, o.vstdate, p.nationality, v.age_y,
           (SELECT n.name FROM nationality n WHERE n.nationality=p.nationality) nationality_name
         FROM ovst o JOIN patient p ON p.hn=o.hn LEFT JOIN vn_stat v ON v.vn=o.vn WHERE o.vn={lit(vn)}""") or [None])[0]
     if visit is None:
         return {}
-    year = _day(visit["vstdate"]).year
+    year = fiscal_year(_day(visit["vstdate"]))
+    first, last = fiscal_range(year)
     history = q(f"""
         SELECT o.vn, o.vstdate, d.nhso_adp_code code,
           SUM(IF(EXISTS(SELECT 1 FROM drugitems di WHERE di.icode=oo.icode),0,oo.qty)) fee_qty,
           SUM(IF(EXISTS(SELECT 1 FROM drugitems di WHERE di.icode=oo.icode),oo.qty,0)) drug_qty,
           SUM(IF(EXISTS(SELECT 1 FROM drugitems di WHERE di.icode=oo.icode),0,IFNULL(oo.qty,0)*IFNULL(oo.unitprice,0))) amount
         FROM ovst o JOIN opitemrece oo ON oo.vn=o.vn JOIN s_drugitems d ON d.icode=oo.icode
-        WHERE o.hn={lit(visit["hn"])} AND YEAR(o.vstdate)={year} AND d.nhso_adp_code IN ({lit_list(CODES)})
+        WHERE o.hn={lit(visit["hn"])} AND o.vstdate BETWEEN {lit(first)} AND {lit(last)} AND d.nhso_adp_code IN ({lit_list(CODES)})
         GROUP BY o.vn, d.nhso_adp_code ORDER BY o.vstdate, o.vn, d.nhso_adp_code""")
     items = q(f"""
         SELECT oo.icode, CONCAT_WS(' ',d.name,d.strength) name, d.nhso_adp_code adp, SUM(oo.qty) qty,

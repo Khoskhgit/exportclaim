@@ -26,10 +26,10 @@ def test_a_clean_test():
     assert codes(row) == ([], [])
 
 
-def test_four_a_calendar_year():
-    days = ["2026-01-05", "2026-03-01", "2026-05-01", "2026-07-01", "2026-09-01", "2027-01-02"]
+def test_four_a_fiscal_year():
+    days = ["2025-10-01", "2026-01-05", "2026-03-01", "2026-05-01", "2026-09-30", "2026-10-01"]
     rows = {r.vn: r for r in check(data([visit(f"v{i}", d) for i, d in enumerate(days)]))}
-    assert [rows[f"v{i}"].count for i in range(6)] == [1, 2, 3, 4, 5, 1]  # counts start again in January
+    assert [rows[f"v{i}"].count for i in range(6)] == [1, 2, 3, 4, 5, 1]  # counts start again on 1 October
     assert codes(rows["v4"])[0] == ["OVER_COUNT"] and codes(rows["v3"])[0] == [] and codes(rows["v5"])[0] == []
 
 

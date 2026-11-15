@@ -360,3 +360,4 @@ tr.picked td{background:#f1f8f5}
 .picked-amount{font-weight:700;white-space:nowrap}
 .picked-remove{min-height:30px;padding:2px 10px;font-size:13px}
 @media (max-width:700px){.ppfs-search .service-pick{grid-column:1/-1}.picked-item{flex-wrap:wrap}}
+.lab-pair{display:inline-block;margin-right:8px;white-space:nowrap}

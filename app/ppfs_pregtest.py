@@ -1,7 +1,7 @@
 """PPFS 8) บริการทดสอบการตั้งครรภ์ - urine pregnancy test or a self-test kit for women who may be pregnant, all rights.
 
-ADP 30014, 75 baht a time, at most 4 times a year. The year is the calendar year (January-December), as the user
-chose. What HOSxP holds:
+ADP 30014, 75 baht a time, at most 4 times a year. The year is the fiscal year (October-September), as the user
+chose for every PPFS limit. What HOSxP holds:
    opitemrece + s_drugitems.nhso_adp_code 30014   the billed item (what the ZIP claims)
    lab_order of "Pregnancy Test,Urine"            the UPT result (none when a self-test kit was given)
    ovstdiag Z32                                   the pregnancy test diagnosis; a Z32 visit with no 30014 item is
@@ -14,7 +14,7 @@ from datetime import date
 from decimal import Decimal
 
 from .nhso18 import lit, lit_list
-from .ppfs import ERROR, PREGTEST, SELF_PAID, WARN, Row, Select, _day, _money, self_paid_error
+from .ppfs import ERROR, PREGTEST, SELF_PAID, WARN, Row, Select, _day, _money, fiscal_range, fiscal_year, self_paid_error
 from .validate import text
 
 MAX_A_YEAR = 4
@@ -54,7 +54,7 @@ def fetch(q: Select, start: date, end: date) -> dict:
     hns = sorted({text(r["hn"]) for r in items})
     history = q(f"""
         SELECT oo.vn, o.hn, o.vstdate FROM ovst o JOIN opitemrece oo ON oo.vn=o.vn JOIN s_drugitems d ON d.icode=oo.icode
-        WHERE o.hn IN ({lit_list(hns)}) AND o.vstdate BETWEEN {lit(date(start.year, 1, 1))} AND {lit(date(end.year, 12, 31))}
+        WHERE o.hn IN ({lit_list(hns)}) AND o.vstdate BETWEEN {lit(fiscal_range(fiscal_year(start))[0])} AND {lit(fiscal_range(fiscal_year(end))[1])}
           AND d.nhso_adp_code={lit(PREGTEST)} AND IFNULL(oo.qty,0)>0
         GROUP BY oo.vn""") if hns else []
     vns = sorted({text(r["vn"]) for r in items + unbilled})
@@ -82,12 +82,12 @@ def check(data: dict, sent: dict[tuple[str, str], str] | None = None) -> list[Ro
             info[vn] = r
             rows[vn] = Row(key=f"{vn}|{PREGTEST}", vn=vn, code=PREGTEST, item_name="(ยังไม่คีย์ค่าบริการ)")
 
-    # The number of each test in its calendar year, from everything billed in HOSxP that year.
+    # The number of each test in its fiscal year, from everything billed in HOSxP that year.
     by_year: dict[tuple[str, int], list[tuple[date, str]]] = {}
     for h in data["history"]:
         day = _day(h["vstdate"])
         if day:
-            by_year.setdefault((text(h["hn"]), day.year), []).append((day, text(h["vn"])))
+            by_year.setdefault((text(h["hn"]), fiscal_year(day)), []).append((day, text(h["vn"])))
     for v in by_year.values():
         v.sort()
 
@@ -100,7 +100,7 @@ def check(data: dict, sent: dict[tuple[str, str], str] | None = None) -> list[Ro
         age = r.get("age_y")
         upt = data["upt"].get(vn, "")
         has_z32 = vn in data["z32"]
-        row.extra = {"age": int(age) if age is not None else None, "upt": upt, "z32": has_z32, "year": day.year if day else None}
+        row.extra = {"age": int(age) if age is not None else None, "upt": upt, "z32": has_z32, "year": fiscal_year(day) if day else None}
         billed = row.qty > 0
 
         if text(r.get("sex")) != "2":
@@ -111,11 +111,11 @@ def check(data: dict, sent: dict[tuple[str, str], str] | None = None) -> list[Ro
             row.add(ERROR, "NO_ITEM", f"มีรหัส Z32 แต่ยังไม่คีย์ค่าบริการ {PREGTEST} ใน HOSxP")
         self_paid_error(row)
         if billed and day:
-            done = by_year.get((row.hn, day.year), [])
+            done = by_year.get((row.hn, fiscal_year(day)), [])
             position = next((i for i, (_, v) in enumerate(done, 1) if v == vn), None)
             row.count = position
             if position and position > MAX_A_YEAR:
-                row.add(ERROR, "OVER_COUNT", f"ทดสอบครั้งที่ {position} ของปี {day.year + 543} เกิน {MAX_A_YEAR} ครั้งต่อปี")
+                row.add(ERROR, "OVER_COUNT", f"ทดสอบครั้งที่ {position} ของปีงบ {fiscal_year(day) + 543} เกิน {MAX_A_YEAR} ครั้งต่อปี")
             earlier = [v for d, v in done[:(position or 1) - 1] if d == day]
             if earlier:
                 row.add(ERROR, "SAME_DAY", f"ทดสอบซ้ำวันเดียวกันกับ VN {earlier[0]}")
@@ -134,18 +134,19 @@ def check(data: dict, sent: dict[tuple[str, str], str] | None = None) -> list[Ro
 
 
 def detail(q: Select, vn: str) -> dict:
-    """The drawer of one visit: every 30014 test of the patient in that calendar year with its UPT result."""
+    """The drawer of one visit: every 30014 test of the patient in that fiscal year with its UPT result."""
     visit = (q(f"""
         SELECT o.vn, o.hn, o.vstdate, p.nationality, v.age_y,
           (SELECT n.name FROM nationality n WHERE n.nationality=p.nationality) nationality_name
         FROM ovst o JOIN patient p ON p.hn=o.hn LEFT JOIN vn_stat v ON v.vn=o.vn WHERE o.vn={lit(vn)}""") or [None])[0]
     if visit is None:
         return {}
-    year = _day(visit["vstdate"]).year
+    year = fiscal_year(_day(visit["vstdate"]))
+    first, last = fiscal_range(year)
     tests = q(f"""
         SELECT o.vn, o.vstdate, SUM(oo.qty) qty, SUM(IFNULL(oo.qty,0)*IFNULL(oo.unitprice,0)) amount
         FROM ovst o JOIN opitemrece oo ON oo.vn=o.vn JOIN s_drugitems d ON d.icode=oo.icode
-        WHERE o.hn={lit(visit["hn"])} AND YEAR(o.vstdate)={year} AND d.nhso_adp_code={lit(PREGTEST)}
+        WHERE o.hn={lit(visit["hn"])} AND o.vstdate BETWEEN {lit(first)} AND {lit(last)} AND d.nhso_adp_code={lit(PREGTEST)}
         GROUP BY o.vn ORDER BY o.vstdate, o.vn""")
     upt = _upt(q, sorted({text(t["vn"]) for t in tests} | {vn}))
     items = q(f"""
