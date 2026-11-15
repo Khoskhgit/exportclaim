@@ -1,0 +1,258 @@
+"""PP Fee Schedule (PPFS) items claimed from สปสช. through the e-Claim program, for patients of every right.
+
+Each service type is one entry of SERVICES (the page's drop-down). For now there is one:
+
+7) การตรวจหลังคลอด - Thai women after giving birth, all rights:
+   ADP 30015 ตรวจหลังคลอด, 150 baht, at most 3 times per birth, one in each window counted from the day after the
+            birth: day 1-7, day 8-15, day 16-42
+   ADP 30016 ยาเสริมธาตุเหล็ก กรดโฟลิก ไอโอดีน (90 tablets, 3 months), 135 baht, at most 2 times per birth
+
+What HOSxP holds:
+   opitemrece + s_drugitems.nhso_adp_code 30015 / 30016   the billed item (what the ZIP claims)
+   person_anc_preg_care (care_date, preg_care_number, vn)  the postnatal check record; without a VN it was done
+                                                            at home or at another place and is not ours to claim
+   person_anc.labor_date                                   the birth (ipt_labour is not used at this hospital)
+
+The birth an item belongs to is the patient's latest labor_date on or before the visit.
+"""
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from datetime import date
+from decimal import Decimal
+from typing import Callable, Iterable
+
+from .nhso18 import lit, lit_list
+from .validate import text
+
+ERROR, WARN = "error", "warn"
+CHECK, DRUG = "30015", "30016"
+
+
+@dataclass(frozen=True)
+class Service:
+    key: str
+    label: str
+    codes: dict[str, tuple[str, Decimal]]  # ADP code -> (short name, rate)
+    rules: tuple[str, ...]
+
+
+SERVICES = {
+    "postnatal": Service(
+        key="postnatal", label="7) การตรวจหลังคลอด",
+        codes={CHECK: ("ตรวจหลังคลอด", Decimal("150")), DRUG: ("ยาธาตุเหล็ก/โฟลิก/ไอโอดีน", Decimal("135"))},
+        rules=(
+            "กลุ่มเป้าหมาย: หญิงหลังคลอดคนไทย ทุกสิทธิการรักษาพยาบาล",
+            "ตรวจหลังคลอด (ADP 30015) 150 บาท/ครั้ง ไม่เกิน 3 ครั้ง: วันที่ 1–7, 8–15 และ 16–42 นับถัดจากวันคลอด",
+            "ยาเสริมธาตุเหล็ก กรดโฟลิก ไอโอดีน (ADP 30016) ครั้งละ 3 เดือน (90 เม็ด) 135 บาท/ครั้ง ไม่เกิน 2 ครั้งต่อการคลอด",
+        )),
+}
+WINDOWS = {1: "1–7", 2: "8–15", 3: "16–42"}
+MAX_COUNT = {CHECK: 3, DRUG: 2}
+IRON = "FERR|IRON|TRIFER|FOLIC|IODI|ธาตุเหล็ก|ไอโอดีน"
+
+Select = Callable[[str], list[dict]]
+
+
+def window(days: int | None) -> int | None:
+    """The postnatal window of a day counted from the birth (day 0 is the birth itself)."""
+    if days is None or days < 0 or days > 42:
+        return None
+    return 1 if days <= 7 else 2 if days <= 15 else 3
+
+
+def _day(value) -> date | None:
+    if isinstance(value, date):
+        return value
+    try:
+        return date.fromisoformat(str(value)[:10]) if value else None
+    except ValueError:
+        return None
+
+
+def _money(value) -> Decimal:
+    try:
+        return Decimal(str(value or 0)).quantize(Decimal("0.01"))
+    except ArithmeticError:
+        return Decimal("0.00")
+
+
+# ------------------------------------------------------------------ HOSxP (read only)
+def fetch(q: Select, start: date, end: date) -> dict:
+    """Everything the postnatal checks need for visits from start to end."""
+    items = q(f"""
+        SELECT oo.vn, o.hn, o.vstdate, o.vsttime, o.an, o.pttype, ptt.name pttype_name,
+          CONCAT(IFNULL(p.pname,''),p.fname,' ',p.lname) ptname, p.cid, p.nationality,
+          d.nhso_adp_code code, oo.icode, d.name item_name, oo.qty, oo.unitprice,
+          IFNULL(oo.qty,0)*IFNULL(oo.unitprice,0) amount
+        FROM ovst o JOIN opitemrece oo ON oo.vn=o.vn JOIN s_drugitems d ON d.icode=oo.icode
+        JOIN patient p ON p.hn=o.hn LEFT JOIN pttype ptt ON ptt.pttype=o.pttype
+        WHERE o.vstdate BETWEEN {lit(start)} AND {lit(end)} AND d.nhso_adp_code IN ({lit_list([CHECK, DRUG])})""")
+    cares = q(f"""
+        SELECT c.vn, c.care_date, c.preg_care_number care_no, c.person_anc_id, a.labor_date,
+          o.hn, o.vstdate, o.vsttime, o.an, o.pttype, ptt.name pttype_name,
+          CONCAT(IFNULL(p.pname,''),p.fname,' ',p.lname) ptname, p.cid, p.nationality
+        FROM person_anc_preg_care c JOIN person_anc a ON a.person_anc_id=c.person_anc_id
+        JOIN ovst o ON o.vn=c.vn JOIN patient p ON p.hn=o.hn LEFT JOIN pttype ptt ON ptt.pttype=o.pttype
+        WHERE IFNULL(c.vn,'')<>'' AND (o.vstdate BETWEEN {lit(start)} AND {lit(end)}
+          OR c.care_date BETWEEN {lit(start)} AND {lit(end)})""")
+    hns = sorted({text(r["hn"]) for r in items + cares if text(r.get("hn"))})
+    births = q(f"""
+        SELECT p.patient_hn hn, a.person_anc_id, a.labor_date FROM person p JOIN person_anc a ON a.person_id=p.person_id
+        WHERE p.patient_hn IN ({lit_list(hns)}) AND a.labor_date IS NOT NULL""") if hns else []
+    first = min((_day(b["labor_date"]) for b in births), default=None)
+    history = q(f"""
+        SELECT oo.vn, o.hn, o.vstdate, d.nhso_adp_code code FROM ovst o JOIN opitemrece oo ON oo.vn=o.vn
+        JOIN s_drugitems d ON d.icode=oo.icode
+        WHERE o.hn IN ({lit_list(hns)}) AND o.vstdate BETWEEN {lit(first)} AND {lit(end)}
+          AND d.nhso_adp_code IN ({lit_list([CHECK, DRUG])}) AND IFNULL(oo.qty,0)>0
+        GROUP BY oo.vn, d.nhso_adp_code""") if hns and first else []
+    vns = sorted({text(r["vn"]) for r in items if text(r.get("code")) == DRUG})
+    iron = {text(r["vn"]): r["qty"] for r in q(f"""
+        SELECT oo.vn, SUM(oo.qty) qty FROM opitemrece oo JOIN drugitems di ON di.icode=oo.icode
+        WHERE oo.vn IN ({lit_list(vns)}) AND CONCAT_WS(' ',di.name,di.generic_name) REGEXP {lit(IRON)}
+        GROUP BY oo.vn""")} if vns else {}
+    return {"items": items, "cares": cares, "births": births, "history": history, "iron": iron}
+
+
+def visit_items(q: Select, vns: Iterable[str]) -> list[dict]:
+    """Every billed item of these visits: (vn, icode, ADP code), to leave all but the claimed ones out of the ZIP."""
+    vns = sorted(set(vns))
+    if not vns:
+        return []
+    return q(f"""
+        SELECT oo.vn, oo.icode, d.nhso_adp_code code FROM opitemrece oo LEFT JOIN s_drugitems d ON d.icode=oo.icode
+        WHERE oo.vn IN ({lit_list(vns)})""")
+
+
+# ------------------------------------------------------------------ rules
+@dataclass
+class Row:
+    key: str
+    vn: str
+    code: str
+    hn: str = ""
+    date: str = ""
+    time: str = ""
+    ptname: str = ""
+    cid: str = ""
+    pttype: str = ""
+    labor_date: str = ""
+    days: int | None = None
+    window: int | None = None
+    count: int | None = None
+    qty: Decimal = Decimal("0")
+    amount: Decimal = Decimal("0.00")
+    item_name: str = ""
+    care_no: int | None = None
+    care_date: str = ""
+    sent: str = ""
+    errors: list[dict] = field(default_factory=list)
+    warnings: list[dict] = field(default_factory=list)
+
+    def add(self, level: str, code: str, message: str) -> None:
+        (self.errors if level == ERROR else self.warnings).append({"code": code, "message": message})
+
+
+def _birth_of(births: dict[str, list[date]], hn: str, day: date | None) -> date | None:
+    if day is None:
+        return None
+    return max((b for b in births.get(hn, []) if b <= day), default=None)
+
+
+def postnatal(data: dict, sent: dict[tuple[str, str], str] | None = None) -> list[Row]:
+    """One row per visit and ADP code, with what stops it (errors) or needs a look (warnings)."""
+    sent = sent or {}
+    births: dict[str, list[date]] = {}
+    for b in data["births"]:
+        if d := _day(b["labor_date"]):
+            births.setdefault(text(b["hn"]), []).append(d)
+    care_by_vn = {}
+    for c in data["cares"]:
+        care_by_vn.setdefault(text(c["vn"]), c)
+
+    rows: dict[tuple[str, str], Row] = {}
+    info: dict[str, dict] = {}
+    for r in data["items"]:
+        vn, code = text(r["vn"]), text(r["code"])
+        info.setdefault(vn, r)
+        row = rows.get((vn, code))
+        if row is None:
+            row = rows[(vn, code)] = Row(key=f"{vn}|{code}", vn=vn, code=code)
+            row.item_name = text(r.get("item_name"))
+        row.qty += Decimal(str(r.get("qty") or 0))
+        row.amount += _money(r.get("amount"))
+    for vn, c in care_by_vn.items():  # a check recorded, nothing billed: shown so it can be keyed in HOSxP
+        info.setdefault(vn, c)
+        if (vn, CHECK) not in rows:
+            rows[(vn, CHECK)] = Row(key=f"{vn}|{CHECK}", vn=vn, code=CHECK, item_name="(ยังไม่คีย์ค่าบริการ)")
+
+    # Which number each item is for its birth, from everything billed in HOSxP (also outside the date range).
+    order: dict[tuple[str, date, str], list[tuple[date, str]]] = {}
+    for h in data["history"]:
+        hn, day = text(h["hn"]), _day(h["vstdate"])
+        birth = _birth_of(births, hn, day)
+        if birth is not None:
+            order.setdefault((hn, birth, text(h["code"])), []).append((day, text(h["vn"])))
+    for v in order.values():
+        v.sort()
+
+    for (vn, code), row in rows.items():
+        r = info[vn]
+        day = _day(r.get("vstdate"))
+        row.hn, row.date, row.time = text(r.get("hn")), day.isoformat() if day else "", str(r.get("vsttime") or "")[:8]
+        row.ptname, row.cid = text(r.get("ptname")), text(r.get("cid"))
+        row.pttype = f"{text(r.get('pttype'))}: {text(r.get('pttype_name'))}".strip(": ")
+        care = care_by_vn.get(vn)
+        birth = _day(care["labor_date"]) if care and care.get("labor_date") else _birth_of(births, row.hn, day)
+        row.labor_date = birth.isoformat() if birth else ""
+        row.days = (day - birth).days if birth and day else None
+        row.window = window(row.days)
+        name, rate = SERVICES["postnatal"].codes[code]
+        billed = row.qty > 0
+
+        if text(r.get("nationality")) != "99":
+            row.add(ERROR, "NOT_THAI", "ไม่ใช่คนไทย (สัญชาติไม่ใช่ 99)")
+        if text(r.get("an")):
+            row.add(ERROR, "IPD", "visit นี้ Admit แล้ว (มี AN)")
+        if not billed:
+            row.add(ERROR, "NO_ITEM", f"มีบันทึกตรวจหลังคลอด แต่ยังไม่คีย์ค่าบริการ {code} ใน HOSxP")
+        if birth is None:
+            row.add(ERROR, "NO_BIRTH", "ไม่พบวันคลอดใน HOSxP (person_anc.labor_date)")
+        elif code == CHECK and row.window is None:
+            row.add(ERROR, "OVER_42", f"ตรวจวันที่ {row.days} หลังคลอด เกิน 42 วัน")
+
+        if birth is not None and billed:
+            done = order.get((row.hn, birth, code), [])
+            position = next((i for i, (_, v) in enumerate(done, 1) if v == vn), None)
+            row.count = position
+            if position and position > MAX_COUNT[code]:
+                row.add(ERROR, "OVER_COUNT", f"{name}ครั้งที่ {position} เกิน {MAX_COUNT[code]} ครั้งต่อการคลอด")
+            if code == CHECK and row.window and position:
+                earlier = [v for d, v in done[:position - 1] if window((d - birth).days) == row.window]
+                if earlier:
+                    row.add(ERROR, "SAME_WINDOW", f"ช่วงวันที่ {WINDOWS[row.window]} เบิกไปแล้วที่ VN {earlier[0]}")
+        if billed and code == CHECK and care is None:
+            row.add(WARN, "NO_CARE", "ไม่มีบันทึกตรวจหลังคลอด (person_anc_preg_care) ของ visit นี้")
+        if care is not None and code == CHECK:
+            row.care_no = care.get("care_no")
+            row.care_date = _day(care.get("care_date")).isoformat() if _day(care.get("care_date")) else ""
+            if row.window and row.care_no and int(row.care_no) != row.window:
+                row.add(WARN, "CARE_NO", f"บันทึกเป็นครั้งที่ {row.care_no} แต่ตรวจในช่วงวันที่ {WINDOWS[row.window]}")
+            if row.care_date and row.care_date != row.date:
+                row.add(WARN, "CARE_DATE", "วันที่ตรวจหลังคลอดไม่ตรงกับวันที่ของ VN")
+        if billed and (row.qty != 1 or row.amount != rate):
+            row.add(WARN, "PRICE", f"ยอด {row.amount} บาท (จำนวน {row.qty:g}) ไม่ตรงอัตรา {rate} บาท/ครั้ง")
+        if billed and code == DRUG and vn not in data["iron"]:
+            row.add(WARN, "NO_IRON", "ไม่พบการจ่ายยาธาตุเหล็ก/โฟลิก/ไอโอดีนใน visit นี้")
+        row.sent = sent.get((vn, code), "")
+    return sorted(rows.values(), key=lambda x: (x.date, x.time, x.vn, x.code))
+
+
+def only_claimed(data: dict[str, list[dict]], claimed: dict[str, set[str]]) -> dict[str, list[dict]]:
+    """Keep the 18 files to the PP items being claimed: ADP rows of those codes, no drug, lab or accident rows."""
+    out = dict(data)
+    out["ADP"] = [r for r in data.get("ADP", []) if text(r.get("CODE")) in claimed.get(text(r.get("SEQ")), set())]
+    for name in ("DRU", "LAB", "AER"):
+        out[name] = []
+    return out

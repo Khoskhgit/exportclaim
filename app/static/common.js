@@ -64,14 +64,14 @@ function setConnection(text, ok) {
 
 // ---------------------------------------------------------------- cards
 // Summary cards double as the status filter. cats: {key: [label, test, tone]}.
-function renderCards(container, cats, rows, current, amountOf, pick) {
+function renderCards(container, cats, rows, current, amountOf, pick, unit = "คน") {
   // A category may bring its own amount (e.g. the paid card sums what the STM paid, not what was claimed).
   container.replaceChildren(...Object.entries(cats).map(([key, [label, test, tone, ownAmount]]) => {
     const hits = rows.filter(test);
     const amount = hits.reduce((sum, r) => sum + Number((ownAmount || amountOf)(r) || 0), 0);
     return el("button", { class: `card tone-${tone}`, type: "button", "aria-pressed": String(current === key), onclick: () => pick(key) },
       el("span", { class: "card-label" }, label),
-      el("span", { class: "card-count" }, count.format(hits.length), el("small", {}, " คน")),
+      el("span", { class: "card-count" }, count.format(hits.length), el("small", {}, ` ${unit}`)),
       el("span", { class: "card-amount" }, `${baht.format(amount)} บาท`));
   }));
 }

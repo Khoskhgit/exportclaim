@@ -1,0 +1,192 @@
+"""The รายการ PPFS page: PP Fee Schedule items for every right, checked and built into an 18-file ZIP for e-Claim.
+
+The ZIP carries only the items being claimed: every other item of the visit is left out (CHT/CHA add up to the PP
+items alone) and the DRU, LAB and AER files are empty, so a visit's other charges are not claimed from สปสช.
+"""
+from __future__ import annotations
+
+import logging
+from datetime import date, datetime
+from pathlib import Path
+from typing import Any
+
+from fastapi import Body, FastAPI, HTTPException, Request
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.templating import Jinja2Templates
+
+from . import auth, nhso18, nhso18_service as svc, ppfs
+from .config import Settings
+from .store import Store
+from .validate import text
+
+log = logging.getLogger("ssop.ppfs")
+ECLAIM_DB = "eclaimdb"
+
+SCHEMA = """
+CREATE TABLE IF NOT EXISTS ppfs_exports (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, created_at TEXT NOT NULL, service TEXT NOT NULL, zip_path TEXT NOT NULL,
+  item_count INTEGER NOT NULL, total TEXT NOT NULL, created_by TEXT NOT NULL DEFAULT ''
+);
+CREATE TABLE IF NOT EXISTS ppfs_export_items (
+  export_id INTEGER NOT NULL, vn TEXT NOT NULL, code TEXT NOT NULL, amount TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS ppfs_export_items_vn ON ppfs_export_items(vn, code);
+"""
+
+
+class PpfsStore:
+    def __init__(self, store: Store):
+        self._db = store._db
+        with self._db() as db:
+            db.executescript(SCHEMA)
+
+    def record(self, service: str, zip_path: Path, items: list[dict], created_by: str = "") -> int:
+        total = sum(float(i["amount"] or 0) for i in items)
+        with self._db() as db:
+            export_id = db.execute(
+                "INSERT INTO ppfs_exports (created_at, service, zip_path, item_count, total, created_by) VALUES (?,?,?,?,?,?)",
+                (datetime.now().isoformat(timespec="seconds"), service, str(zip_path), len(items), f"{total:.2f}",
+                 created_by)).lastrowid
+            db.executemany("INSERT INTO ppfs_export_items (export_id, vn, code, amount) VALUES (?,?,?,?)",
+                           [(export_id, i["vn"], i["code"], str(i["amount"])) for i in items])
+        return export_id
+
+    def sent(self, vns: list[str]) -> dict[tuple[str, str], str]:
+        """(vn, code) -> when it was last put in a ZIP."""
+        out: dict[tuple[str, str], str] = {}
+        with self._db() as db:
+            for start in range(0, len(vns), 500):
+                part = vns[start:start + 500]
+                for r in db.execute(
+                        f"SELECT i.vn, i.code, MAX(e.created_at) at FROM ppfs_export_items i JOIN ppfs_exports e "
+                        f"ON e.id=i.export_id WHERE i.vn IN ({','.join('?' * len(part))}) GROUP BY i.vn, i.code", part):
+                    out[(r["vn"], r["code"])] = r["at"]
+        return out
+
+    def history(self, limit: int = 50) -> list[dict]:
+        with self._db() as db:
+            return [dict(r) for r in db.execute(
+                "SELECT id, created_at, service, zip_path, item_count, total, created_by FROM ppfs_exports "
+                "ORDER BY id DESC LIMIT ?", (limit,))]
+
+    def path(self, export_id: int) -> Path | None:
+        with self._db() as db:
+            row = db.execute("SELECT zip_path FROM ppfs_exports WHERE id=?", (export_id,)).fetchone()
+        return Path(row["zip_path"]) if row else None
+
+
+def _date(value: Any, label: str) -> date:
+    try:
+        return date.fromisoformat(str(value))
+    except ValueError:
+        raise HTTPException(400, f"{label} ไม่ถูกต้อง") from None
+
+
+def _service(value: Any) -> ppfs.Service:
+    service = ppfs.SERVICES.get(text(value) or "postnatal")
+    if service is None:
+        raise HTTPException(400, "ไม่รู้จักประเภทบริการ")
+    return service
+
+
+def _out(row: ppfs.Row) -> dict:
+    name, rate = ppfs.SERVICES["postnatal"].codes[row.code]
+    return {
+        "key": row.key, "vn": row.vn, "code": row.code, "code_name": name, "rate": str(rate), "hn": row.hn,
+        "date": row.date, "time": row.time, "ptname": row.ptname, "cid": row.cid[-4:].rjust(len(row.cid), "x") if row.cid else "",
+        "pttype": row.pttype, "labor_date": row.labor_date, "days": row.days, "window": row.window,
+        "window_label": ppfs.WINDOWS.get(row.window, "") if row.window else "", "count": row.count,
+        "qty": f"{row.qty:g}", "amount": f"{row.amount:.2f}", "item_name": row.item_name, "care_no": row.care_no,
+        "care_date": row.care_date, "sent": row.sent, "errors": row.errors, "warnings": row.warnings,
+    }
+
+
+def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templates: Jinja2Templates) -> None:
+    store = PpfsStore(local)
+
+    def q(sql: str) -> list[dict]:
+        return hosxp._select(sql, [])
+
+    def check(service: ppfs.Service, start: date, end: date) -> list[ppfs.Row]:
+        data = ppfs.fetch(q, start, end)
+        vns = sorted({text(r["vn"]) for r in data["items"] + data["cares"]})
+        return ppfs.postnatal(data, store.sent(vns))
+
+    @app.get("/ppfs", response_class=HTMLResponse)
+    def page(request: Request):
+        return templates.TemplateResponse(request, "ppfs.html", {"hname": settings.hname})
+
+    @app.get("/api/ppfs/services")
+    def services():
+        return [{"key": s.key, "label": s.label, "rules": list(s.rules),
+                 "codes": [{"code": c, "name": n, "rate": str(r)} for c, (n, r) in s.codes.items()]}
+                for s in ppfs.SERVICES.values()]
+
+    @app.post("/api/ppfs/search")
+    def search(body: dict = Body(...)):
+        service = _service(body.get("service"))
+        start, end = _date(body.get("start"), "วันที่เริ่ม"), _date(body.get("end"), "วันที่สิ้นสุด")
+        if end < start:
+            raise HTTPException(400, "วันที่สิ้นสุดต้องไม่ก่อนวันที่เริ่ม")
+        if (end - start).days > 366:
+            raise HTTPException(400, "ค้นได้ครั้งละไม่เกิน 1 ปี")
+        return {"service": service.key, "rows": [_out(r) for r in check(service, start, end)]}
+
+    @app.post("/api/ppfs/export")
+    def export(request: Request, body: dict = Body(...)):
+        service = _service(body.get("service"))
+        keys = list(dict.fromkeys(text(k) for k in body.get("keys") or [] if "|" in text(k)))
+        if not keys:
+            raise HTTPException(400, "ยังไม่ได้เลือกรายการ")
+        # Check again with fresh data over the days of the picked visits.
+        days = sorted({_date(text(d), "วันที่") for d in body.get("dates") or []})
+        if not days:
+            raise HTTPException(400, "ข้อมูลไม่ครบ")
+        rows = {r.key: r for r in check(service, days[0], days[-1])}
+        picked = [rows.get(k) for k in keys]
+        missing = [k for k, r in zip(keys, picked) if r is None]
+        if missing:
+            raise HTTPException(400, f"ไม่พบรายการ {missing[0].split('|')[0]} แล้ว ให้ค้นหาใหม่")
+        blocked = [{"key": r.key, "reason": r.errors[0]["message"]} for r in picked if r.errors]
+        if blocked:
+            return JSONResponse({"detail": "มีรายการที่ส่งไม่ได้", "blocked": blocked}, status_code=409)
+        resend = [r.key for r in picked if r.sent]
+        if resend and not body.get("confirm_resend"):
+            return JSONResponse({"detail": "ต้องยืนยันการส่งซ้ำ", "resend": resend, "needs_confirm": True}, status_code=409)
+
+        claimed: dict[str, set[str]] = {}
+        for r in picked:
+            claimed.setdefault(r.vn, set()).add(r.code)
+        vns = list(claimed)
+        # Leave out every other item of these visits, so CHT/CHA add up to the claimed PP items only.
+        excluded = {(text(i["vn"]), text(i["icode"])) for i in ppfs.visit_items(q, vns)
+                    if text(i.get("code")) not in claimed.get(text(i["vn"]), set())}
+        config, groups = svc.load_setup(q, settings.hcode)
+        visits = nhso18.opd_contexts(q, vns, groups, config.zone)
+        if not visits:
+            raise HTTPException(400, "ไม่พบ visit ที่เลือก")
+        data = nhso18.Builder(q, config, settings.rcm_db, ECLAIM_DB, excluded).run(visits)
+        data = ppfs.only_claimed(data, claimed)
+        found = {(text(r["SEQ"]), text(r["CODE"])) for r in data["ADP"]}
+        lost = [r.key for r in picked if (r.vn, r.code) not in found]
+        if lost:
+            raise HTTPException(400, f"สร้างแฟ้ม ADP ของ {lost[0].replace('|', ' รหัส ')} ไม่ได้ ตรวจรายการค่าบริการใน HOSxP")
+        result = nhso18.build_zip(data, settings.hcode, settings.export_dir)
+        items = [{"vn": r.vn, "code": r.code, "amount": f"{r.amount:.2f}"} for r in picked]
+        export_id = store.record(service.key, result.zip_path, items, auth.user_label(request))
+        log.info("ppfs export id=%s service=%s items=%s", export_id, service.key, len(items))
+        return {"id": export_id, "file": result.zip_path.name, "count": len(items), "visits": len(vns),
+                "total": f"{sum(r.amount for r in picked):.2f}", "counts": result.counts}
+
+    @app.get("/api/ppfs/exports")
+    def exports():
+        return [{**row, "file": Path(row.pop("zip_path")).name,
+                 "service": ppfs.SERVICES[row["service"]].label if row["service"] in ppfs.SERVICES else row["service"]}
+                for row in store.history()]
+
+    @app.get("/api/ppfs/exports/{export_id}/download")
+    def download(export_id: int):
+        path = store.path(export_id)
+        if path is None or not path.is_file():
+            raise HTTPException(404, "ไม่พบไฟล์")
+        return FileResponse(path, media_type="application/zip", filename=path.name)

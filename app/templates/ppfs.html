@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>รายการ PPFS · Export Claim</title>
+<link rel="stylesheet" href="/static/app.css?v={{ v }}">
+</head>
+<body>
+{% set active = "ppfs" %}{% include "_top.html" %}
+<main>
+  <div class="page-head"><h2>รายการ PPFS</h2><p>บริการสร้างเสริมสุขภาพและป้องกันโรค (PP Fee Schedule) ทุกสิทธิ · ตรวจ เลือก แล้วสร้าง ZIP 18 แฟ้มนำเข้าโปรแกรม e-Claim</p></div>
+
+  <form id="search" class="panel search ppfs-search">
+    <label class="service-pick">ประเภทบริการ<select name="service" id="service"><option value="postnatal">7) การตรวจหลังคลอด</option></select></label>
+    <label>วันที่รับบริการตั้งแต่<input type="date" name="start" required></label>
+    <label>ถึงวันที่<input type="date" name="end" required></label>
+    <div class="actions-cell"><button class="primary" type="submit">ค้นหาและตรวจ</button></div>
+    <div class="presets"><span>ช่วงด่วน:</span><button type="button" data-preset="this">เดือนนี้</button><button type="button" data-preset="last">เดือนก่อน</button></div>
+    <ul id="rules" class="service-rules"></ul>
+  </form>
+
+  <section id="summary" class="cards" aria-label="สรุปและกรองตามสถานะ"></section>
+
+  <section class="panel table-panel">
+    <div class="table-tools">
+      <div class="search-box"><input id="filter" type="search" placeholder="กรองจากชื่อ, VN หรือ HN" aria-label="กรองรายการ"></div>
+      <button type="button" id="select-ready">เลือกรายการที่ผ่าน</button>
+      <button type="button" id="select-none" class="ghost">ยกเลิกทั้งหมด</button>
+      <span id="result-count" class="result-count"></span>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead id="thead"><tr>
+          <th class="check"><span class="sr-only">เลือก</span></th>
+          <th data-sort="rank">ผลตรวจ</th><th data-sort="date">วันที่</th><th data-sort="vn">VN</th><th data-sort="hn">HN</th>
+          <th data-sort="ptname">ชื่อ</th><th data-sort="labor_date">วันคลอด</th><th class="num" data-sort="days">หลังคลอด (วัน)</th>
+          <th data-sort="code">รายการ</th><th class="num" data-sort="count">ครั้งที่</th><th class="num" data-sort="amount">ยอด</th><th>ปัญหาที่พบ</th>
+        </tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+      <div id="empty" class="empty"><div class="empty-icon" aria-hidden="true">⌕</div><div>เลือกประเภทบริการและช่วงวันที่ แล้วกด "ค้นหาและตรวจ"</div></div>
+    </div>
+  </section>
+
+  <section class="panel picked-panel" aria-labelledby="picked-title">
+    <div class="picked-head"><h3 id="picked-title">รายการที่เลือก</h3><span id="picked-sum" class="muted"></span></div>
+    <ol id="picked" class="picked-list"></ol>
+    <p id="picked-empty" class="hint">ยังไม่ได้เลือกรายการ ติ๊กในตารางด้านบน หรือกด "เลือกรายการที่ผ่าน"</p>
+  </section>
+
+  <details class="panel history">
+    <summary>ประวัติการส่งออก PPFS</summary>
+    <div class="history-body"><div id="history"></div></div>
+  </details>
+</main>
+<footer class="actions">
+  <div class="actions-inner">
+    <div class="totals"><span class="step" aria-hidden="true">1</span><div><strong id="selected-count">เลือก 0 รายการ</strong><span id="selected-total" class="amount">ยอดเบิก 0.00 บาท</span></div></div>
+    <span class="arrow" aria-hidden="true">→</span>
+    <button id="export" class="primary big" type="button" disabled>สร้าง ZIP 18 แฟ้ม (e-Claim)</button>
+  </div>
+</footer>
+<dialog id="confirm">
+  <h2 id="confirm-title"></h2>
+  <div id="confirm-body"></div>
+  <div class="dialog-actions">
+    <button type="button" id="confirm-cancel" class="ghost">ยกเลิก</button>
+    <button type="button" id="confirm-ok" class="primary">ยืนยัน</button>
+  </div>
+</dialog>
+<script src="/static/common.js?v={{ v }}"></script>
+<script src="/static/ppfs.js?v={{ v }}"></script>
+</body>
+</html>
