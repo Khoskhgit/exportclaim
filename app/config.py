@@ -45,8 +45,8 @@ class Settings:
     dental_pttypes: tuple[str, ...] = ("29",)
     ofc_approve_pttypes: tuple[str, ...] = ("21",)
     # PPFS 27) infant iron syrup: HOSxP keys it under the placeholder ADP 10000 ("NONE"); the code e-Claim expects
-    # is set here and replaces 10000 in the ZIP. Empty = not known yet, and the rows cannot be sent.
-    ppfs_iron_child_adp: str = ""
+    # (737414, given by the user) replaces 10000 in the ZIP. Set PPFS_IRON_CHILD_ADP to change it.
+    ppfs_iron_child_adp: str = "737414"
     ppfs_iron_child_icodes: tuple[str, ...] = ("3004084",)
     default_doctor: str = ""
     default_usage_code: str = "0201"
@@ -139,7 +139,7 @@ def load_settings(env_file: Path | None = None) -> Settings:
         hosp_main=_csv(get("HOSP_MAIN")),
         dental_pttypes=_csv(get("DENTAL_PTTYPES")) or ("29",),
         ofc_approve_pttypes=_csv(get("OFC_APPROVE_PTTYPES")) or ("21",),
-        ppfs_iron_child_adp=(get("PPFS_IRON_CHILD_ADP") or "").strip(),
+        ppfs_iron_child_adp=(get("PPFS_IRON_CHILD_ADP") or "").strip() or "737414",
         ppfs_iron_child_icodes=_csv(get("PPFS_IRON_CHILD_ICODES")) or ("3004084",),
         default_doctor=get("DEFAULT_DOCTOR", ""),
         default_usage_code=get("DEFAULT_USAGE_CODE", "0201"),

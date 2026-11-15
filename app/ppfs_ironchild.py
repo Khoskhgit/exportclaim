@@ -3,8 +3,8 @@
 
 HOSxP keys the fee as item 3004084 "18จ่ายยาเสริมธาตุเหล็ก 6เดือน-1ปี6เดือน" under the placeholder ADP code 10000
 (named "NONE"), which the child Hb/Hct screening shares. So this service reads the fee by its icode
-(PPFS_IRON_CHILD_ICODES) and the ZIP sends the ADP code set in PPFS_IRON_CHILD_ADP in place of 10000. Until that
-code is set every row is an error, so nothing goes out as 10000. Ages are the age at the visit in months (vn_stat);
+(PPFS_IRON_CHILD_ICODES) and the ZIP sends the e-Claim code 737414 (PPFS_IRON_CHILD_ADP) in place of 10000.
+If the code is blanked every row is an error, so nothing goes out as 10000. Ages are the age at the visit in months (vn_stat);
 the 2-5 year item (3004023) is not part of this service as the user gave it.
 """
 from __future__ import annotations
