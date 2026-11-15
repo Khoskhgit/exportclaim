@@ -14,7 +14,7 @@ from fastapi import Body, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 
-from . import auth, nhso18, nhso18_service as svc, ppfs, ppfs_pregtest
+from . import auth, nhso18, nhso18_service as svc, ppfs, ppfs_fp, ppfs_pregtest
 from .config import Settings
 from .store import Store
 from .validate import text
@@ -108,6 +108,9 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
         return hosxp._select(sql, [])
 
     def check(service: ppfs.Service, start: date, end: date) -> list[ppfs.Row]:
+        if service.key == "fp":
+            data = ppfs_fp.fetch(q, start, end)
+            return ppfs_fp.check(data, store.sent(sorted({text(r["vn"]) for r in data["items"]})))
         if service.key == "pregtest":
             data = ppfs_pregtest.fetch(q, start, end)
             vns = sorted({text(r["vn"]) for r in data["items"] + data["unbilled"]})
@@ -148,6 +151,21 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
                        "amount": money(i["amount"])} for i in d["items"]],
             "dx": [{"type": text(x["diagtype"]), "code": text(x["icd10"]), "name": text(x["name"])} for x in d["dx"]],
             "nationality": f"{text(d['visit'].get('nationality'))} {text(d['visit'].get('nationality_name'))}".strip()}
+        if _service(body.get("service")).key == "fp":
+            d = ppfs_fp.detail(q, vn)
+            if not d:
+                raise HTTPException(404, "ไม่พบ visit นี้ใน HOSxP")
+            sent = store.sent(sorted({text(h["vn"]) for h in d["history"]}))
+            return {**common(d), "year": d["year"],
+                    "drug_icodes": [text(i["icode"]) for i in d["items"] if i.get("is_drug")],
+                    "history": [{"date": iso(h["vstdate"]), "vn": text(h["vn"]), "code": text(h["code"]),
+                                 "name": ppfs_fp.CODES.get(text(h["code"]), (text(h["code"]),))[0],
+                                 "unit": ppfs_fp.CODES.get(text(h["code"]), ("", 0, ""))[2],
+                                 "fee_qty": f"{float(h['fee_qty'] or 0):g}", "drug_qty": f"{float(h['drug_qty'] or 0):g}",
+                                 "amount": money(h["amount"]), "sent": sent.get((text(h["vn"]), text(h["code"])), "")}
+                                for h in d["history"]],
+                    "caps": [{"codes": list(c), "names": [ppfs_fp.CODES[x][0] for x in c], "cap": n, "unit": u}
+                             for c, n, u in ppfs_fp.YEAR_CAPS]}
         if _service(body.get("service")).key == "pregtest":
             d = ppfs_pregtest.detail(q, vn)
             if not d:
@@ -205,7 +223,7 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
         vns = list(claimed)
         # Leave out every other item of these visits, so CHT/CHA add up to the claimed PP items only.
         excluded = {(text(i["vn"]), text(i["icode"])) for i in ppfs.visit_items(q, vns)
-                    if text(i.get("code")) not in claimed.get(text(i["vn"]), set())}
+                    if text(i.get("code")) not in claimed.get(text(i["vn"]), set()) or i.get("is_drug")}
         config, groups = svc.load_setup(q, settings.hcode)
         visits = nhso18.opd_contexts(q, vns, groups, config.zone)
         if not visits:

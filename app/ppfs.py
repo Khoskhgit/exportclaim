@@ -57,6 +57,21 @@ SERVICES = {
             "ตรวจปัสสาวะทดสอบการตั้งครรภ์ หรือชุดทดสอบการตั้งครรภ์ด้วยตัวเอง (ADP 30014) 75 บาท/ครั้ง",
             "ไม่เกิน 4 ครั้งต่อปี (นับตามปีปฏิทิน ม.ค.–ธ.ค.)",
         )),
+    "fp": Service(
+        key="fp", label="9) บริการวางแผนครอบครัวและการป้องกันการตั้งครรภ์ไม่พึงประสงค์",
+        codes={"FP003_1": ("ยาเม็ดคุมฮอร์โมนรวม", Decimal("40")), "FP003_2": ("ยาเม็ดคุมฮอร์โมนเดี่ยว", Decimal("80")),
+               "FP003_4": ("ยาฉีดคุมกำเนิด", Decimal("60")), "FP001": ("ใส่ห่วงอนามัย", Decimal("800")),
+               "FP002_1": ("ฝังยาคุมกำเนิด", Decimal("2150")), "FP002_2": ("ถอดยาฝังคุมกำเนิด", Decimal("350")),
+               "FP003_3": ("ยาคุมฉุกเฉิน", Decimal("50"))},
+        rules=(
+            "กลุ่มเป้าหมาย: หญิงไทยวัยเจริญพันธุ์ ทุกสิทธิการรักษาพยาบาล · นับ \"ต่อปี\" ตามปีปฏิทิน ม.ค.–ธ.ค.",
+            "ยาเม็ดคุมกำเนิด ครั้งละไม่เกิน 3 แผง ไม่เกิน 13 แผง/ปี: ฮอร์โมนรวม (FP003_1) 40 บาท/แผง, ฮอร์โมนเดี่ยว (FP003_2) 80 บาท/แผง"
+            " เฉพาะหญิงให้นมบุตรไม่เกิน 1 ปี 6 เดือน หรือมีไมเกรนแบบมีออร่า",
+            "ยาฉีดคุมกำเนิด (FP003_4) 60 บาท ไม่เกิน 5 ครั้ง/ปี · ใส่ห่วงอนามัย (FP001) 800 บาท ครั้งต่อปี",
+            "ฝังยาคุมกำเนิด (FP002_1) 2,150 บาท · ถอดยาฝังคุมกำเนิด (FP002_2) 350 บาท",
+            "ยาเม็ดคุมกำเนิดฉุกเฉิน (FP003_3) 50 บาท/แผง ไม่เกิน 2 แผง/ปี",
+            "ส่งเฉพาะค่าบริการ (รายการ 18…) ตัวยาที่ใช้รหัสเดียวกันไม่ถูกส่ง · ถุงยางอนามัยยังไม่มีรายการใน HOSxP",
+        )),
 }
 WINDOWS = {1: "1–7", 2: "8–15", 3: "16–42"}
 MAX_COUNT = {CHECK: 3, DRUG: 2}
@@ -94,7 +109,7 @@ def fetch(q: Select, start: date, end: date) -> dict:
     items = q(f"""
         SELECT oo.vn, o.hn, o.vstdate, o.vsttime, o.an, o.pttype, ptt.name pttype_name,
           CONCAT(IFNULL(p.pname,''),p.fname,' ',p.lname) ptname, p.cid, p.nationality,
-          d.nhso_adp_code code, oo.icode, d.name item_name, oo.qty, oo.unitprice,
+          d.nhso_adp_code code, oo.icode, d.name item_name, oo.qty, oo.unitprice, oo.paidst,
           IFNULL(oo.qty,0)*IFNULL(oo.unitprice,0) amount
         FROM ovst o JOIN opitemrece oo ON oo.vn=o.vn JOIN s_drugitems d ON d.icode=oo.icode
         JOIN patient p ON p.hn=o.hn LEFT JOIN pttype ptt ON ptt.pttype=o.pttype
@@ -127,12 +142,14 @@ def fetch(q: Select, start: date, end: date) -> dict:
 
 
 def visit_items(q: Select, vns: Iterable[str]) -> list[dict]:
-    """Every billed item of these visits: (vn, icode, ADP code), to leave all but the claimed ones out of the ZIP."""
+    """Every billed item of these visits: (vn, icode, ADP code, is a drug), to leave all but the claimed fees out of
+    the ZIP. A drug can carry the same ADP code as its service fee (DMPA and "ฉีดยาคุมกำเนิด"); only the fee is claimed."""
     vns = sorted(set(vns))
     if not vns:
         return []
     return q(f"""
-        SELECT oo.vn, oo.icode, d.nhso_adp_code code FROM opitemrece oo LEFT JOIN s_drugitems d ON d.icode=oo.icode
+        SELECT oo.vn, oo.icode, d.nhso_adp_code code, EXISTS(SELECT 1 FROM drugitems di WHERE di.icode=oo.icode) is_drug
+        FROM opitemrece oo LEFT JOIN s_drugitems d ON d.icode=oo.icode
         WHERE oo.vn IN ({lit_list(vns)})""")
 
 
@@ -205,11 +222,20 @@ class Row:
     care_date: str = ""
     sent: str = ""
     extra: dict = field(default_factory=dict)  # columns of one service only (age, UPT result, …)
+    self_paid: bool = False  # a fee marked ชำระเองเบิกไม่ได้ (paidst 03): the 18 files would send it as QTY 0
     errors: list[dict] = field(default_factory=list)
     warnings: list[dict] = field(default_factory=list)
 
     def add(self, level: str, code: str, message: str) -> None:
         (self.errors if level == ERROR else self.warnings).append({"code": code, "message": message})
+
+
+SELF_PAID = "03"
+
+
+def self_paid_error(row: "Row") -> None:
+    if row.self_paid:
+        row.add(ERROR, "SELF_PAID", "ค่าบริการตั้งเป็น \"ชำระเองเบิกไม่ได้\" (paidst 03) ใน HOSxP แก้เป็นลูกหนี้สิทธิก่อนส่ง")
 
 
 def code_name(code: str) -> tuple[str, Decimal]:
@@ -247,6 +273,7 @@ def postnatal(data: dict, sent: dict[tuple[str, str], str] | None = None) -> lis
             row.item_name = text(r.get("item_name"))
         row.qty += Decimal(str(r.get("qty") or 0))
         row.amount += _money(r.get("amount"))
+        row.self_paid |= text(r.get("paidst")) == SELF_PAID
     for vn, c in care_by_vn.items():  # a check recorded, nothing billed: shown so it can be keyed in HOSxP
         info.setdefault(vn, c)
         if (vn, CHECK) not in rows:
@@ -282,6 +309,7 @@ def postnatal(data: dict, sent: dict[tuple[str, str], str] | None = None) -> lis
             row.add(ERROR, "IPD", "visit นี้ Admit แล้ว (มี AN)")
         if not billed:
             row.add(ERROR, "NO_ITEM", f"มีบันทึกตรวจหลังคลอด แต่ยังไม่คีย์ค่าบริการ {code} ใน HOSxP")
+        self_paid_error(row)
         if birth is None:
             row.add(ERROR, "NO_BIRTH", "ไม่พบวันคลอดใน HOSxP (person_anc.labor_date)")
         elif code == CHECK and row.window is None:

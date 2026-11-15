@@ -25,8 +25,14 @@ const COLUMNS = {
     ["ผล UPT", "upt", false, (r) => uptBadge(r.extra.upt)],
     ["Z32", "z32", false, (r) => (r.extra.z32 ? "✓" : dash())],
   ],
+  fp: [
+    ["อายุ (ปี)", "age", true, (r) => (r.extra.age === null || r.extra.age === undefined ? dash() : String(r.extra.age))],
+    ["จำนวน", "fee_qty", true, (r) => `${r.extra.fee_qty} ${r.extra.unit}`],
+    ["ยาที่จ่าย", "drug_qty", false, (r) => (r.extra.drug_name ? el("span", {}, `${r.extra.drug_qty}`, el("span", { class: "sub" }, r.extra.drug_name)) : dash())],
+  ],
 };
-const COUNT_LABEL = { postnatal: "ครั้งที่", pregtest: "ครั้งที่ในปี" };
+const COUNT_LABEL = { postnatal: "ครั้งที่", pregtest: "ครั้งที่ในปี", fp: "สะสมในปี" };
+const countText = (r) => (!r.count ? dash() : service() === "fp" && r.extra.cap ? `${r.extra.year_total} / ${r.extra.cap} ${r.extra.cap_unit}` : String(r.count));
 const service = () => $("service").value;
 
 function renderHead() {
@@ -53,7 +59,7 @@ function visible() {
   const q = state.text.toLowerCase();
   const test = CATEGORIES[state.filter][1];
   const list = state.rows.filter((r) => test(r) && (!q || `${r.ptname} ${r.vn} ${r.hn}`.toLowerCase().includes(q)));
-  return sortRows(list.map((r) => Object.assign(r, r.extra, { rank: rank(r) })), state.sort, ["amount", "rank", "days", "count", "age"]);
+  return sortRows(list.map((r) => Object.assign(r, r.extra, { rank: rank(r) })), state.sort, ["amount", "rank", "days", "count", "age", "fee_qty"]);
 }
 
 function render() {
@@ -73,7 +79,7 @@ function render() {
       el("td", { class: "name-cell", title: r.ptname }, r.ptname, el("span", { class: "sub" }, r.pttype)),
       ...(COLUMNS[service()] || []).map(([, , num, cell]) => el("td", { class: num ? "num" : "mono" }, cell(r))),
       el("td", {}, itemLabel(r)),
-      el("td", { class: "num" }, r.count ? String(r.count) : dash()),
+      el("td", { class: "num" }, countText(r)),
       el("td", { class: "num" }, money(r.amount)),
       el("td", { class: "problems" }, problems.length ? problems.join(" · ") : dash()));
   }));
@@ -177,7 +183,11 @@ async function openDrawer(r) {
     const data = await api("/api/ppfs/detail", { vn: r.vn, service: kind });
     if (state.current !== r.key) return;
     const b = data.birth;
-    const own = kind === "pregtest" ? [
+    const own = kind === "fp" ? [
+      ["อายุ", r.extra.age === null || r.extra.age === undefined ? "—" : `${r.extra.age} ปี`],
+      ["จำนวนที่เบิก", `${r.extra.fee_qty} ${r.extra.unit}`], ["ยาที่จ่าย", r.extra.drug_name ? `${r.extra.drug_name} × ${r.extra.drug_qty}` : "—"],
+      [`สะสมในปี ${r.extra.year ? r.extra.year + 543 : ""}`, r.extra.cap ? `${r.extra.year_total || 0} จาก ${r.extra.cap} ${r.extra.cap_unit}` : "ไม่จำกัด"],
+    ] : kind === "pregtest" ? [
       ["อายุ", r.extra.age === null || r.extra.age === undefined ? "—" : `${r.extra.age} ปี`], ["ผล UPT", r.extra.upt || "ไม่พบ"],
       ["รหัส Z32", r.extra.z32 ? "มี" : "ไม่มี"], [`ครั้งที่ในปี ${r.extra.year ? r.extra.year + 543 : ""}`, r.count ? `${r.count} จาก 4` : "—"],
     ] : [
@@ -194,12 +204,28 @@ async function openDrawer(r) {
       check.push(el("h3", {}, "ผลตรวจ"));
       check.push(el("ul", { class: "issues" }, ...issues.map((i) => el("li", { class: `issue ${i.level}` },
         el("div", { class: "issue-title" }, el("span", { class: `badge ${i.level === "error" ? "b-error" : "b-warn"}` }, i.level === "error" ? "Error" : "เตือน"), " ", i.message)))));
-      check.push(el("p", { class: "hint" }, kind === "pregtest" ? "แก้ข้อมูลใน HOSxP (รายการค่าบริการ / รหัสวินิจฉัย / ผล lab) แล้วกดค้นหาอีกครั้ง"
+      check.push(el("p", { class: "hint" }, kind === "fp" ? "แก้ข้อมูลใน HOSxP (คีย์ค่าบริการ 18… ให้ตรงกับยาที่จ่าย) แล้วกดค้นหาอีกครั้ง" : kind === "pregtest" ? "แก้ข้อมูลใน HOSxP (รายการค่าบริการ / รหัสวินิจฉัย / ผล lab) แล้วกดค้นหาอีกครั้ง"
         : "แก้ข้อมูลใน HOSxP (บันทึกหลังคลอด / วันคลอด / รายการค่าบริการ) แล้วกดค้นหาอีกครั้ง"));
     } else check.push(el("div", { class: "all-good" }, "✓ ผ่านการตรวจทั้งหมด พร้อมส่ง"));
 
     const post = [];
-    if (kind === "pregtest") {
+    if (kind === "fp") {
+      const year = data.year + 543;
+      post.push(el("h3", {}, `เพดานต่อปี ${year}`));
+      post.push(info(data.caps.map((c) => {
+        const used = data.history.filter((h) => c.codes.includes(h.code) && Number(h.fee_qty) > 0)
+          .reduce((s, h) => s + (c.unit === "แผง" ? Number(h.fee_qty) : 1), 0);
+        return [c.names.join(" + "), `${used} / ${c.cap} ${c.unit}${used > c.cap ? " ⚠ เกิน" : ""}`];
+      })));
+      post.push(el("h3", {}, `รายการวางแผนครอบครัวของปี ${year}`));
+      post.push(data.history.length ? table(["วันที่", "VN", "บริการ", { label: "ค่าบริการ", num: true }, { label: "ยา", num: true }, { label: "ยอด", num: true }, "ส่งออก"],
+        data.history.map((h) => el("tr", { class: h.vn === r.vn && h.code === r.code ? "current" : "" }, el("td", { class: "mono" }, toDmy(h.date)),
+          el("td", { class: "mono" }, h.vn), el("td", {}, `${h.code} ${h.name}`),
+          el("td", { class: "num" }, Number(h.fee_qty) ? `${h.fee_qty} ${h.unit}` : el("span", { class: "badge b-error" }, "ไม่คีย์")),
+          el("td", { class: "num" }, Number(h.drug_qty) ? h.drug_qty : "—"), el("td", { class: "num" }, money(h.amount)),
+          el("td", {}, h.sent ? thaiDateTime(h.sent) : "—"))))
+        : el("p", { class: "muted" }, "ไม่มีรายการ"));
+    } else if (kind === "pregtest") {
       post.push(el("h3", {}, `ทดสอบการตั้งครรภ์ (30014) ของปี ${data.year + 543}`));
       post.push(data.tests.length ? table(["#", "วันที่", "VN", "ผล UPT", { label: "จำนวน", num: true }, { label: "ยอด", num: true }, "ส่งออก"],
         data.tests.map((t, i) => el("tr", { class: t.vn === r.vn ? "current" : "" }, el("td", {}, i < 4 ? String(i + 1) : el("span", { class: "badge b-error" }, String(i + 1))),
@@ -210,7 +236,7 @@ async function openDrawer(r) {
     } else post.push(b ? info([["ครรภ์ที่", b.preg_no], ["LMP", b.lmp ? toDmy(b.lmp) : ""], ["วันคลอด", toDmy(b.labor_date)],
       ["วิธีคลอด", b.labour_type], ["สถานที่คลอด", b.hospcode]])
       : el("p", { class: "hint" }, "ไม่พบวันคลอดของผู้ป่วยนี้ใน HOSxP (person_anc.labor_date) ให้บันทึกการคลอดในทะเบียนฝากครรภ์ก่อน"));
-    if (kind !== "pregtest") {
+    if (kind === "postnatal") {
     post.push(el("h3", {}, "บันทึกตรวจหลังคลอด (person_anc_preg_care)"));
     post.push(data.cares.length ? table(["วันที่", { label: "วันที่หลังคลอด", num: true }, { label: "ครั้งที่", num: true }, "สถานที่", "VN"],
       data.cares.map((c) => el("tr", { class: c.vn === r.vn ? "current" : "" }, el("td", { class: "mono" }, toDmy(c.date)),
@@ -233,13 +259,14 @@ async function openDrawer(r) {
     const claimed = new Set(state.rows.filter((x) => x.vn === r.vn).map((x) => x.code));
     const costs = [el("p", { class: "muted-note" }, `ZIP PPFS ส่งเฉพาะรายการ ${[...claimed].join(" / ")} รายการอื่นของ visit ไม่ถูกส่ง`),
       table(["ส่ง", "รายการ", "ADP", { label: "จำนวน", num: true }, { label: "รวม", num: true }], data.items.map((i) => {
-        const sent = claimed.has(i.adp);
+        const sent = claimed.has(i.adp) && !(data.drug_icodes || []).includes(i.icode);
         return el("tr", { class: sent ? "" : "excluded" }, el("td", {}, sent ? el("span", { class: "badge b-ok" }, "ส่ง") : el("span", { class: "muted" }, "ไม่ส่ง")),
           el("td", {}, i.name), el("td", { class: "mono" }, i.adp || "—"), el("td", { class: "num" }, i.qty), el("td", { class: "num" }, money(i.amount)));
       }))];
     body.replaceChildren(...tabs([
       { id: "check", label: "สรุปและผลตรวจ", badge: issues.length || undefined, alert: r.errors.length > 0, content: check },
-      kind === "pregtest" ? { id: "tests", label: "ประวัติทดสอบ", badge: data.tests.length || undefined, content: post }
+      kind === "fp" ? { id: "fp", label: "ประวัติวางแผนครอบครัว", badge: data.history.length || undefined, content: post }
+        : kind === "pregtest" ? { id: "tests", label: "ประวัติทดสอบ", badge: data.tests.length || undefined, content: post }
         : { id: "postnatal", label: "หลังคลอด", badge: data.claims.length || undefined, content: post },
       { id: "dx", label: "การวินิจฉัย", badge: data.dx.length, content: dx },
       { id: "cost", label: "ค่าใช้จ่าย", badge: data.items.length, content: costs },

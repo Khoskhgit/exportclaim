@@ -14,7 +14,7 @@ from datetime import date
 from decimal import Decimal
 
 from .nhso18 import lit, lit_list
-from .ppfs import ERROR, PREGTEST, WARN, Row, Select, _day, _money
+from .ppfs import ERROR, PREGTEST, SELF_PAID, WARN, Row, Select, _day, _money, self_paid_error
 from .validate import text
 
 MAX_A_YEAR = 4
@@ -42,7 +42,7 @@ def _upt(q: Select, vns: list[str]) -> dict[str, str]:
 
 def fetch(q: Select, start: date, end: date) -> dict:
     items = q(f"""
-        SELECT {VISIT_COLS}, oo.icode, d.name item_name, oo.qty, IFNULL(oo.qty,0)*IFNULL(oo.unitprice,0) amount
+        SELECT {VISIT_COLS}, oo.icode, oo.paidst, d.name item_name, oo.qty, IFNULL(oo.qty,0)*IFNULL(oo.unitprice,0) amount
         FROM ovst o JOIN opitemrece oo ON oo.vn=o.vn JOIN s_drugitems d ON d.icode=oo.icode {VISIT_JOINS}
         WHERE o.vstdate BETWEEN {lit(start)} AND {lit(end)} AND d.nhso_adp_code={lit(PREGTEST)}""")
     unbilled = q(f"""
@@ -75,6 +75,7 @@ def check(data: dict, sent: dict[tuple[str, str], str] | None = None) -> list[Ro
             row = rows[vn] = Row(key=f"{vn}|{PREGTEST}", vn=vn, code=PREGTEST, item_name=text(r.get("item_name")))
         row.qty += Decimal(str(r.get("qty") or 0))
         row.amount += _money(r.get("amount"))
+        row.self_paid |= text(r.get("paidst")) == SELF_PAID
     for r in data["unbilled"]:
         vn = text(r["vn"])
         if vn not in rows:
@@ -108,6 +109,7 @@ def check(data: dict, sent: dict[tuple[str, str], str] | None = None) -> list[Ro
             row.add(ERROR, "IPD", "visit นี้ Admit แล้ว (มี AN)")
         if not billed:
             row.add(ERROR, "NO_ITEM", f"มีรหัส Z32 แต่ยังไม่คีย์ค่าบริการ {PREGTEST} ใน HOSxP")
+        self_paid_error(row)
         if billed and day:
             done = by_year.get((row.hn, day.year), [])
             position = next((i for i, (_, v) in enumerate(done, 1) if v == vn), None)
