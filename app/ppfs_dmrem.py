@@ -11,7 +11,8 @@ stage with their LAB file and no charges (CHT 0): the visits themselves are clai
 is billed twice.
 
 "After stopping the drugs" is read as: no glucose-lowering drug dispensed from 3 months before the first of the two
-tests until the second (and, for stage 2, until the third). A drug keyed with quantity 0 still counts: in HOSxP it
+tests until the second (and, for stage 2, until the third). The registry imported from e-Claim (dmrem_registry) is
+checked: no registration in force is an error, a registration made after the stage's test a warning. A drug keyed with quantity 0 still counts: in HOSxP it
 usually means the patient has the drug at home, so is still on it. A patient who never had one is shown with a warning
 (the lifestyle route, or a diagnosis to check). The patient must also be registered in the e-Claim program, which
 HOSxP does not hold.
@@ -23,7 +24,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 from .nhso18 import lit, lit_list
-from .ppfs import ERROR, WARN, Row, Select, _day
+from .ppfs import ERROR, WARN, Row, Select, _day, fiscal_range, fiscal_year
 from .validate import text
 
 HBA1C_LAB = 198
@@ -32,6 +33,13 @@ HBA1C_LAB = 198
 HBA1C_LABTEST = "05"
 LIMIT = Decimal("6.5")
 GAP_DAYS = 90
+# The remission counted is the one of the registration's fiscal year: tests from 180 days before that year began (the
+# first test may come before). With no registry, the year before the searched range.
+BEFORE_REGISTRATION_DAYS = 180
+
+
+def window_start(reg_date: str) -> date:
+    return fiscal_range(fiscal_year(date.fromisoformat(reg_date)))[0] - timedelta(days=BEFORE_REGISTRATION_DAYS)
 DRUG_BEFORE_DAYS = 90
 RATES = {1: Decimal("4000"), 2: Decimal("2000")}
 DM_DRUGS = ("METFORMIN|GLIPIZIDE|GLICLAZIDE|GLIBENCLAMIDE|GLIMEPIRIDE|INSULIN|PIOGLITAZONE|GLIPTIN|GLIFLOZIN|ACARBOSE|"
@@ -92,7 +100,9 @@ def stages(tests: list[tuple[date, Decimal, dict]], drug_days: list[date]) -> di
     return {}
 
 
-def check(data: dict, start: date, end: date, sent: dict[tuple[str, str], str] | None = None) -> list[Row]:
+def check(data: dict, start: date, end: date, sent: dict[tuple[str, str], str] | None = None,
+          registry: dict[str, list[dict]] | None = None) -> list[Row]:
+    """registry: PID -> its e-Claim registrations (None = no registry imported yet, so it is not checked)."""
     sent = sent or {}
     by_hn: dict[str, list[tuple[date, Decimal, dict]]] = {}
     for r in data["tests"]:
@@ -113,6 +123,9 @@ def check(data: dict, start: date, end: date, sent: dict[tuple[str, str], str] |
         tests.sort(key=lambda t: (t[0], text(t[2]["vn"])))
         # One result a day is enough (a repeat on the same day is not a new test).
         tests = [t for i, t in enumerate(tests) if i == 0 or t[0] != tests[i - 1][0]]
+        cid_regs = [x for x in (registry or {}).get(text(tests[0][2].get("cid")), []) if x["status"] == "Y" and x["reg_date"]]
+        since = window_start(cid_regs[0]["reg_date"]) if cid_regs else start - timedelta(days=365)
+        tests = [t for t in tests if t[0] >= since]
         for stage, found in stages(tests, drugs.get(hn, [])).items():
             visit = found["visit"]
             day = _day(visit["vstdate"])
@@ -129,12 +142,21 @@ def check(data: dict, start: date, end: date, sent: dict[tuple[str, str], str] |
             row.count = stage
             age = visit.get("age_y")
             drug = last_drug.get(hn)
-            row.extra = {"stage": stage, "age": int(age) if age is not None else None,
+            used = found["tests"]
+            gaps = [(used[i][0] - used[i - 1][0]).days for i in range(1, len(used))]
+            regs = (registry or {}).get(text(visit.get("cid")), [])
+            reg = next((x for x in regs if x["status"] == "Y" and not (x["expire_date"] and x["expire_date"] < day.isoformat())), None)
+            row.extra = {"stage": stage, "age": int(age) if age is not None else None, "gaps": gaps,
+                         "registered": reg["reg_date"] if reg else "", "registry_checked": registry is not None,
                          "tests": [{"date": d.isoformat(), "value": f"{v}", "vn": text(t["vn"])} for d, v, t in found["tests"]],
                          "all_tests": [{"date": d.isoformat(), "value": f"{v}"} for d, v, _ in tests],
                          "last_drug": drug[0].isoformat() if drug else "", "last_drug_name": drug[1] if drug else "",
                          "maininscl": text(visit.get("maininscl"))}
-            if text(visit.get("maininscl")) != "UCS":
+            if registry is not None and not reg:
+                row.add(ERROR, "NOT_REGISTERED", "ไม่พบการลงทะเบียน DM Remission ในโปรแกรม e-Claim (นำเข้าทะเบียนล่าสุดแล้วหรือยัง)")
+            elif reg and reg["reg_date"] > day.isoformat():
+                row.add(WARN, "LATE_REGISTER", f"ลงทะเบียนเมื่อ {_thai(date.fromisoformat(reg['reg_date']))} หลังวันที่ตรวจของขั้นนี้")
+            if text(visit.get("maininscl")) not in ("UCS", "WEL"):
                 row.add(ERROR, "NOT_UC", f"visit นี้ไม่ใช่สิทธิ UC ({text(visit.get('maininscl')) or 'ไม่ทราบ'})")
             if hn not in data["e11"]:
                 row.add(ERROR, "NO_E11", "ไม่พบรหัสโรค E11 (เบาหวานชนิดที่ 2) ใน HOSxP")
@@ -163,6 +185,57 @@ def lab_rows(q: Select, vns: list[str], hcode: str) -> list[dict]:
             out.append({"HCODE": hcode, "HN": text(r["hn"]), "PERSON_ID": text(r["cid"]), "DATESERV": _day(r["vstdate"]),
                         "SEQ": text(r["vn"]), "LABTEST": HBA1C_LABTEST, "LABRESULT": result.quantize(Decimal("0.01"))})
     return out
+
+
+def _thai(day: date) -> str:
+    return f"{day.day:02d}/{day.month:02d}/{day.year + 543}"
+
+
+def cutoff(day: date) -> date:
+    """The next data cut for payment on or after a day: 31 March or 15 September."""
+    for c in (date(day.year, 3, 31), date(day.year, 9, 15), date(day.year + 1, 3, 31)):
+        if c >= day:
+            return c
+    return date(day.year + 1, 3, 31)
+
+
+def follow_up(tests: list[tuple[date, Decimal]], drug_days: list[date], today: date, since: date | None = None) -> dict:
+    """Where a registered patient stands and when the next HbA1c should be done.
+
+    state: "done" (stage 2 reached), "wait3" (stage 1 reached, the 3rd test is due), "wait2" (one test below 6.5% off
+    drugs, the 2nd is due), "not_yet" (no test below 6.5% off drugs yet), "no_test"."""
+    if since:
+        tests = [t for t in tests if t[0] >= since]
+    rows = [(d, v, {}) for d, v in tests]
+    found = stages(rows, drug_days)
+    last_drug = max(drug_days, default=None)
+    if 2 in found:
+        d3 = found[2]["tests"][2][0]
+        return {"state": "done", "stage": 2, "since": found[2]["tests"][1][0], "next_from": None, "next_to": None,
+                "reached": d3, "last_drug": last_drug}
+    if 1 in found:
+        d2 = found[1]["tests"][1][0]
+        later = [t for t in tests if t[0] > d2]
+        nxt = d2 + timedelta(days=GAP_DAYS)
+        state = "wait3"
+        note = ""
+        if later and later[0][1] >= LIMIT:
+            state, note = "relapse", f"ผลครั้งถัดไป {later[0][1]}% ไม่ผ่าน"
+        elif later and (later[0][0] - d2).days < GAP_DAYS:
+            note = f"ตรวจครั้งถัดไปเร็วไป ({(later[0][0] - d2).days} วัน)"
+        return {"state": state, "stage": 1, "since": d2, "next_from": nxt, "next_to": d2 + timedelta(days=183),
+                "reached": d2, "last_drug": last_drug, "note": note}
+    if not tests:
+        return {"state": "no_test", "stage": 0, "since": None, "next_from": None, "next_to": None, "reached": None,
+                "last_drug": last_drug}
+    d, v = tests[-1]
+    off_drug = not any(d - timedelta(days=DRUG_BEFORE_DAYS) <= x <= today for x in drug_days)
+    if v < LIMIT and off_drug:
+        return {"state": "wait2", "stage": 0, "since": d, "next_from": d + timedelta(days=GAP_DAYS), "next_to": None,
+                "reached": None, "last_drug": last_drug}
+    reason = f"ผลล่าสุด {v}%" if v >= LIMIT else "ยังได้ยาลดน้ำตาล"
+    return {"state": "not_yet", "stage": 0, "since": d, "next_from": None, "next_to": None, "reached": None,
+            "last_drug": last_drug, "note": reason}
 
 
 def stage_visits(picked: list[Row]) -> list[str]:

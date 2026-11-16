@@ -361,3 +361,11 @@ tr.picked td{background:#f1f8f5}
 .picked-remove{min-height:30px;padding:2px 10px;font-size:13px}
 @media (max-width:700px){.ppfs-search .service-pick{grid-column:1/-1}.picked-item{flex-wrap:wrap}}
 .lab-pair{display:inline-block;margin-right:8px;white-space:nowrap}
+/* PPFS 6) DM Remission registry */
+.dmrem-panel{padding:14px 16px}
+.dmrem-head{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.dmrem-head>div{flex:1;min-width:220px}
+.dmrem-head h3{margin:0;font-size:16px}
+.button-like{display:inline-flex;align-items:center;min-height:38px;padding:6px 14px;border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--panel);font-weight:600;cursor:pointer}
+.button-like:hover{border-color:var(--accent);color:var(--accent)}
+.follow-chips{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0}

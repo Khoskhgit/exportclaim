@@ -6,7 +6,7 @@ items alone) and the DRU, LAB and AER files are empty, so a visit's other charge
 from __future__ import annotations
 
 import logging
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -17,6 +17,7 @@ from fastapi.templating import Jinja2Templates
 from . import (auth, nhso18, nhso18_service as svc, ppfs, ppfs_anemia, ppfs_fluoride, ppfs_fp, ppfs_iron, ppfs_ironchild,
                ppfs_anemiachild, ppfs_dmrem,
                ppfs_ncd, ppfs_pregtest)
+from . import dmrem_registry
 from .config import Settings
 from .store import Store
 from .validate import text
@@ -127,6 +128,7 @@ def _out(row: ppfs.Row) -> dict:
 
 def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templates: Jinja2Templates) -> None:
     store = PpfsStore(local)
+    registry = dmrem_registry.RegistryStore(local)
 
     def q(sql: str) -> list[dict]:
         return hosxp._select(sql, [])
@@ -155,7 +157,9 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
         if service.key == "dmrem":
             data = ppfs_dmrem.fetch(q, start, end)
             vns = sorted({text(r["vn"]) for r in data["tests"]})
-            return ppfs_dmrem.check(data, start, end, store.sent(vns))
+            cids = {text(r.get("cid")) for r in data["tests"]}
+            imported = registry.summary()["n"] > 0
+            return ppfs_dmrem.check(data, start, end, store.sent(vns), registry.by_pid(cids) if imported else None)
         if service.key == "anemiachild":
             band_list = ppfs_anemiachild.bands(settings)
             data = ppfs_anemiachild.fetch(q, start, end, band_list)
@@ -344,6 +348,79 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
                         "sent": sent.get((text(c["vn"]), text(c["code"])), "")} for c in d["claims"]],
             "iron": [{"name": text(i["name"]), "qty": f"{float(i['qty'] or 0):g}"} for i in d["iron"]],
         }
+
+    # ------------------------------------------------------------ 6) DM Remission registry
+    @app.get("/api/ppfs/dmrem/registry")
+    def registry_summary():
+        return registry.summary()
+
+    @app.post("/api/ppfs/dmrem/registry")
+    async def registry_import(request: Request, name: str = ""):
+        data = await request.body()
+        if not data:
+            raise HTTPException(400, "ไม่ได้เลือกไฟล์")
+        if len(data) > 20 * 1024 * 1024:
+            raise HTTPException(413, "ไฟล์ใหญ่เกินไป")
+        try:
+            rows = dmrem_registry.parse(name, data)
+        except dmrem_registry.RegistryError as exc:
+            raise HTTPException(400, str(exc)) from None
+        units = {r.unit.split("-")[0] for r in rows if r.unit}
+        if settings.hcode and units and settings.hcode not in units:
+            raise HTTPException(400, f"เป็นทะเบียนของหน่วยบริการ {', '.join(sorted(units))} ไม่ใช่ {settings.hcode}")
+        result = registry.save(rows, name, auth.user_label(request))
+        log.info("dmrem registry import %s rows=%s", name, len(rows))
+        return {**result, "rows": len(rows), "people": len({r.pid for r in rows}), "summary": registry.summary()}
+
+    @app.post("/api/ppfs/dmrem/follow-up")
+    def registry_follow_up():
+        """Every registered patient: the HbA1c so far, the stage reached and when the next test is due."""
+        regs = registry.by_pid()
+        if not regs:
+            return {"rows": [], "summary": registry.summary()}
+        today = date.today()
+        patients = {text(r["cid"]): r for r in q(f"""
+            SELECT p.cid, p.hn, CONCAT(IFNULL(p.pname,''),p.fname,' ',p.lname) ptname, TIMESTAMPDIFF(YEAR,p.birthday,CURDATE()) age
+            FROM patient p WHERE p.cid IN ({nhso18.lit_list(regs)})""")}
+        hns = sorted({text(p["hn"]) for p in patients.values()})
+        tests: dict[str, list] = {}
+        drugs: dict[str, list] = {}
+        if hns:
+            for r in q(f"""
+                SELECT o.hn, o.vstdate, lo.lab_order_result result FROM lab_head lh
+                JOIN lab_order lo ON lo.lab_order_number=lh.lab_order_number JOIN ovst o ON o.vn=lh.vn
+                WHERE lo.lab_items_code={ppfs_dmrem.HBA1C_LAB} AND o.hn IN ({nhso18.lit_list(hns)})
+                  AND IFNULL(lo.lab_order_result,'')<>''"""):
+                v = ppfs_dmrem.value(r["result"])
+                if v is not None and r["vstdate"]:
+                    tests.setdefault(text(r["hn"]), {})[r["vstdate"]] = v  # one result a day
+            for r in q(f"""
+                SELECT DISTINCT o.hn, o.vstdate FROM ovst o JOIN opitemrece oo ON oo.vn=o.vn JOIN drugitems di ON di.icode=oo.icode
+                WHERE o.hn IN ({nhso18.lit_list(hns)}) AND CONCAT_WS(' ',di.name,di.generic_name) REGEXP {nhso18.lit(ppfs_dmrem.DM_DRUGS)}"""):
+                drugs.setdefault(text(r["hn"]), []).append(r["vstdate"])
+        iso = lambda d: d.isoformat() if d else ""
+        out = []
+        for pid, entries in regs.items():
+            reg = entries[0]
+            p = patients.get(pid)
+            hn = text(p["hn"]) if p else ""
+            series = sorted(tests.get(hn, {}).items())
+            since = ppfs_dmrem.window_start(reg["reg_date"]) if reg["reg_date"] else None
+            f = ppfs_dmrem.follow_up(series, drugs.get(hn, []), today, since)
+            due = f["next_from"]
+            overdue = bool(f.get("next_to") and f["next_to"] < today and f["state"] == "wait3")
+            out.append({
+                "pid": f"{'x' * 9}{pid[-4:]}", "hn": hn, "ptname": text(p["ptname"]) if p else "", "age": p["age"] if p else None,
+                "in_hosxp": bool(p), "reg_date": reg["reg_date"], "inscl": reg["inscl"], "status": reg["status"],
+                "state": f["state"], "stage": f["stage"], "note": f.get("note", ""),
+                "tests": [{"date": iso(d), "value": f"{v}"} for d, v in series[-4:]],
+                "next_from": iso(due), "next_to": iso(f["next_to"]), "overdue": overdue,
+                "cutoff": iso(ppfs_dmrem.cutoff(max(due, today))) if due else "",
+                "last_drug": iso(f["last_drug"]),
+            })
+        order = {"wait3": 0, "wait2": 1, "relapse": 2, "not_yet": 3, "no_test": 4, "done": 5}
+        out.sort(key=lambda r: (order.get(r["state"], 9), r["next_from"] or "9999", r["hn"]))
+        return {"rows": out, "summary": registry.summary(), "today": today.isoformat()}
 
     @app.post("/api/ppfs/item")
     def item_choice(body: dict = Body(...)):

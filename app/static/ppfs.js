@@ -52,7 +52,9 @@ const COLUMNS = {
   ],
   dmrem: [
     ["อายุ (ปี)", "age", true, (r) => (r.extra.age === null || r.extra.age === undefined ? dash() : String(r.extra.age))],
-    ["HbA1c ที่ใช้", "", false, (r) => el("span", {}, ...r.extra.tests.map((t) => el("span", { class: "sub" }, `${toDmy(t.date)} · ${t.value}%`)))],
+    ["HbA1c ที่ใช้ (ห่าง วัน)", "", false, (r) => el("span", {}, ...r.extra.tests.map((t, i) => el("span", { class: "sub" },
+      `${toDmy(t.date)} · ${t.value}%${i ? ` · ห่าง ${r.extra.gaps[i - 1]} วัน` : ""}`)))],
+    ["ลงทะเบียน e-Claim", "registered", false, (r) => (r.extra.registered ? toDmy(r.extra.registered) : r.extra.registry_checked ? el("span", { class: "badge b-error" }, "ไม่พบ") : el("span", { class: "muted" }, "ยังไม่นำเข้าทะเบียน"))],
     ["ยาลดน้ำตาลครั้งล่าสุด", "last_drug", false, (r) => (r.extra.last_drug ? el("span", {}, toDmy(r.extra.last_drug), el("span", { class: "sub" }, r.extra.last_drug_name)) : el("span", { class: "badge b-warn" }, "ไม่เคย"))],
     ["สิทธิหลัก", "", false, (r) => r.extra.maininscl || dash()],
   ],
@@ -234,7 +236,8 @@ async function openDrawer(r) {
     const own = kind === "dmrem" ? [
       ["อายุ", r.extra.age === null || r.extra.age === undefined ? "—" : `${r.extra.age} ปี`], ["สิทธิหลัก", r.extra.maininscl],
       ["ขั้น", r.extra.stage === 1 ? "1 เข้าสู่ระยะสงบ (4,000 บาท)" : "2 ยังคงระยะสงบ (2,000 บาท)"],
-      ["HbA1c ที่ใช้", r.extra.tests.map((t) => `${toDmy(t.date)} ${t.value}%`).join(" → ")],
+      ["HbA1c ที่ใช้", r.extra.tests.map((t, i) => `${toDmy(t.date)} ${t.value}%${i ? ` (ห่าง ${r.extra.gaps[i - 1]} วัน)` : ""}`).join(" → ")],
+      ["ลงทะเบียน e-Claim", r.extra.registered ? toDmy(r.extra.registered) : r.extra.registry_checked ? "ไม่พบในทะเบียน" : "ยังไม่ได้นำเข้าทะเบียน"],
       ["ยาลดน้ำตาลครั้งล่าสุด", r.extra.last_drug ? `${toDmy(r.extra.last_drug)} · ${r.extra.last_drug_name}` : "ไม่เคยได้ยา"],
       ["รหัส ADP ที่ส่ง", r.extra.adp || "ยังไม่ได้ตั้ง"],
     ] : kind === "anemiachild" ? [
@@ -463,6 +466,70 @@ async function openDrawer(r) {
 }
 function closeDrawer() { $("drawer").hidden = true; $("drawer-backdrop").hidden = true; state.current = null; render(); }
 
+// ------------------------------------------------------------- 6) DM Remission registry and follow-up
+const FOLLOW = {
+  wait3: ["ขั้น 1 แล้ว · รอผลครั้งที่ 3", "b-ok"], wait2: ["รอผลครั้งที่ 2", "b-c"], done: ["ครบขั้น 2", "b-sent"],
+  relapse: ["หลุดระยะสงบ", "b-error"], not_yet: ["ยังไม่เข้าเกณฑ์", "b-warn"], no_test: ["ยังไม่มีผล HbA1c", "b-warn"],
+};
+function dmremPanel() {
+  $("dmrem-panel").hidden = service() !== "dmrem";
+  if (service() === "dmrem") loadRegistry();
+}
+async function loadRegistry() {
+  try {
+    const s = await api("/api/ppfs/dmrem/registry");
+    $("dmrem-summary").textContent = s.n
+      ? `${count.format(s.n)} รายการ (${count.format(s.people)} คน) ลงทะเบียน ${toDmy(s.first)} – ${toDmy(s.last)}${s.last_upload ? ` · นำเข้าล่าสุด ${thaiDateTime(s.last_upload.at)} (${s.last_upload.name})` : ""}`
+      : "ยังไม่ได้นำเข้า (ข้อ 6 จะยังไม่ตรวจการลงทะเบียน)";
+  } catch (err) { notice(err.message); }
+}
+async function importRegistry(file) {
+  try {
+    const response = await fetch(`/api/ppfs/dmrem/registry?name=${encodeURIComponent(file.name)}`, { method: "POST", body: file });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.detail || `ผิดพลาด (${response.status})`);
+    notice(`นำเข้า ${file.name}: ${count.format(data.rows)} รายการ ${count.format(data.people)} คน (ใหม่ ${data.added}, อัปเดต ${data.updated})`, "ok");
+    await loadRegistry();
+    if (state.rows.length) await search();
+  } catch (err) { notice(err.message); }
+  $("dmrem-file").value = "";
+}
+async function showFollowUp() {
+  const box = $("dmrem-follow-body");
+  if (!box.hidden) { box.hidden = true; $("dmrem-follow").textContent = "ติดตามผู้ลงทะเบียน"; return; }
+  box.hidden = false; $("dmrem-follow").textContent = "ซ่อนการติดตาม";
+  box.replaceChildren(el("p", { class: "muted" }, "กำลังโหลด…"));
+  try {
+    const data = await api("/api/ppfs/dmrem/follow-up", {});
+    if (!data.rows.length) { box.replaceChildren(el("p", { class: "hint" }, "ยังไม่ได้นำเข้าทะเบียน")); return; }
+    let filter = "wait3";
+    const counts = {};
+    data.rows.forEach((x) => { counts[x.state] = (counts[x.state] || 0) + 1; });
+    const chips = el("div", { class: "follow-chips" });
+    const tableBox = el("div", { class: "table-wrap" });
+    const draw = () => {
+      chips.replaceChildren(...Object.entries(FOLLOW).map(([k, [label, tone]]) => el("button", { type: "button", "aria-pressed": String(filter === k),
+        class: filter === k ? "primary" : "", onclick: () => { filter = k; draw(); } }, `${label} ${count.format(counts[k] || 0)}`)));
+      const list = data.rows.filter((x) => x.state === filter);
+      tableBox.replaceChildren(table(["สถานะ", "HN", "ชื่อ", "ลงทะเบียน", "HbA1c ล่าสุด", "ตรวจครั้งถัดไปได้", "รอบตัดข้อมูล", "ยาลดน้ำตาลล่าสุด", "หมายเหตุ"],
+        list.map((x) => {
+          const [label, tone] = FOLLOW[x.state] || [x.state, "b-sent"];
+          const window = x.next_from ? `${toDmy(x.next_from)}${x.next_to ? ` – ${toDmy(x.next_to)}` : " เป็นต้นไป"}` : "—";
+          return el("tr", { class: x.overdue ? "flag-row" : "" }, el("td", {}, el("span", { class: `badge ${tone}` }, label)),
+            el("td", { class: "mono" }, x.hn || "—"), el("td", {}, x.ptname || el("span", { class: "muted" }, "ไม่พบใน HOSxP")),
+            el("td", { class: "mono" }, toDmy(x.reg_date)),
+            el("td", {}, ...x.tests.map((t) => el("span", { class: "sub" }, `${toDmy(t.date)} · ${t.value}%`))),
+            el("td", {}, window, x.overdue ? el("span", { class: "sub" }, "เลยกำหนดแล้ว") : null),
+            el("td", { class: "mono" }, x.cutoff ? toDmy(x.cutoff) : "—"),
+            el("td", { class: "mono" }, x.last_drug ? toDmy(x.last_drug) : "—"), el("td", {}, x.note || "—"));
+        })));
+    };
+    draw();
+    box.replaceChildren(el("p", { class: "muted-note" }, "ขั้น 2 ต้องตรวจ HbA1c ห่างจากผลครั้งที่ 2 อย่างน้อย 3 เดือน (ช่วงที่แสดงคือ 3–6 เดือน) แถวสีเหลืองคือเลยช่วง 6 เดือนแล้วยังไม่มีผล · รอบตัดข้อมูล 31 มี.ค. / 15 ก.ย."),
+      chips, tableBox);
+  } catch (err) { box.replaceChildren(el("p", {}, err.message)); }
+}
+
 async function loadHistory() {
   try {
     const rows = await api("/api/ppfs/exports");
@@ -483,6 +550,7 @@ async function loadServices() {
     $("service").replaceChildren(...state.services.map((s) => el("option", { value: s.key, selected: s.key === current }, s.label)));
   } catch (err) { notice(err.message); }
   renderRules();
+  dmremPanel();
 }
 
 async function connection() {
@@ -494,7 +562,9 @@ async function connection() {
 }
 
 $("search").addEventListener("submit", (e) => { e.preventDefault(); search(); });
-$("service").addEventListener("change", () => { state.rows = []; state.selected.clear(); state.sort.key = "date"; state.sort.dir = "asc"; renderRules(); renderHead(); render(); });
+$("service").addEventListener("change", () => { state.rows = []; state.selected.clear(); state.sort.key = "date"; state.sort.dir = "asc"; renderRules(); renderHead(); render(); dmremPanel(); });
+$("dmrem-file").addEventListener("change", (e) => { if (e.target.files[0]) importRegistry(e.target.files[0]); });
+$("dmrem-follow").onclick = showFollowUp;
 $("filter").addEventListener("input", (e) => { state.text = e.target.value; render(); });
 $("select-ready").onclick = () => { visible().filter((r) => selectable(r) && !r.warnings.length && !r.sent).forEach((r) => state.selected.add(r.key)); render(); };
 $("select-none").onclick = () => { state.selected.clear(); render(); };
