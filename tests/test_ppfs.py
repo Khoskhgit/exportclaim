@@ -72,3 +72,21 @@ def test_sent_and_the_zip_keeps_only_the_claimed_items():
     out = ppfs.only_claimed(built, {"v1": {CHECK}})
     assert out["ADP"] == [{"SEQ": "v1", "CODE": CHECK}] and out["LAB"] == [] and out["OPD"] == [{"SEQ": "v1"}]
     assert out["DRU"] == [{"SEQ": "v1"}]  # drugs left in the build were ticked by the user
+
+
+def test_fdh_needs_an_account_and_a_known_zone(tmp_path):
+    from dataclasses import replace
+
+    from fastapi.testclient import TestClient
+
+    from app.main import create_app
+    from app.store import Store
+    from factories import settings
+    from test_api import FakeHosxp
+
+    config = replace(settings(), export_dir=tmp_path / "e", fdh_user="", fdh_password="")
+    client = TestClient(create_app(config, FakeHosxp(), Store(tmp_path / "s.sqlite3")))
+    body = {"service": "pregtest", "keys": ["v1|30014"], "dates": ["2026-03-01"]}
+    assert client.post("/api/ppfs/fdh/send", json={**body, "zone": "x"}).status_code == 400
+    response = client.post("/api/ppfs/fdh/send", json={**body, "zone": "uat"})
+    assert response.status_code == 400 and "บัญชี FDH" in response.json()["detail"]

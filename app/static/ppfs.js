@@ -163,6 +163,7 @@ function renderPicked() {
   $("selected-count").textContent = `เลือก ${count.format(list.length)} รายการ`;
   $("selected-total").textContent = `ยอดเบิก ${money(total)} บาท`;
   $("export").disabled = !list.length;
+  $("fdh-send").disabled = $("fdh-prescreen").disabled = !list.length || state.fdhBusy;
 }
 
 function renderRules() {
@@ -530,6 +531,55 @@ async function showFollowUp() {
   } catch (err) { box.replaceChildren(el("p", {}, err.message)); }
 }
 
+// ------------------------------------------------------------- FDH (same account and endpoints as the 18-file page)
+const fdhZoneLabel = (zone) => (zone === "prod" ? "PROD (ส่งจริง)" : "UAT (ทดสอบ)");
+async function loadFdhStatus() {
+  try {
+    const status = await api("/api/nhso18/fdh/status");
+    state.fdhStatus = status;
+    $("fdh").hidden = !status.ready; $("fdh-off").hidden = status.ready;
+    $("fdh-account").textContent = status.source === "own" ? `บัญชี: ${status.fdh_user} (ของฉัน)` : `บัญชี: ${status.fdh_user} (กลาง)`;
+  } catch (err) { $("fdh").hidden = true; }
+}
+async function runFdh(prescreen) {
+  clearNotices();
+  const list = pickedRows();
+  if (!list.length) return;
+  const zone = $("fdh-zone").value;
+  const what = prescreen ? "PreScreen" : "ส่ง FDH";
+  const summary = el("dl", { class: "sum" },
+    el("dt", {}, "ปลายทาง"), el("dd", { class: zone === "prod" ? "danger-text" : "" }, fdhZoneLabel(zone)),
+    el("dt", {}, "บัญชี FDH"), el("dd", {}, (state.fdhStatus && state.fdhStatus.fdh_user) || "ยังไม่ได้ตั้ง"),
+    el("dt", {}, "ประเภทบริการ"), el("dd", {}, $("service").selectedOptions[0].textContent),
+    el("dt", {}, "รายการ"), el("dd", {}, `${list.length} รายการ`),
+    el("dt", {}, "ยอดเบิก"), el("dd", {}, `${money(list.reduce((s, r) => s + Number(r.amount), 0))} บาท`),
+    el("dt", {}, "PHDB"), el("dd", {}, prescreen ? "ไม่ส่ง (PreScreen)" : $("fdh-phdb").checked ? "ส่งด้วย" : "ไม่ส่ง"));
+  const note = el("p", { class: "muted-note" }, zone === "prod" && !prescreen
+    ? "ส่งข้อมูลจริงไป สปสช. รายการจะขึ้นเป็น \"ส่งแล้ว\" เมื่อ FDH ตอบรับ" : "UAT และ PreScreen ไม่นับเป็นส่งแล้ว");
+  if (!await confirmDialog(`ยืนยัน${what} ${fdhZoneLabel(zone)}`, [summary, note], what)) return;
+  const payload = { service: $("service").value, keys: list.map((r) => r.key), dates: [...new Set(list.map((r) => r.date))],
+    zone, prescreen, phdb: $("fdh-phdb").checked };
+  const button = $(prescreen ? "fdh-prescreen" : "fdh-send");
+  state.fdhBusy = true; renderPicked(); button.textContent = "กำลังส่ง…";
+  try {
+    let result;
+    try { result = await api("/api/ppfs/fdh/send", payload); }
+    catch (err) {
+      if (!err.data || !err.data.needs_confirm) throw err;
+      const again = el("p", {}, `มี ${err.data.resend.length} รายการที่เคยส่งออกแล้ว ต้องการส่งซ้ำใช่หรือไม่?`);
+      if (!await confirmDialog("ยืนยันการส่งซ้ำ", [again], "ส่งซ้ำ")) return;
+      result = await api("/api/ppfs/fdh/send", { ...payload, confirm_resend: true });
+    }
+    const counts = Object.entries(result.counts).filter(([, n]) => n).map(([f, n]) => `${f} ${n}`).join(", ");
+    const head = `${what} ${fdhZoneLabel(result.zone)} ${result.count} รายการ (${result.visits} visit · ${counts})`;
+    notice(`${result.ok ? "✓" : "✕"} ${head}: ${result.message || `HTTP ${result.http_status}`}`, result.ok ? "ok" : "error", true);
+    if (result.export_id) { state.selected.clear(); await Promise.all([search(), loadHistory()]); }
+  } catch (err) {
+    const detail = err.data && err.data.blocked ? `: ${err.data.blocked.map((b) => `${b.key.replace("|", " ")} (${b.reason})`).join(", ")}` : "";
+    notice(err.message + detail);
+  } finally { state.fdhBusy = false; button.textContent = prescreen ? "PreScreen" : "ส่ง FDH"; renderPicked(); }
+}
+
 async function loadHistory() {
   try {
     const rows = await api("/api/ppfs/exports");
@@ -569,6 +619,13 @@ $("filter").addEventListener("input", (e) => { state.text = e.target.value; rend
 $("select-ready").onclick = () => { visible().filter((r) => selectable(r) && !r.warnings.length && !r.sent).forEach((r) => state.selected.add(r.key)); render(); };
 $("select-none").onclick = () => { state.selected.clear(); render(); };
 $("export").onclick = exportZip;
+$("fdh-send").onclick = () => runFdh(false);
+$("fdh-prescreen").onclick = () => runFdh(true);
+$("fdh-test").onclick = async () => {
+  $("fdh-test").disabled = true;
+  try { notice((await api("/api/nhso18/fdh/test", { zone: $("fdh-zone").value })).message, "ok"); }
+  catch (err) { notice(err.message); } finally { $("fdh-test").disabled = false; }
+};
 $("drawer-close").onclick = closeDrawer;
 $("drawer-backdrop").onclick = closeDrawer;
 document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("drawer").hidden && !$("confirm").open) closeDrawer(); });
@@ -577,5 +634,6 @@ setupPresets($("search"));
 (() => { const today = new Date(); $("search").elements.start.value = isoDate(new Date(today.getFullYear(), today.getMonth(), 1)); $("search").elements.end.value = isoDate(today); })();
 loadServices();
 loadHistory();
+loadFdhStatus();
 connection();
 render();

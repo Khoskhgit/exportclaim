@@ -14,7 +14,7 @@ from fastapi import Body, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 
-from . import (auth, nhso18, nhso18_service as svc, ppfs, ppfs_anemia, ppfs_fluoride, ppfs_fp, ppfs_iron, ppfs_ironchild,
+from . import (auth, fdh, nhso18, nhso18_service as svc, ppfs, ppfs_anemia, ppfs_fluoride, ppfs_fp, ppfs_iron, ppfs_ironchild,
                ppfs_anemiachild, ppfs_dmrem,
                ppfs_ncd, ppfs_pregtest)
 from . import dmrem_registry
@@ -431,8 +431,10 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
         store.set_choice(service.key, vn, icode, bool(body.get("include")))
         return {"ok": True}
 
-    @app.post("/api/ppfs/export")
-    def export(request: Request, body: dict = Body(...)):
+    def build(body: dict):
+        """Re-check the picked rows with fresh data and build the 18 files (shared by the ZIP and FDH).
+
+        Returns (service, picked rows, vns, data) or a JSONResponse asking to fix or confirm."""
         service = _service(body.get("service"))
         keys = list(dict.fromkeys(text(k) for k in body.get("keys") or [] if "|" in text(k)))
         if not keys:
@@ -489,12 +491,80 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
         lost = [r.key for r in picked if service.key != "dmrem" and (r.vn, r.code) not in found]
         if lost:
             raise HTTPException(400, f"สร้างแฟ้ม ADP ของ {lost[0].replace('|', ' รหัส ')} ไม่ได้ ตรวจรายการค่าบริการใน HOSxP")
+        return service, picked, vns, data
+
+    @app.post("/api/ppfs/export")
+    def export(request: Request, body: dict = Body(...)):
+        built = build(body)
+        if isinstance(built, JSONResponse):
+            return built
+        service, picked, vns, data = built
         result = nhso18.build_zip(data, settings.hcode, settings.export_dir)
         items = [{"vn": r.vn, "code": r.code, "amount": f"{r.amount:.2f}"} for r in picked]
         export_id = store.record(service.key, result.zip_path, items, auth.user_label(request))
         log.info("ppfs export id=%s service=%s items=%s", export_id, service.key, len(items))
         return {"id": export_id, "file": result.zip_path.name, "count": len(items), "visits": len(vns),
                 "total": f"{sum(r.amount for r in picked):.2f}", "counts": result.counts}
+
+    # ------------------------------------------------------------ FDH (the account, token test and history are the
+    # 18-file page's: /api/nhso18/fdh/status, /account, /test, /history)
+    def fdh_account(request: Request) -> tuple[str, str, str]:
+        user = getattr(request.state, "user", None)
+        login = text(user["user_id"]) if user else ""
+        own = local.fdh_account(login) if login else None
+        if own:
+            return own["fdh_user"], own["password_hash"], "own"
+        if settings.fdh_user and settings.fdh_password:
+            return settings.fdh_user, "", "env"
+        return "", "", ""
+
+    def fdh_client(fdh_user: str, hashed: str) -> fdh.Client:
+        password = settings.fdh_password if not hashed and fdh_user == settings.fdh_user else ""
+        return fdh.Client(fdh_user, password, settings.hcode, settings.fdh_token_url, settings.fdh_hash_key,
+                          settings.moph_user_agent, hashed=hashed or "")
+
+    @app.post("/api/ppfs/fdh/send")
+    def fdh_send(request: Request, body: dict = Body(...)):
+        zone, prescreen = text(body.get("zone")) or "uat", bool(body.get("prescreen"))
+        if zone not in fdh.ZONES:
+            raise HTTPException(400, "ปลายทาง FDH ไม่ถูกต้อง")
+        fdh_user, hashed, source = fdh_account(request)
+        if not source:
+            raise HTTPException(400, "ยังไม่ได้ตั้งบัญชี FDH (ตั้งที่ปุ่ม \"บัญชี FDH\" ในหน้า 18 แฟ้ม หรือ FDH_USER / FDH_PASSWORD ใน .env)")
+        if prescreen:
+            body = {**body, "confirm_resend": True}  # PreScreen only checks; it never needs the resend question.
+        built = build(body)
+        if isinstance(built, JSONResponse):
+            return built
+        service, picked, vns, data = built
+        parts = fdh.files(fdh.fix_rows(data, q), with_phdb=bool(body.get("phdb", True)) and not prescreen)
+        mode = "prescreen" if prescreen else "send"
+        folder = settings.export_dir / f"FDH_PPFS_{zone}_{mode}_{datetime.now():%Y%m%d-%H%M%S}"
+        try:
+            folder.mkdir(parents=True, exist_ok=True)
+            for name, content in parts.items():
+                (folder / name).write_bytes(content)
+        except OSError as exc:
+            raise HTTPException(500, f"บันทึกสำเนาแฟ้มที่ส่งไม่สำเร็จ: {exc.__class__.__name__}") from None
+        user = auth.user_label(request)
+        try:
+            reply = fdh_client(fdh_user, hashed).send(zone, parts, prescreen)
+        except fdh.FdhError as exc:
+            local.record_fdh_send(vns, zone, mode, False, None, str(exc), str(folder), user, fdh_user=fdh_user)
+            raise HTTPException(502, str(exc)) from None
+        local.record_fdh_send(vns, zone, mode, reply.ok, reply.http_status, f"PPFS {service.label}: {reply.message}",
+                              str(folder), user, fdh_user=fdh_user)
+        export_id = None
+        if reply.ok and mode == "send" and zone == "prod":  # only a real send makes the rows "ส่งแล้ว"
+            zip_result = nhso18.build_zip(data, settings.hcode, settings.export_dir)
+            items = [{"vn": r.vn, "code": r.code, "amount": f"{r.amount:.2f}"} for r in picked]
+            export_id = store.record(service.key, zip_result.zip_path, items, f"{user} (FDH)")
+        log.info("ppfs fdh %s zone=%s service=%s items=%s ok=%s http=%s fdh_user=%s", mode, zone, service.key, len(picked),
+                 reply.ok, reply.http_status, fdh_user)
+        counts = {n.split(".")[0].upper(): max(c.count(b"\r\n") - 1, 0) for n, c in parts.items()}
+        return {"ok": reply.ok, "zone": zone, "mode": mode, "fdh_user": fdh_user, "count": len(picked), "visits": len(vns),
+                "http_status": reply.http_status, "status": reply.status, "message": reply.message, "counts": counts,
+                "export_id": export_id}
 
     @app.get("/api/ppfs/exports")
     def exports():
