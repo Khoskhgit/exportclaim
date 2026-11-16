@@ -41,6 +41,17 @@ class Service:
 
 
 SERVICES = {
+    "dmrem": Service(
+        key="dmrem", label="6) กรณีบริการเบาหวานระยะสงบ (DM Remission)",
+        codes={"DMR1": ("เบาหวานระยะสงบ ขั้น 1", Decimal("4000")), "DMR2": ("เบาหวานระยะสงบ ขั้น 2", Decimal("2000"))},
+        rules=(
+            "กลุ่มเป้าหมาย: ผู้ป่วยเบาหวานชนิดที่ 2 (E11) อายุ 18 ปีขึ้นไป สิทธิ UC ที่ลงทะเบียนในโปรแกรม e-Claim แล้ว (โปรแกรมนี้ตรวจการลงทะเบียนไม่ได้)",
+            "ขั้น 1: 4,000 บาท/ราย เมื่อ HbA1c < 6.5% ติดต่อกัน 2 ครั้ง ห่างกันอย่างน้อย 3 เดือน หลังหยุดยาลดน้ำตาล"
+            " (นับว่าไม่ได้รับยาตั้งแต่ 3 เดือนก่อนผลครั้งแรก) หรือปรับพฤติกรรมอย่างเข้มงวด",
+            "ขั้น 2: 2,000 บาท/ราย เมื่อยังคง HbA1c < 6.5% อีก 1 ครั้ง ห่างจากครั้งที่ 2 อย่างน้อย 3 เดือน · จ่ายขั้นละครั้งเดียว",
+            "ไม่มีรหัส ADP: สปสช. ประมวลผลจากผล HbA1c ที่ส่งเข้า e-Claim (ตัดรอบ 15 ก.ย. / 31 มี.ค.) ZIP จะส่ง visit ที่ตรวจ HbA1c"
+            " ของแต่ละขั้นพร้อมแฟ้ม LAB โดยไม่มีค่าใช้จ่าย (ค่ารักษาของ visit ส่งตามปกติที่หน้า 18 แฟ้ม)",
+        )),
     "postnatal": Service(
         key="postnatal", label="7) การตรวจหลังคลอด",
         codes={CHECK: ("ตรวจหลังคลอด", Decimal("150")), DRUG: ("ยาธาตุเหล็ก/โฟลิก/ไอโอดีน", Decimal("135"))},
@@ -400,11 +411,11 @@ def postnatal(data: dict, sent: dict[tuple[str, str], str] | None = None) -> lis
     return sorted(rows.values(), key=lambda x: (x.date, x.time, x.vn, x.code))
 
 
-def only_claimed(data: dict[str, list[dict]], claimed: dict[str, set[str]]) -> dict[str, list[dict]]:
+def only_claimed(data: dict[str, list[dict]], claimed: dict[str, set[str]], keep_lab: bool = False) -> dict[str, list[dict]]:
     """Keep the 18 files to the PP items being sent: ADP rows of those codes, no lab or accident rows. Drugs the user
     ticked stay in DRU (the others were left out of the build already)."""
     out = dict(data)
     out["ADP"] = [r for r in data.get("ADP", []) if text(r.get("CODE")) in claimed.get(text(r.get("SEQ")), set())]
-    for name in ("LAB", "AER"):
+    for name in ("AER",) if keep_lab else ("LAB", "AER"):
         out[name] = []
     return out

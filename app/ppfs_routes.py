@@ -15,7 +15,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 
 from . import (auth, nhso18, nhso18_service as svc, ppfs, ppfs_anemia, ppfs_fluoride, ppfs_fp, ppfs_iron, ppfs_ironchild,
-               ppfs_anemiachild,
+               ppfs_anemiachild, ppfs_dmrem,
                ppfs_ncd, ppfs_pregtest)
 from .config import Settings
 from .store import Store
@@ -113,6 +113,8 @@ def _service(value: Any) -> ppfs.Service:
 
 def _out(row: ppfs.Row) -> dict:
     name, rate = ppfs.code_name(row.code)
+    if not rate and row.amount:  # a code set only in .env (6): the row knows what it is
+        name, rate = row.item_name, row.amount
     return {
         "key": row.key, "vn": row.vn, "code": row.code, "code_name": name, "rate": str(rate), "hn": row.hn,
         "date": row.date, "time": row.time, "ptname": row.ptname, "cid": row.cid[-4:].rjust(len(row.cid), "x") if row.cid else "",
@@ -150,6 +152,10 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
         return plan
 
     def check(service: ppfs.Service, start: date, end: date) -> list[ppfs.Row]:
+        if service.key == "dmrem":
+            data = ppfs_dmrem.fetch(q, start, end)
+            vns = sorted({text(r["vn"]) for r in data["tests"]})
+            return ppfs_dmrem.check(data, start, end, store.sent(vns))
         if service.key == "anemiachild":
             band_list = ppfs_anemiachild.bands(settings)
             data = ppfs_anemiachild.fetch(q, start, end, band_list)
@@ -223,6 +229,13 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
                        "amount": money(i["amount"])} for i in d["items"]],
             "dx": [{"type": text(x["diagtype"]), "code": text(x["icd10"]), "name": text(x["name"])} for x in d["dx"]],
             "nationality": f"{text(d['visit'].get('nationality'))} {text(d['visit'].get('nationality_name'))}".strip()}
+        if _service(body.get("service")).key == "dmrem":
+            d = ppfs_dmrem.detail(q, vn)
+            if not d:
+                raise HTTPException(404, "ไม่พบ visit นี้ใน HOSxP")
+            return {**common(d),
+                    "tests": [{"date": iso(t["vstdate"]), "vn": text(t["vn"]), "result": text(t["result"])} for t in d["tests"]],
+                    "drugs": [{"date": iso(x["vstdate"]), "name": text(x["name"]), "qty": f"{float(x['qty'] or 0):g}"} for x in d["drugs"]]}
         if _service(body.get("service")).key == "anemiachild":
             band_list = ppfs_anemiachild.bands(settings)
             d = ppfs_anemiachild.detail(q, vn, band_list)
@@ -364,8 +377,12 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
             return JSONResponse({"detail": "ต้องยืนยันการส่งซ้ำ", "resend": resend, "needs_confirm": True}, status_code=409)
 
         claimed: dict[str, set[str]] = {}
-        for r in picked:
-            claimed.setdefault(r.vn, set()).add(r.code)
+        if service.key == "dmrem":  # 6) sends the HbA1c visits of each stage, with no fee
+            for vn in ppfs_dmrem.stage_visits(picked):
+                claimed.setdefault(vn, set())
+        else:
+            for r in picked:
+                claimed.setdefault(r.vn, set()).add(r.code)
         vns = list(claimed)
         # Leave out every other item of these visits, so CHT/CHA add up to the claimed PP items only.
         # Only the claimed fees and what the user ticked in the cost tab go into the ZIP (CHT/CHA add up to those).
@@ -382,9 +399,17 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
         if service.key in ("ironchild", "anemiachild"):
             rate = ppfs_ironchild.RATE if service.key == "ironchild" else ppfs_anemiachild.RATE
             ppfs_ironchild.rewrite_adp(data, claimed, rate)  # 10000 -> the e-Claim code chosen for the visit
-        data = ppfs.only_claimed(data, {vn: claimed[vn] | ticked.get(vn, set()) for vn in vns})
+        data = ppfs.only_claimed(data, {vn: claimed[vn] | ticked.get(vn, set()) for vn in vns}, keep_lab=service.key == "dmrem")
+        if service.key == "dmrem":
+            hba1c = ppfs_dmrem.lab_rows(q, vns, settings.hcode)
+            done = {(r["SEQ"], r["LABTEST"]) for r in hba1c}
+            data["LAB"] = sorted([r for r in data["LAB"] if (text(r.get("SEQ")), text(r.get("LABTEST"))) not in done] + hba1c,
+                                 key=lambda r: (text(r.get("SEQ")), text(r.get("LABTEST"))))
+            missing = [vn for vn in vns if not any(r["SEQ"] == vn for r in hba1c)]
+            if missing:
+                raise HTTPException(400, f"ไม่พบผล HbA1c ของ VN {missing[0]} แล้ว ให้ค้นหาใหม่")
         found = {(text(r["SEQ"]), text(r["CODE"])) for r in data["ADP"]}
-        lost = [r.key for r in picked if (r.vn, r.code) not in found]
+        lost = [r.key for r in picked if service.key != "dmrem" and (r.vn, r.code) not in found]
         if lost:
             raise HTTPException(400, f"สร้างแฟ้ม ADP ของ {lost[0].replace('|', ' รหัส ')} ไม่ได้ ตรวจรายการค่าบริการใน HOSxP")
         result = nhso18.build_zip(data, settings.hcode, settings.export_dir)
