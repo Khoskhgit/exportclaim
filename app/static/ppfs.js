@@ -12,6 +12,8 @@ const CATEGORIES = {
   sent: ["ส่งแล้ว", (r) => Boolean(r.sent), "sent"],
 };
 const selectable = (r) => !r.errors.length;
+// A service name longer than 30 characters is cut and ends with "ฯ" (the full name is in the tooltip).
+const shortLabel = (label) => { const chars = [...label]; return chars.length > 30 ? `${chars.slice(0, 30).join("")}ฯ` : label; };
 
 // Columns that differ by service: [header, sort key, numeric, cell].
 const uptBadge = (v) => !v ? dash() : el("span", { class: `badge ${/pos/i.test(v) ? "b-warn" : "b-ok"}` }, v);
@@ -447,7 +449,7 @@ async function openDrawer(r) {
           el("td", {}, i.name, i.locked ? el("span", { class: "sub" }, "ค่าบริการที่เบิก") : null),
           el("td", { class: "mono" }, i.adp || "—"),
           el("td", { class: "funds" }, i.services.length
-            ? el("span", {}, ...i.services.map((s) => el("span", { class: `fund-chip${s.key === kind ? " here" : ""}`, title: s.label }, s.label)))
+            ? el("span", {}, ...i.services.map((s) => el("span", { class: `fund-chip${s.key === kind ? " here" : ""}`, title: s.label }, shortLabel(s.label))))
             : el("span", { class: "muted" }, "—")),
           el("td", { class: "num" }, i.qty), el("td", { class: "num" }, money(i.amount)));
         return row;
