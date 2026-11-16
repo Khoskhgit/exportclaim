@@ -99,12 +99,6 @@ class PpfsStore:
         return Path(row["zip_path"]) if row else None
 
 
-# The fund columns of HOSxP's nhso_adp_code (each holds the rate the fund pays; 0 or empty = not claimable there).
-FUND_LABELS = {"UCS": "บัตรทอง (UC)", "OFC": "ข้าราชการ (OFC)", "LGO": "อปท. (LGO)", "SSS": "ประกันสังคม (SSS)",
-               "fs": "Fee Schedule", "UCEP": "UCEP", "PPFS": "PP Fee Schedule"}
-FUND_OF_INSCL = {"UCS": "UCS", "WEL": "UCS", "OFC": "OFC", "LGO": "LGO", "SSS": "SSS", "SSI": "SSS"}
-
-
 def _date(value: Any, label: str) -> date:
     try:
         return date.fromisoformat(str(value))
@@ -223,39 +217,29 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
         service, vn = _service(body.get("service")), text(body.get("vn"))
         codes = {text(c) for c in body.get("codes") or []}
         plan = send_plan(service, {vn: codes}).get(vn, {})
-        funds, right = fund_rates(vn, {i["adp"] for i in out.get("items", []) if i.get("adp")})
+        services = item_services([(i["icode"], i.get("adp", "")) for i in out.get("items", [])])
         for i in out.get("items", []):
             p = plan.get(i["icode"], {"send": False, "locked": False, "default": False})
-            f = funds.get(i.get("adp"), {})
-            i.update(send=p["send"], locked=p["locked"], default=p["default"], fund_type=f.get("type", ""),
-                     funds=f.get("funds", []), claimable=any(x["fund"] == right["column"] for x in f.get("funds", [])))
-        out["right"] = right
+            found = services.get(i["icode"], [])
+            i.update(send=p["send"], locked=p["locked"], default=p["default"],
+                     services=[{"key": k, "label": ppfs.SERVICES[k].label} for k in found], this_service=service.key in found)
         return out
 
-    def fund_rates(vn: str, codes: set[str]) -> tuple[dict[str, dict], dict]:
-        """ADP code -> {"type", "funds": [{fund, label, rate}]} from HOSxP's nhso_adp_code (a rate above 0 is a fund the
-        code can be claimed from), and the visit's own right."""
-        visit = (q(f"SELECT o.pttype, seekhipdatas(o.pttype,0) maininscl FROM ovst o WHERE o.vn={nhso18.lit(vn)}") or [{}])[0]
-        inscl = text(visit.get("maininscl"))
-        column = FUND_OF_INSCL.get(inscl, "")
-        right = {"inscl": inscl, "column": column, "label": FUND_LABELS.get(column, inscl or "ไม่ทราบสิทธิ")}
-        if not codes:
-            return {}, right
-        out: dict[str, dict] = {}
-        for r in q(f"""
-                SELECT c.nhso_adp_code code, t.nhso_adp_type_name type, c.UCS, c.OFC, c.LGO, c.SSS, c.fs, c.UCEP, c.PPFS
-                FROM nhso_adp_code c LEFT JOIN nhso_adp_type t ON t.nhso_adp_type_id=c.nhso_adp_type_id
-                WHERE c.nhso_adp_code IN ({nhso18.lit_list(codes)})"""):
-            funds = []
-            for column, label in FUND_LABELS.items():
-                try:
-                    rate = float(r.get(column) or 0)
-                except (TypeError, ValueError):
-                    rate = 0.0
-                if rate > 0:
-                    funds.append({"fund": column, "label": label, "rate": f"{rate:.2f}"})
-            out[text(r["code"])] = {"type": text(r.get("type")), "funds": funds}
-        return out, right
+    def item_services(items: list[tuple[str, str]]) -> dict[str, list[str]]:
+        """icode -> the PPFS services (keys) the item is claimed under: by ADP code, or by icode for 26) and 27) whose
+        fees sit under HOSxP's placeholder 10000, and the HbA1c lab for 6)."""
+        by_icode = {i: "anemiachild" for i in ppfs_anemiachild.all_icodes(ppfs_anemiachild.bands(settings))}
+        by_icode |= {i: "ironchild" for i in ppfs_ironchild.all_icodes(ppfs_ironchild.bands(settings))}
+        hba1c = {text(r["icode"]) for r in q(f"SELECT icode FROM lab_items WHERE lab_items_code={ppfs_dmrem.HBA1C_LAB}")}
+        out: dict[str, list[str]] = {}
+        for icode, code in items:
+            found = [k for k, s in ppfs.SERVICES.items() if code and code in s.codes and k not in ("anemiachild", "ironchild", "dmrem")]
+            if icode in by_icode:
+                found = [by_icode[icode]]
+            if icode in hba1c:
+                found.append("dmrem")
+            out[icode] = found
+        return out
 
     def _detail(body: dict) -> dict:
         vn = text(body.get("vn"))
