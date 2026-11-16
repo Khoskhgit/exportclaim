@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import logging
 from datetime import date, datetime, timedelta
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
@@ -98,6 +99,12 @@ class PpfsStore:
         return Path(row["zip_path"]) if row else None
 
 
+# The fund columns of HOSxP's nhso_adp_code (each holds the rate the fund pays; 0 or empty = not claimable there).
+FUND_LABELS = {"UCS": "บัตรทอง (UC)", "OFC": "ข้าราชการ (OFC)", "LGO": "อปท. (LGO)", "SSS": "ประกันสังคม (SSS)",
+               "fs": "Fee Schedule", "UCEP": "UCEP", "PPFS": "PP Fee Schedule"}
+FUND_OF_INSCL = {"UCS": "UCS", "WEL": "UCS", "OFC": "OFC", "LGO": "LGO", "SSS": "SSS", "SSI": "SSS"}
+
+
 def _date(value: Any, label: str) -> date:
     try:
         return date.fromisoformat(str(value))
@@ -136,19 +143,18 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
     def send_plan(service: ppfs.Service, claimed: dict[str, set[str]]) -> dict[str, dict[str, dict]]:
         """vn -> icode -> {"send", "locked", "default"}: what goes into the ZIP for each billed item of the visits.
 
-        The claimed fee is always sent (locked). Anything else is left out unless the user ticks it in the cost tab;
-        for 27) the iron drug given is ticked by default, as the user asked."""
+        The claimed fee is always sent (locked). Everything else of the visit is ticked by default too, as the user asked;
+        the user unticks in the cost tab what should stay out."""
         vns = sorted(claimed)
         items = ppfs.visit_items(q, vns)
         special = {"ironchild": ppfs_ironchild, "anemiachild": ppfs_anemiachild}.get(service.key)
         fee_icodes = set(special.all_icodes(special.bands(settings))) if special else set()
-        extra = ppfs_ironchild.iron_icodes(q, vns) if service.key == "ironchild" else {}
         chosen = store.choices(service.key, vns)
         plan: dict[str, dict[str, dict]] = {}
         for i in items:
             vn, icode = text(i["vn"]), text(i["icode"])
             fee = icode in fee_icodes if special else (text(i.get("code")) in claimed.get(vn, set()) and not i.get("is_drug"))
-            default = fee or icode in extra.get(vn, set())
+            default = service.key != "dmrem"  # 6) sends the HbA1c visits without charges: they are billed on the 18-file page
             send = True if fee else chosen.get((vn, icode), default)
             plan.setdefault(vn, {})[icode] = {"send": send, "locked": fee, "default": default}
         return plan
@@ -217,10 +223,39 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
         service, vn = _service(body.get("service")), text(body.get("vn"))
         codes = {text(c) for c in body.get("codes") or []}
         plan = send_plan(service, {vn: codes}).get(vn, {})
+        funds, right = fund_rates(vn, {i["adp"] for i in out.get("items", []) if i.get("adp")})
         for i in out.get("items", []):
             p = plan.get(i["icode"], {"send": False, "locked": False, "default": False})
-            i.update(send=p["send"], locked=p["locked"], default=p["default"])
+            f = funds.get(i.get("adp"), {})
+            i.update(send=p["send"], locked=p["locked"], default=p["default"], fund_type=f.get("type", ""),
+                     funds=f.get("funds", []), claimable=any(x["fund"] == right["column"] for x in f.get("funds", [])))
+        out["right"] = right
         return out
+
+    def fund_rates(vn: str, codes: set[str]) -> tuple[dict[str, dict], dict]:
+        """ADP code -> {"type", "funds": [{fund, label, rate}]} from HOSxP's nhso_adp_code (a rate above 0 is a fund the
+        code can be claimed from), and the visit's own right."""
+        visit = (q(f"SELECT o.pttype, seekhipdatas(o.pttype,0) maininscl FROM ovst o WHERE o.vn={nhso18.lit(vn)}") or [{}])[0]
+        inscl = text(visit.get("maininscl"))
+        column = FUND_OF_INSCL.get(inscl, "")
+        right = {"inscl": inscl, "column": column, "label": FUND_LABELS.get(column, inscl or "ไม่ทราบสิทธิ")}
+        if not codes:
+            return {}, right
+        out: dict[str, dict] = {}
+        for r in q(f"""
+                SELECT c.nhso_adp_code code, t.nhso_adp_type_name type, c.UCS, c.OFC, c.LGO, c.SSS, c.fs, c.UCEP, c.PPFS
+                FROM nhso_adp_code c LEFT JOIN nhso_adp_type t ON t.nhso_adp_type_id=c.nhso_adp_type_id
+                WHERE c.nhso_adp_code IN ({nhso18.lit_list(codes)})"""):
+            funds = []
+            for column, label in FUND_LABELS.items():
+                try:
+                    rate = float(r.get(column) or 0)
+                except (TypeError, ValueError):
+                    rate = 0.0
+                if rate > 0:
+                    funds.append({"fund": column, "label": label, "rate": f"{rate:.2f}"})
+            out[text(r["code"])] = {"type": text(r.get("type")), "funds": funds}
+        return out, right
 
     def _detail(body: dict) -> dict:
         vn = text(body.get("vn"))
@@ -467,9 +502,19 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
         # Only the claimed fees and what the user ticked in the cost tab go into the ZIP (CHT/CHA add up to those).
         plan = send_plan(service, claimed)
         excluded = {(vn, icode) for vn, entries in plan.items() for icode, p in entries.items() if not p["send"]}
-        ticked = {vn: {text(i.get("code")) for i in ppfs.visit_items(q, [vn]) if text(i.get("code"))
-                       and plan.get(vn, {}).get(text(i["icode"]), {}).get("send") and not plan[vn][text(i["icode"])]["locked"]}
-                  for vn in vns}
+        items = ppfs.visit_items(q, vns)
+        sent_items = [i for i in items if plan.get(text(i["vn"]), {}).get(text(i["icode"]), {}).get("send")]
+        # ADP codes of the other items sent; a drug goes to DRU only (DMPA carries its fee's code FP003_4).
+        ticked: dict[str, set[str]] = {}
+        drug_adp: set[tuple[str, str, Decimal]] = set()
+        for i in sent_items:
+            vn, code = text(i["vn"]), text(i.get("code"))
+            if not code:
+                continue
+            if i.get("is_drug"):
+                drug_adp.add((vn, code, Decimal(str(i.get("unitprice") or 0)).quantize(Decimal("0.01"))))
+            elif not plan[vn][text(i["icode"])]["locked"]:
+                ticked.setdefault(vn, set()).add(code)
         config, groups = svc.load_setup(q, settings.hcode)
         visits = nhso18.opd_contexts(q, vns, groups, config.zone)
         if not visits:
@@ -479,6 +524,8 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
             rate = ppfs_ironchild.RATE if service.key == "ironchild" else ppfs_anemiachild.RATE
             ppfs_ironchild.rewrite_adp(data, claimed, rate)  # 10000 -> the e-Claim code chosen for the visit
         data = ppfs.only_claimed(data, {vn: claimed[vn] | ticked.get(vn, set()) for vn in vns}, keep_lab=service.key == "dmrem")
+        data["ADP"] = [r for r in data["ADP"]
+                       if (text(r.get("SEQ")), text(r.get("CODE")), Decimal(str(r.get("RATE") or 0)).quantize(Decimal("0.01"))) not in drug_adp]
         if service.key == "dmrem":
             hba1c = ppfs_dmrem.lab_rows(q, vns, settings.hcode)
             done = {(r["SEQ"], r["LABTEST"]) for r in hba1c}

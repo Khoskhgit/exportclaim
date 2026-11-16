@@ -429,14 +429,17 @@ async function openDrawer(r) {
       sentTotal.textContent = `ส่ง ${on.length} รายการ รวม ${money(on.reduce((s, i) => s + Number(i.amount), 0))} บาท (CHT/CHA ใน ZIP เท่ากับยอดนี้)`;
     };
     showTotal();
-    const costs = [el("p", { class: "muted-note" }, kind === "dmrem"
+    const right = data.right || {};
+    const costs = [el("p", { class: "fund-right" }, "สิทธิของ visit นี้: ", el("strong", {}, right.label || "—"),
+      " · กองทุนที่เบิกได้อ่านจากอัตราในตารางรหัส ADP ของ HOSxP (สีเขียว = เบิกได้ในสิทธินี้)"),
+      el("p", { class: "muted-note" }, kind === "dmrem"
       ? "ข้อนี้ไม่มีค่าบริการ ZIP ส่ง visit ที่ตรวจ HbA1c ของขั้นนี้พร้อมแฟ้ม LAB (HbA1c = LABTEST 05) โดยไม่มีค่าใช้จ่าย ค่ารักษาของ visit ส่งตามปกติที่หน้า 18 แฟ้ม"
-      : `ค่าบริการ ${[...claimed].join(" / ")} ส่งเสมอ · ติ๊กรายการอื่นที่ต้องการส่งไปด้วย (เช่น ยาที่จ่าย) ยาที่ติ๊กจะอยู่ในแฟ้ม DRU ไม่แก้ข้อมูลใน HOSxP`),
+      : `ค่าบริการ ${[...claimed].join(" / ")} ส่งเสมอ · รายการอื่นติ๊กไว้ทั้งหมด ติ๊กออกรายการที่ไม่ต้องการส่ง (ยาอยู่ในแฟ้ม DRU) ไม่แก้ข้อมูลใน HOSxP`),
       sentTotal,
-      table(["ส่ง", "รายการ", "ADP", { label: "จำนวน", num: true }, { label: "รวม", num: true }], data.items.map((i) => {
+      table(["ส่ง", "รายการ", "ADP", "กองทุนที่เบิกได้", { label: "จำนวน", num: true }, { label: "รวม", num: true }], data.items.map((i) => {
         const row = el("tr", { class: i.send ? "" : "excluded" });
         const box = el("input", { type: "checkbox", checked: i.send, disabled: i.locked, "aria-label": `ส่ง ${i.name}`,
-          title: i.locked ? "ค่าบริการที่เบิก ส่งเสมอ" : i.default ? "ส่งโดยค่าเริ่มต้น" : "",
+          title: i.locked ? "ค่าบริการที่เบิก ส่งเสมอ" : "ติ๊กออกถ้าไม่ต้องการส่ง",
           onchange: async (e) => {
             try {
               await api("/api/ppfs/item", { service: kind, vn: r.vn, icode: i.icode, include: e.target.checked });
@@ -444,8 +447,14 @@ async function openDrawer(r) {
             } catch (err) { e.target.checked = !e.target.checked; notice(err.message); }
           } });
         row.append(el("td", { class: "check" }, box),
-          el("td", {}, i.name, i.locked ? el("span", { class: "sub" }, "ค่าบริการที่เบิก") : i.default ? el("span", { class: "sub" }, "ส่งโดยค่าเริ่มต้น") : null),
-          el("td", { class: "mono" }, i.adp || "—"), el("td", { class: "num" }, i.qty), el("td", { class: "num" }, money(i.amount)));
+          el("td", {}, i.name, i.locked ? el("span", { class: "sub" }, "ค่าบริการที่เบิก")
+            : i.adp && !i.claimable ? el("span", { class: "sub warn-text" }, "สิทธินี้เบิกไม่ได้") : null),
+          el("td", { class: "mono" }, i.adp || "—"),
+          el("td", { class: "funds" }, !i.adp ? el("span", { class: "muted" }, "ไม่มีรหัส ADP")
+            : !i.funds.length ? el("span", { class: "badge b-warn" }, "ไม่มีอัตราในกองทุนใด")
+            : el("span", {}, ...i.funds.map((f) => el("span", { class: `fund-chip${f.fund === right.column ? " here" : ""}`, title: f.label },
+                `${f.label} ${money(f.rate)}`)), i.fund_type ? el("span", { class: "sub" }, i.fund_type) : null)),
+          el("td", { class: "num" }, i.qty), el("td", { class: "num" }, money(i.amount)));
         return row;
       }))];
     body.replaceChildren(...tabs([

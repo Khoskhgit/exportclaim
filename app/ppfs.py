@@ -217,7 +217,7 @@ def visit_items(q: Select, vns: Iterable[str]) -> list[dict]:
     if not vns:
         return []
     return q(f"""
-        SELECT oo.vn, oo.icode, d.nhso_adp_code code, EXISTS(SELECT 1 FROM drugitems di WHERE di.icode=oo.icode) is_drug
+        SELECT oo.vn, oo.icode, d.nhso_adp_code code, oo.unitprice, EXISTS(SELECT 1 FROM drugitems di WHERE di.icode=oo.icode) is_drug
         FROM opitemrece oo LEFT JOIN s_drugitems d ON d.icode=oo.icode
         WHERE oo.vn IN ({lit_list(vns)})""")
 
