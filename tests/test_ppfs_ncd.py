@@ -67,3 +67,10 @@ def test_missing_lab_price_and_self_paid():
                                          labs={"v1": {"TC": "200"}}))}
     assert codes(rows["v1|12004"])[1] == ["NO_LAB", "PRICE"]
     assert "SELF_PAID" in codes(rows["v2|12003"])[0]
+
+
+def test_a_screening_visit_without_the_fee():
+    unbilled = {**item("v9", "2026-11-05", FPG, hn="9", qty=0, amount=0), "code": FPG}
+    rows = check({**data([]), "unbilled": [unbilled], "labs": {"v9": {"FPG": "98"}}})
+    (row,) = rows
+    assert (row.key, codes(row)[0]) == ("v9|12003", ["NO_ITEM"]) and "3003780" in row.errors[0]["message"]

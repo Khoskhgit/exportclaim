@@ -9,6 +9,10 @@ The year is the fiscal year (October-September), as the user chose for every PPF
 screening day itself is fine (the screening found it): that is only a warning. The diabetes risk factors in the
 announcement's note (BMI, blood pressure, family history, …) are not checked: HOSxP has no single place for them.
 The labs are this hospital's lab_items: 76 Glucose serum/plasma (FPG), 102 Cholesterol, 91 HDL.
+
+A screening visit with no fee keyed (diagnosis Z13.1 for diabetes, Z13.6 for the lipid screen, at the age of the
+service) is shown as an error so the fee can be keyed in HOSxP: the fee items in use are 3003780 (FPG) and 3003899
+(TC + HDL); the ones keyed until July 2569 (3004130, 3004131) were cancelled.
 """
 from __future__ import annotations
 
@@ -27,6 +31,7 @@ LABS = {FPG: {76: "FPG"}, LIPID: {102: "TC", 91: "HDL"}}
 DM = "^E1[0-4]"
 LIPID_DX = "^E78"
 LIPID_DRUGS = "STATIN|GEMFIBROZIL|FENOFIBRATE|EZETIMIBE"
+SCREEN_DX = {FPG: "^Z131", LIPID: "^Z136"}  # the screening diagnosis that should come with each fee
 
 VISIT_COLS = """o.vn, o.hn, o.vstdate, o.vsttime, o.an, o.pttype, ptt.name pttype_name,
           CONCAT(IFNULL(p.pname,''),p.fname,' ',p.lname) ptname, p.cid, p.nationality, p.sex, v.age_y"""
@@ -73,7 +78,17 @@ def fetch(q: Select, start: date, end: date) -> dict:
           IFNULL(oo.qty,0)*IFNULL(oo.unitprice,0) amount
         FROM ovst o JOIN opitemrece oo ON oo.vn=o.vn JOIN s_drugitems d ON d.icode=oo.icode {VISIT_JOINS}
         WHERE o.vstdate BETWEEN {lit(start)} AND {lit(end)} AND d.nhso_adp_code IN ({lit_list(CODES)}) AND {FEE}""")
-    hns = sorted({text(r["hn"]) for r in items})
+    unbilled = []
+    for code, dx in SCREEN_DX.items():
+        low, high = AGES[code]
+        for r in q(f"""
+                SELECT {VISIT_COLS} FROM ovst o {VISIT_JOINS}
+                WHERE o.vstdate BETWEEN {lit(start)} AND {lit(end)} AND IFNULL(o.an,'')='' AND v.age_y BETWEEN {low} AND {high}
+                  AND EXISTS(SELECT 1 FROM ovstdiag x WHERE x.vn=o.vn AND x.icd10 REGEXP {lit(dx)})
+                  AND NOT EXISTS(SELECT 1 FROM opitemrece oo JOIN s_drugitems d ON d.icode=oo.icode
+                                 WHERE oo.vn=o.vn AND d.nhso_adp_code={lit(code)} AND {FEE})"""):
+            unbilled.append({**r, "code": code})
+    hns = sorted({text(r["hn"]) for r in items + unbilled})
     since = min(fiscal_range(fiscal_year(start))[0], start - timedelta(days=366 * LIPID_YEARS))
     history = q(f"""
         SELECT oo.vn, o.hn, o.vstdate, d.nhso_adp_code code FROM ovst o JOIN opitemrece oo ON oo.vn=o.vn
@@ -81,8 +96,8 @@ def fetch(q: Select, start: date, end: date) -> dict:
         WHERE o.hn IN ({lit_list(hns)}) AND o.vstdate BETWEEN {lit(since)} AND {lit(fiscal_range(fiscal_year(end))[1])}
           AND d.nhso_adp_code IN ({lit_list(CODES)}) AND {FEE} AND IFNULL(oo.qty,0)>0
         GROUP BY oo.vn, d.nhso_adp_code""") if hns else []
-    return {"items": items, "history": history, "labs": _labs(q, sorted({text(r["vn"]) for r in items})),
-            **histories(q, hns)}
+    return {"items": items, "unbilled": unbilled, "history": history,
+            "labs": _labs(q, sorted({text(r["vn"]) for r in items + unbilled})), **histories(q, hns)}
 
 
 def _since(first: date | None, day: date | None) -> str:
@@ -105,6 +120,11 @@ def check(data: dict, sent: dict[tuple[str, str], str] | None = None) -> list[Ro
         row.qty += Decimal(str(r.get("qty") or 0))
         row.amount += _money(r.get("amount"))
         row.self_paid |= text(r.get("paidst")) == SELF_PAID
+    for r in data.get("unbilled", []):  # a screening diagnosis with no fee: shown so the fee can be keyed
+        vn, code = text(r["vn"]), text(r["code"])
+        if (vn, code) not in rows:
+            info.setdefault(vn, r)
+            rows[(vn, code)] = Row(key=f"{vn}|{code}", vn=vn, code=code, item_name="(ยังไม่คีย์ค่าบริการ)")
 
     claims: dict[tuple[str, str], list[tuple[date, str]]] = {}
     for h in data["history"]:
@@ -142,6 +162,9 @@ def check(data: dict, sent: dict[tuple[str, str], str] | None = None) -> list[Ro
         if text(r.get("an")):
             row.add(ERROR, "IPD", "visit นี้ Admit แล้ว (มี AN)")
         self_paid_error(row)
+        if not billed:
+            fee = "3003780 (FBS 40 บาท)" if code == FPG else "3003899 (TC + HDL 160 บาท)"
+            row.add(ERROR, "NO_ITEM", f"มีรหัส {SCREEN_DX[code][1:4]}.{SCREEN_DX[code][4]} แต่ยังไม่คีย์ค่าบริการ {code} ใน HOSxP (รายการ {fee})")
         low, high = AGES[code]
         if age is not None and not low <= int(age) <= high:
             row.add(ERROR, "AGE", f"อายุ {int(age)} ปี {name} เบิกได้เฉพาะอายุ {low}–{high} ปี")
