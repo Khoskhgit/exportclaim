@@ -45,9 +45,8 @@ def window_start(reg_date: str) -> date:
 def stop_day(registrations: list[dict]) -> date | None:
     """The first day off the drugs from the e-Claim registry: the earliest วันที่เข้ารับบริการ of its Y registrations.
 
-    With it the remission is counted from that day: the drugs dispensed before it are ignored and the first test of
-    stage 1 must be on or after it (a drug dispensed after it still breaks the remission). Without it the drugs in
-    HOSxP decide (none from 3 months before the first test)."""
+    With it the registration is the first test (stages_registered): the drugs dispensed before it are ignored, a drug
+    dispensed after it still breaks the remission. Without it the HbA1c and drugs in HOSxP decide (stages)."""
     days = [date.fromisoformat(r["visit_date"]) for r in registrations if r.get("status") == "Y" and r.get("visit_date")]
     return min(days, default=None)
 DRUG_BEFORE_DAYS = 90
@@ -143,6 +142,36 @@ def stages(tests: list[tuple[date, Decimal, dict]], drug_days: list[date]) -> di
     return {}
 
 
+def stages_registered(tests: list[tuple[date, Decimal, dict]], drug_days: list[date], stop: date) -> dict[int, dict]:
+    """The stages of a patient in the e-Claim registry: the registration (its วันที่เข้ารับบริการ, `stop`) is the first
+    test; the 2nd (stage 1) and 3rd (stage 2) are the next HbA1c below 6.5% at least 3 months after the one before,
+    with no glucose-lowering drug dispensed (qty > 0) in between. A result of 6.5% or more on the way ends it; a lower
+    one sooner than 3 months is passed over.
+
+    The HbA1c of the registration day in HOSxP is used for the first test when there is one, otherwise the first test
+    has no visit (value None)."""
+    first = next((t for t in tests if t[0] == stop), (stop, None, {}))
+    after = [t for t in tests if t[0] > stop]
+
+    def following(prev: date) -> tuple | None:
+        for t in after:
+            if t[0] <= prev:
+                continue
+            if t[1] >= LIMIT:
+                return None
+            if (t[0] - prev).days >= GAP_DAYS:
+                return t if not any(prev < d <= t[0] for d in drug_days) else None
+        return None
+
+    second = following(stop)
+    if not second:
+        return {}
+    out = {1: {"visit": second[2], "tests": [first, second]}}
+    if third := following(second[0]):
+        out[2] = {"visit": third[2], "tests": [first, second, third]}
+    return out
+
+
 def check(data: dict, start: date, end: date, sent: dict[tuple[str, str], str] | None = None,
           registry: dict[str, list[dict]] | None = None) -> list[Row]:
     """registry: PID -> its e-Claim registrations (None = no registry imported yet, so it is not checked)."""
@@ -177,7 +206,7 @@ def check(data: dict, start: date, end: date, sent: dict[tuple[str, str], str] |
             since = stop
             hn_drugs = [x for x in hn_drugs if x > stop]
         tests = [t for t in tests if t[0] >= since]
-        for stage, found in stages(tests, hn_drugs).items():
+        for stage, found in (stages_registered(tests, hn_drugs, stop) if stop else stages(tests, hn_drugs)).items():
             visit = found["visit"]
             day = _day(visit["vstdate"])
             if not (start <= day <= end):
@@ -200,7 +229,8 @@ def check(data: dict, start: date, end: date, sent: dict[tuple[str, str], str] |
             row.extra = {"stage": stage, "age": int(age) if age is not None else None, "gaps": gaps,
                          "registered": reg["reg_date"] if reg else "", "registry_checked": registry is not None,
                          "stopped": stop.isoformat() if stop else "",
-                         "tests": [{"date": d.isoformat(), "value": f"{v}", "vn": text(t["vn"])} for d, v, t in found["tests"]],
+                         "tests": [{"date": d.isoformat(), "value": "" if v is None else f"{v}", "vn": text(t.get("vn"))}
+                                   for d, v, t in found["tests"]],
                          "all_tests": [{"date": d.isoformat(), "value": f"{v}"} for d, v, _ in tests],
                          "last_drug": drug[0].isoformat() if drug else "", "last_drug_name": drug[1] if drug else "",
                          "maininscl": text(visit.get("maininscl"))}
@@ -258,12 +288,12 @@ def follow_up(tests: list[tuple[date, Decimal]], drug_days: list[date], today: d
     state: "done" (stage 2 reached), "wait3" (stage 1 reached, the 3rd test is due), "wait2" (one test below 6.5% off
     drugs, the 2nd is due), "not_yet" (no test below 6.5% off drugs yet), "no_test"."""
     last_drug = max(drug_days, default=None)
-    if stop:  # the first day off the drugs from the registry (stop_day)
+    if stop:  # the registration is the first test (stages_registered)
         since, drug_days = stop, [x for x in drug_days if x > stop]
     if since:
         tests = [t for t in tests if t[0] >= since]
     rows = [(d, v, {}) for d, v in tests]
-    found = stages(rows, drug_days)
+    found = stages_registered(rows, drug_days, stop) if stop else stages(rows, drug_days)
     if 2 in found:
         d3 = found[2]["tests"][2][0]
         return {"state": "done", "stage": 2, "since": found[2]["tests"][1][0], "next_from": None, "next_to": None,
@@ -280,6 +310,14 @@ def follow_up(tests: list[tuple[date, Decimal]], drug_days: list[date], today: d
             note = f"ตรวจครั้งถัดไปเร็วไป ({(later[0][0] - d2).days} วัน)"
         return {"state": state, "stage": 1, "since": d2, "next_from": nxt, "next_to": d2 + timedelta(days=183),
                 "reached": d2, "last_drug": last_drug, "note": note}
+    if stop:  # registered: waiting for the 2nd test, 3 months after the registration
+        later = [t for t in tests if t[0] > stop]
+        drug_after = any(x > stop for x in drug_days)
+        note = "ยังได้ยาลดน้ำตาลหลังลงทะเบียน" if drug_after else (
+            f"ผลครั้งถัดไป {later[0][1]}% ไม่ผ่าน" if later and later[0][1] >= LIMIT else "")
+        return {"state": "not_yet" if note else "wait2", "stage": 0, "since": stop,
+                "next_from": None if note else stop + timedelta(days=GAP_DAYS), "next_to": None, "reached": None,
+                "last_drug": last_drug, "note": note}
     if not tests:
         return {"state": "no_test", "stage": 0, "since": None, "next_from": None, "next_to": None, "reached": None,
                 "last_drug": last_drug}
@@ -298,7 +336,8 @@ def stage_visits(picked: list[Row]) -> list[str]:
     seen: dict[str, str] = {}
     for r in picked:
         for t in r.extra.get("tests", []):
-            seen.setdefault(t["vn"], t["date"])
+            if t["vn"]:  # the registration has no visit when HOSxP has no HbA1c that day
+                seen.setdefault(t["vn"], t["date"])
     return sorted(seen, key=lambda vn: (seen[vn], vn))
 
 

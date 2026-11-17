@@ -55,7 +55,7 @@ const COLUMNS = {
   dmrem: [
     ["อายุ (ปี)", "age", true, (r) => (r.extra.age === null || r.extra.age === undefined ? dash() : String(r.extra.age))],
     ["HbA1c ที่ใช้ (ห่าง วัน)", "", false, (r) => el("span", {}, ...r.extra.tests.map((t, i) => el("span", { class: "sub" },
-      `${toDmy(t.date)} · ${t.value}%${i ? ` · ห่าง ${r.extra.gaps[i - 1]} วัน` : ""}`)))],
+      `${toDmy(t.date)} · ${t.value ? `${t.value}%` : "ลงทะเบียน"}${i ? ` · ห่าง ${r.extra.gaps[i - 1]} วัน` : ""}`)))],
     ["ลงทะเบียน e-Claim", "registered", false, (r) => (r.extra.registered ? toDmy(r.extra.registered) : r.extra.registry_checked ? el("span", { class: "badge b-error" }, "ไม่พบ") : el("span", { class: "muted" }, "ยังไม่นำเข้าทะเบียน"))],
     ["ยาลดน้ำตาลครั้งล่าสุด", "last_drug", false, (r) => (r.extra.last_drug ? el("span", {}, toDmy(r.extra.last_drug), el("span", { class: "sub" }, r.extra.last_drug_name)) : el("span", { class: "badge b-warn" }, "ไม่เคย"))],
     ["สิทธิหลัก", "", false, (r) => r.extra.maininscl || dash()],
@@ -239,10 +239,10 @@ async function openDrawer(r) {
     const own = kind === "dmrem" ? [
       ["อายุ", r.extra.age === null || r.extra.age === undefined ? "—" : `${r.extra.age} ปี`], ["สิทธิหลัก", r.extra.maininscl],
       ["ขั้น", r.extra.stage === 1 ? "1 เข้าสู่ระยะสงบ (4,000 บาท)" : "2 ยังคงระยะสงบ (2,000 บาท)"],
-      ["HbA1c ที่ใช้", r.extra.tests.map((t, i) => `${toDmy(t.date)} ${t.value}%${i ? ` (ห่าง ${r.extra.gaps[i - 1]} วัน)` : ""}`).join(" → ")],
+      ["HbA1c ที่ใช้", r.extra.tests.map((t, i) => `${toDmy(t.date)} ${t.value ? `${t.value}%` : "(ลงทะเบียน)"}${i ? ` (ห่าง ${r.extra.gaps[i - 1]} วัน)` : ""}`).join(" → ")],
       ["ลงทะเบียน e-Claim", r.extra.registered ? toDmy(r.extra.registered) : r.extra.registry_checked ? "ไม่พบในทะเบียน" : "ยังไม่ได้นำเข้าทะเบียน"],
       ["ยาลดน้ำตาลครั้งล่าสุด", r.extra.last_drug ? `${toDmy(r.extra.last_drug)} · ${r.extra.last_drug_name}` : "ไม่เคยได้ยา"],
-      ["เริ่มนับหยุดยา", r.extra.stopped ? `${toDmy(r.extra.stopped)} (วันที่เข้ารับบริการในทะเบียน)` : "ไม่มีในทะเบียน ใช้การจ่ายยาใน HOSxP (qty > 0)"],
+      ["ครั้งที่ 1 (หยุดยา)", r.extra.stopped ? `${toDmy(r.extra.stopped)} วันที่เข้ารับบริการในทะเบียน e-Claim` : "ไม่มีในทะเบียน ใช้ผล HbA1c และการจ่ายยาใน HOSxP (qty > 0)"],
       ["รหัส ADP ที่ส่ง", r.extra.adp || "ยังไม่ได้ตั้ง"],
     ] : kind === "anemiachild" ? [
       ["อายุ", r.extra.age_text ? `${r.extra.age_text} (${r.extra.months} เดือน)` : "—"],

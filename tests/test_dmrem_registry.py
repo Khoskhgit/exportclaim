@@ -109,3 +109,22 @@ def test_follow_up_counts_from_the_stop_day():
     f = follow_up(series, [d("2026-03-20")], d("2026-06-01"), stop=d("2026-04-10"))
     assert (f["state"], f["next_from"], f["last_drug"]) == ("wait2", d("2026-07-09"), d("2026-03-20"))
     assert follow_up(series, [d("2026-03-20")], d("2026-06-01"))["state"] == "not_yet"
+
+
+def test_the_registration_is_the_first_test():
+    from app.ppfs_dmrem import stage_visits, stages_registered
+    tests = [(d("2026-04-15"), Decimal("6.0"), {"vn": "a"}), (d("2026-07-24"), Decimal("5.2"), {"vn": "b"}),
+             (d("2026-11-13"), Decimal("5.1"), {"vn": "c"})]
+    found = stages_registered(tests, [], d("2026-04-10"))  # no HbA1c on the registration day; one too soon is passed over
+    assert [t[0] for t in found[1]["tests"]] == [d("2026-04-10"), d("2026-07-24")] and found[1]["tests"][0][1] is None
+    assert found[2]["visit"]["vn"] == "c"
+    assert stages_registered(tests, [d("2026-08-01")], d("2026-04-10")).keys() == {1}  # a drug before the 3rd test
+    high = [(d("2026-05-20"), Decimal("6.8"), {"vn": "x"})] + tests[1:]
+    assert stages_registered(high, [], d("2026-04-10")) == {}  # 6.5% or more on the way
+    data = {"tests": [hba1c("v2", "2026-07-24", "5.2")], "drugs": [], "e11": {"1"}}
+    reg = {"status": "Y", "reg_date": "2026-04-10", "expire_date": "", "visit_date": "2026-04-10"}
+    (row,) = check(data, date(2025, 10, 1), date(2026, 9, 30), registry={"1" * 13: [reg]})
+    assert [(t["date"], t["value"], t["vn"]) for t in row.extra["tests"]] == [("2026-04-10", "", ""), ("2026-07-24", "5.2", "v2")]
+    assert stage_visits([row]) == ["v2"]
+    wait = follow_up([], [], d("2026-05-01"), stop=d("2026-04-10"))
+    assert (wait["state"], wait["next_from"]) == ("wait2", d("2026-07-09"))
