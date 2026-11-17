@@ -18,7 +18,16 @@ const shortLabel = (label) => { const chars = [...label]; return chars.length > 
 // Columns that differ by service: [header, sort key, numeric, cell].
 const uptBadge = (v) => !v ? dash() : el("span", { class: `badge ${/pos/i.test(v) ? "b-warn" : "b-ok"}` }, v);
 const flag = (on, yes, no = "—", tone = "b-ok") => (on ? el("span", { class: `badge ${tone}` }, yes) : el("span", { class: "muted" }, no));
+const KTB_TONE = { "1B0046_0": "b-ok", "1B004N": "b-ok", "1B0046_1": "b-error", "1B0046_2": "b-warn", "1B004P": "b-error" };
 const COLUMNS = {
+  cervix: [
+    ["อายุ (ปี)", "age", true, (r) => (r.extra.age === null || r.extra.age === undefined ? dash() : String(r.extra.age))],
+    ["วิธี / ผล lab", "result", false, (r) => el("span", {}, r.extra.method, el("span", { class: "sub" }, r.extra.result || "ไม่มีผล"))],
+    ["ADP ที่ส่ง KTB", "", false, (r) => (KTB_TONE[r.code] ? el("span", {}, el("span", { class: `badge ${KTB_TONE[r.code]}` }, r.code),
+      el("span", { class: "sub" }, `TYPE ${r.extra.adp_type} แทน ${r.extra.hosxp_adp || "—"}`)) : el("span", { class: "badge b-error" }, "เลือกไม่ได้"))],
+    ["Z12.4", "", false, (r) => (r.extra.dx ? "✓" : dash())],
+    ["คัดกรองครั้งก่อน", "last", false, (r) => (r.extra.last ? el("span", {}, toDmy(r.extra.last), el("span", { class: "sub" }, `VN ${r.extra.last_vn}`)) : dash())],
+  ],
   instrument: [
     ["AuthenCode", "authen", false, (r) => r.extra.authen || el("span", { class: "badge b-warn" }, "ไม่มี")],
     ["คนพิการ", "", false, (r) => (r.extra.disabled_right ? el("span", { class: "badge b-ok" }, "สิทธิผู้พิการ")
@@ -83,7 +92,7 @@ const COLUMNS = {
     ["ช่วงอายุ / ชนิดยา / ADP", "", false, (r) => el("span", {}, r.extra.band, el("span", { class: "sub" }, r.extra.form ? `${r.extra.form} · ${r.extra.adp || "ไม่มีรหัส"}` : "ไม่ทราบชนิดยา"))],
   ],
 };
-const COUNT_LABEL = { instrument: "จำนวน", postnatal: "ครั้งที่", pregtest: "ครั้งที่ในปีงบ", fp: "สะสมในปีงบ", ncd: "ครั้งที่", anemia: "ครั้งที่", iron: "ครั้งที่ในปีงบ", fluoride: "ครั้งที่ในปีงบ", ironchild: "ครั้งที่ในปีงบ", anemiachild: "ครั้งที่ในช่วงอายุ", dmrem: "ขั้น" };
+const COUNT_LABEL = { cervix: "ครั้งที่", instrument: "จำนวน", postnatal: "ครั้งที่", pregtest: "ครั้งที่ในปีงบ", fp: "สะสมในปีงบ", ncd: "ครั้งที่", anemia: "ครั้งที่", iron: "ครั้งที่ในปีงบ", fluoride: "ครั้งที่ในปีงบ", ironchild: "ครั้งที่ในปีงบ", anemiachild: "ครั้งที่ในช่วงอายุ", dmrem: "ขั้น" };
 function labText(labs) {
   const parts = Object.entries(labs || {});
   if (!parts.length) return dash();
@@ -175,7 +184,10 @@ function renderPicked() {
   $("selected-count").textContent = `เลือก ${count.format(list.length)} รายการ`;
   $("selected-total").textContent = `ยอดเบิก ${money(total)} บาท`;
   $("export").disabled = !list.length;
-  $("fdh-send").disabled = $("fdh-prescreen").disabled = !list.length || state.fdhBusy;
+  const ktb = service() === "cervix";
+  $("fdh-send").disabled = $("fdh-prescreen").disabled = !list.length || state.fdhBusy || ktb;
+  $("fdh-send").title = $("fdh-prescreen").title = ktb ? "ข้อ 12 เบิกผ่าน KTB Health Platform ใช้ ZIP แทน" : "";
+  $("cervix-csv").disabled = !list.length;
 }
 
 function renderRules() {
@@ -246,7 +258,13 @@ async function openDrawer(r) {
     const data = await api("/api/ppfs/detail", { vn: r.vn, service: kind, codes: state.rows.filter((x) => x.vn === r.vn).map((x) => x.code) });
     if (state.current !== r.key) return;
     const b = data.birth;
-    const own = kind === "instrument" ? [
+    const own = kind === "cervix" ? [
+      ["อายุ", r.extra.age === null || r.extra.age === undefined ? "—" : `${r.extra.age} ปี`],
+      ["วิธี / ผล lab", `${r.extra.method} · ${r.extra.result || "ไม่มีผล"}`],
+      ["ADP ที่ส่ง KTB", KTB_TONE[r.code] ? `TYPE ${r.extra.adp_type} ${r.code} (แทน ${r.extra.hosxp_adp} ใน HOSxP)` : "เลือกไม่ได้"],
+      ["รหัส Z12.4 / Z01.4", r.extra.dx ? "มี" : "ไม่มี"],
+      ["คัดกรองครั้งก่อน (5 ปี)", r.extra.last ? `${toDmy(r.extra.last)} (VN ${r.extra.last_vn})` : "ไม่มี"],
+    ] : kind === "instrument" ? [
       ["AuthenCode", r.extra.authen || "ไม่มี"], ["สิทธิผู้พิการ", r.extra.disabled_right ? "ใช่" : "ไม่ใช่"],
       ["ทะเบียนคนพิการ", r.extra.deformed ? `${r.extra.deformed_no || "มี"}${r.extra.deformed_date ? ` · ลงทะเบียน ${toDmy(r.extra.deformed_date)}` : ""}` : "ไม่พบ"],
       ["รหัสในรายการ ADP", r.extra.in_list ? "ใช่" : "ไม่อยู่ในรายการ"],
@@ -309,7 +327,7 @@ async function openDrawer(r) {
       check.push(el("h3", {}, "ผลตรวจ"));
       check.push(el("ul", { class: "issues" }, ...issues.map((i) => el("li", { class: `issue ${i.level}` },
         el("div", { class: "issue-title" }, el("span", { class: `badge ${i.level === "error" ? "b-error" : "b-warn"}` }, i.level === "error" ? "Error" : "เตือน"), " ", i.message)))));
-      check.push(el("p", { class: "hint" }, kind === "instrument" ? "คำเตือนไม่บล็อกการส่ง ตรวจสิทธิคนพิการและรายการที่บันทึกในเว็บแล้วก่อนส่ง เพื่อไม่ให้เบิกซ้ำ" : kind === "dmrem" ? "ตรวจว่าลงทะเบียนผู้ป่วยในโปรแกรม e-Claim แล้ว และตั้งรหัส ADP ใน .env ก่อนส่ง" : kind === "anemiachild" ? "เบิกได้ช่วงอายุละ 1 ครั้ง (6–12 เดือน และ 3–5 ปี) รวมไม่เกิน 2 ครั้งต่อคน" : kind === "ironchild" ? "เบิกได้ช่วงละ 1 ครั้งต่อปีงบ ค่าบริการ 6–12 เดือนต้องให้เด็กอายุ 6–12 เดือน ค่าบริการ 2–5 ปีต้องให้เด็กอายุ 2–5 ปี" : kind === "fluoride" ? "เบิกได้อายุ 25–59 ปี ไม่เกิน 2 ครั้งต่อปีงบ ถ้ายังไม่คีย์ 15001 ให้คีย์ใน HOSxP แล้วค้นหาใหม่" : kind === "iron" ? "เบิกได้คนละ 1 ครั้งต่อปีงบ อายุ 13–45 ปี เฉพาะหญิงไทย รายที่ไม่ตรงเงื่อนไขไม่ต้องส่ง" : kind === "anemia" ? "เบิกได้คนละ 1 ครั้ง อายุ 13–24 ปี เฉพาะหญิงไทย รายที่ไม่ตรงเงื่อนไขไม่ต้องส่ง" : kind === "ncd" ? "ผู้ที่มีประวัติรักษาโรคมาก่อน หรือเบิกไปแล้วในรอบ ไม่ใช่กลุ่มที่เบิกได้ ไม่ต้องส่ง" : kind === "fp" ? "แก้ข้อมูลใน HOSxP (คีย์ค่าบริการ 18… ให้ตรงกับยาที่จ่าย) แล้วกดค้นหาอีกครั้ง" : kind === "pregtest" ? "แก้ข้อมูลใน HOSxP (รายการค่าบริการ / รหัสวินิจฉัย / ผล lab) แล้วกดค้นหาอีกครั้ง"
+      check.push(el("p", { class: "hint" }, kind === "cervix" ? "ลงผล HPV/Pap ใน HOSxP ให้แปลได้ (Negative / HPV Type … / NILM) แล้วค้นหาใหม่ คัดกรองซ้ำภายใน 5 ปีเบิกไม่ได้" : kind === "instrument" ? "คำเตือนไม่บล็อกการส่ง ตรวจสิทธิคนพิการและรายการที่บันทึกในเว็บแล้วก่อนส่ง เพื่อไม่ให้เบิกซ้ำ" : kind === "dmrem" ? "ตรวจว่าลงทะเบียนผู้ป่วยในโปรแกรม e-Claim แล้ว และตั้งรหัส ADP ใน .env ก่อนส่ง" : kind === "anemiachild" ? "เบิกได้ช่วงอายุละ 1 ครั้ง (6–12 เดือน และ 3–5 ปี) รวมไม่เกิน 2 ครั้งต่อคน" : kind === "ironchild" ? "เบิกได้ช่วงละ 1 ครั้งต่อปีงบ ค่าบริการ 6–12 เดือนต้องให้เด็กอายุ 6–12 เดือน ค่าบริการ 2–5 ปีต้องให้เด็กอายุ 2–5 ปี" : kind === "fluoride" ? "เบิกได้อายุ 25–59 ปี ไม่เกิน 2 ครั้งต่อปีงบ ถ้ายังไม่คีย์ 15001 ให้คีย์ใน HOSxP แล้วค้นหาใหม่" : kind === "iron" ? "เบิกได้คนละ 1 ครั้งต่อปีงบ อายุ 13–45 ปี เฉพาะหญิงไทย รายที่ไม่ตรงเงื่อนไขไม่ต้องส่ง" : kind === "anemia" ? "เบิกได้คนละ 1 ครั้ง อายุ 13–24 ปี เฉพาะหญิงไทย รายที่ไม่ตรงเงื่อนไขไม่ต้องส่ง" : kind === "ncd" ? "ผู้ที่มีประวัติรักษาโรคมาก่อน หรือเบิกไปแล้วในรอบ ไม่ใช่กลุ่มที่เบิกได้ ไม่ต้องส่ง" : kind === "fp" ? "แก้ข้อมูลใน HOSxP (คีย์ค่าบริการ 18… ให้ตรงกับยาที่จ่าย) แล้วกดค้นหาอีกครั้ง" : kind === "pregtest" ? "แก้ข้อมูลใน HOSxP (รายการค่าบริการ / รหัสวินิจฉัย / ผล lab) แล้วกดค้นหาอีกครั้ง"
         : "แก้ข้อมูลใน HOSxP (บันทึกหลังคลอด / วันคลอด / รายการค่าบริการ) แล้วกดค้นหาอีกครั้ง"));
     } else check.push(el("div", { class: "all-good" }, "✓ ผ่านการตรวจทั้งหมด พร้อมส่ง"));
 
@@ -410,6 +428,14 @@ async function openDrawer(r) {
           el("td", { class: "num" }, Number(h.drug_qty) ? h.drug_qty : "—"), el("td", { class: "num" }, money(h.amount)),
           el("td", {}, h.sent ? thaiDateTime(h.sent) : "—"))))
         : el("p", { class: "muted" }, "ไม่มีรายการ"));
+    } else if (kind === "cervix") {
+      post.push(el("h3", {}, "ประวัติคัดกรองมะเร็งปากมดลูก (HOSxP)"));
+      post.push(data.tests.length ? table(["วันที่", "VN", "วิธี", "ผล lab", "ADP KTB", { label: "ยอด", num: true }, "ส่งออก"],
+        data.tests.map((t) => el("tr", { class: t.vn === r.vn ? "current" : "" }, el("td", { class: "mono" }, toDmy(t.date)),
+          el("td", { class: "mono" }, t.vn), el("td", {}, t.method), el("td", {}, t.result || "—"),
+          el("td", { class: "mono" }, t.code || "—"), el("td", { class: "num" }, money(t.amount)), el("td", {}, t.sent ? thaiDateTime(t.sent) : "—"))))
+        : el("p", { class: "muted" }, "ไม่มี"));
+      post.push(el("p", { class: "muted-note" }, "เบิกได้คนละ 1 ครั้งทุก 5 ปี · ผล 16/18 นัด Colposcope · ผล HR อื่นนัด LBC (VIA, LBC, Colposcope ยังไม่มีใน HOSxP)"));
     } else if (kind === "instrument") {
       post.push(el("h3", {}, "อุปกรณ์ที่ได้รับย้อนหลัง 2 ปี (HOSxP)"));
       post.push(data.history.length ? table(["วันที่", "VN", "ADP", "รายการ", { label: "จำนวน", num: true }, { label: "ยอด", num: true }, "ส่งออก"],
@@ -468,6 +494,7 @@ async function openDrawer(r) {
     showTotal();
     const costs = [el("p", { class: "muted-note" }, kind === "dmrem"
       ? "ข้อนี้ไม่มีค่าบริการ ZIP ส่ง visit ที่ตรวจ HbA1c ของขั้นนี้พร้อมแฟ้ม LAB (HbA1c = LABTEST 05) · ติ๊กไว้ทุกรายการยกเว้นยาเบาหวาน ติ๊กออกรายการที่ไม่ต้องการส่ง ไม่แก้ข้อมูลใน HOSxP"
+      : kind === "cervix" ? `ค่าตรวจ HPV/Pap ส่งเสมอด้วยรหัส ${[...claimed].join(" / ")} · รายการอื่นไม่ติ๊กไว้ (KTB จับคู่กิจกรรมด้วยรหัส ADP) ติ๊กเพิ่มถ้าต้องการส่ง`
       : `ค่าบริการ ${[...claimed].join(" / ")} ส่งเสมอ · รายการอื่นติ๊กไว้ทั้งหมด ติ๊กออกรายการที่ไม่ต้องการส่ง (ยาอยู่ในแฟ้ม DRU) ไม่แก้ข้อมูลใน HOSxP`),
       sentTotal,
       table(["ส่ง", "รายการ", "ADP", "ประเภทบริการ PPFS", { label: "จำนวน", num: true }, { label: "รวม", num: true }], data.items.map((i) => {
@@ -491,7 +518,8 @@ async function openDrawer(r) {
       }))];
     body.replaceChildren(...tabs([
       { id: "check", label: "สรุปและผลตรวจ", badge: issues.length || undefined, alert: r.errors.length > 0, content: check },
-      kind === "instrument" ? { id: "instrument", label: "อุปกรณ์และเว็บ", badge: data.history.length || undefined, content: post }
+      kind === "cervix" ? { id: "cervix", label: "ประวัติคัดกรอง", badge: data.tests.length || undefined, content: post }
+        : kind === "instrument" ? { id: "instrument", label: "อุปกรณ์และเว็บ", badge: data.history.length || undefined, content: post }
         : kind === "dmrem" ? { id: "dmrem", label: "HbA1c และยา", badge: data.tests.length || undefined, content: post }
         : kind === "anemiachild" ? { id: "anemiachild", label: "ประวัติคัดกรอง", badge: data.claims.length || undefined, content: post }
         : kind === "ironchild" ? { id: "ironchild", label: "ประวัติรับยา", badge: data.claims.length || undefined, content: post }
@@ -515,6 +543,7 @@ const FOLLOW = {
   relapse: ["หลุดระยะสงบ", "b-error"], not_yet: ["ยังไม่เข้าเกณฑ์", "b-warn"], no_test: ["ยังไม่มีผล HbA1c", "b-warn"],
 };
 function dmremPanel() {
+  $("cervix-panel").hidden = service() !== "cervix";
   $("instrument-panel").hidden = service() !== "instrument";
   if (service() === "instrument") loadInstrumentWeb();
   $("dmrem-panel").hidden = service() !== "dmrem";
@@ -658,6 +687,28 @@ async function importInstrumentWeb(file) {
   } catch (err) { notice(err.message); }
 }
 
+// ------------------------------------------------------------- 12) KTB eligibility check CSV
+async function cervixCsv() {
+  const button = $("cervix-csv");
+  button.disabled = true;
+  try {
+    const hns = [...new Set(pickedRows().map((r) => r.hn))];
+    const response = await fetch("/api/ppfs/cervix/ktb-csv", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ hns }) });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      if (response.status === 401 && data.login) { window.location.assign("/login?error=expired"); return; }
+      throw new Error(data.detail || `ผิดพลาด (${response.status})`);
+    }
+    const blob = await response.blob();
+    const name = /filename="([^"]+)"/.exec(response.headers.get("Content-Disposition") || "")?.[1] || "PPFS12.CSV";
+    const link = el("a", { href: URL.createObjectURL(blob), download: name });
+    document.body.append(link); link.click(); link.remove();
+    setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+    const skipped = Number(response.headers.get("X-Skipped") || 0);
+    notice(`สร้าง ${name}: ${count.format(Number(response.headers.get("X-Rows") || 0))} คน${skipped ? ` (ข้าม ${skipped} คน: ไม่ใช่คนไทยหรือไม่มีเลขบัตร/วันเกิด)` : ""}`, "ok");
+  } catch (err) { notice(err.message); } finally { renderPicked(); }
+}
+
 async function loadServices() {
   try {
     state.services = await api("/api/ppfs/services");
@@ -685,6 +736,7 @@ $("filter").addEventListener("input", (e) => { state.text = e.target.value; rend
 $("select-ready").onclick = () => { visible().filter((r) => selectable(r) && !r.warnings.length && !r.sent).forEach((r) => state.selected.add(r.key)); render(); };
 $("select-none").onclick = () => { state.selected.clear(); render(); };
 $("export").onclick = exportZip;
+$("cervix-csv").onclick = cervixCsv;
 $("fdh-send").onclick = () => runFdh(false);
 $("fdh-prescreen").onclick = () => runFdh(true);
 $("fdh-test").onclick = async () => {

@@ -12,11 +12,11 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import Body, FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from fastapi.templating import Jinja2Templates
 
 from . import (auth, fdh, nhso18, nhso18_service as svc, ppfs, ppfs_anemia, ppfs_fluoride, ppfs_fp, ppfs_iron, ppfs_ironchild,
-               ppfs_anemiachild, ppfs_dmrem, ppfs_instrument,
+               ppfs_anemiachild, ppfs_cervix, ppfs_dmrem, ppfs_instrument,
                ppfs_ncd, ppfs_pregtest)
 from . import dmrem_registry
 from .config import Settings
@@ -147,16 +147,25 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
         chosen = store.choices(service.key, vns)
         # 6) ticks everything of the HbA1c visit except the glucose-lowering drugs (the user asked, 2026-11-17).
         dm_drugs = set(ppfs_dmrem.drug_icodes(q)) if service.key == "dmrem" else set()
+        # 12) locks the HPV/Pap test (its code is the KTB code chosen from the result) and leaves the rest unticked:
+        # KTB matches activities by ADP code, so other codes of the visit are only sent when the user ticks them.
+        cervix = set(ppfs_cervix.test_icodes(q)) if service.key == "cervix" else set()
         plan: dict[str, dict[str, dict]] = {}
         for i in items:
             vn, icode = text(i["vn"]), text(i["icode"])
-            fee = icode in fee_icodes if special else (text(i.get("code")) in claimed.get(vn, set()) and not i.get("is_drug"))
-            default = icode not in dm_drugs
+            if cervix:
+                fee = icode in cervix
+            else:
+                fee = icode in fee_icodes if special else (text(i.get("code")) in claimed.get(vn, set()) and not i.get("is_drug"))
+            default = icode not in dm_drugs and not cervix
             send = True if fee else chosen.get((vn, icode), default)
             plan.setdefault(vn, {})[icode] = {"send": send, "locked": fee, "default": default}
         return plan
 
     def check(service: ppfs.Service, start: date, end: date) -> list[ppfs.Row]:
+        if service.key == "cervix":
+            data = ppfs_cervix.fetch(q, start, end)
+            return ppfs_cervix.check(data, store.sent(sorted({text(r["vn"]) for r in data["items"]})))
         if service.key == "instrument":
             data = ppfs_instrument.fetch(q, start, end, settings.rcm_db, web_store.between(start, end))
             vns = sorted({text(r["vn"]) for r in data["items"] + data["web_visits"]})
@@ -240,11 +249,14 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
         by_icode = {i: "anemiachild" for i in ppfs_anemiachild.all_icodes(ppfs_anemiachild.bands(settings))}
         by_icode |= {i: "ironchild" for i in ppfs_ironchild.all_icodes(ppfs_ironchild.bands(settings))}
         hba1c = {text(r["icode"]) for r in q(f"SELECT icode FROM lab_items WHERE lab_items_code={ppfs_dmrem.HBA1C_LAB}")}
+        cervix_icodes = set(ppfs_cervix.test_icodes(q))
         out: dict[str, list[str]] = {}
         for icode, code in items:
-            found = [k for k, s in ppfs.SERVICES.items() if code and code in s.codes and k not in ("anemiachild", "ironchild", "dmrem")]
+            found = [k for k, s in ppfs.SERVICES.items() if code and code in s.codes and k not in ("anemiachild", "ironchild", "dmrem", "cervix")]
             if ppfs_instrument.is_instrument(code):
                 found.append("instrument")
+            if icode in cervix_icodes:
+                found.append("cervix")
             if icode in by_icode:
                 found = [by_icode[icode]]
             if icode in hba1c:
@@ -263,6 +275,20 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
                        "amount": money(i["amount"])} for i in d["items"]],
             "dx": [{"type": text(x["diagtype"]), "code": text(x["icd10"]), "name": text(x["name"])} for x in d["dx"]],
             "nationality": f"{text(d['visit'].get('nationality'))} {text(d['visit'].get('nationality_name'))}".strip()}
+        if _service(body.get("service")).key == "cervix":
+            d = ppfs_cervix.detail(q, vn)
+            if not d:
+                raise HTTPException(404, "ไม่พบ visit นี้ใน HOSxP")
+            sent = store.sent(sorted({text(t["vn"]) for t in d["tests"]}))
+            tests = []
+            for t in d["tests"]:
+                lab = d["icodes"].get(text(t["icode"]))
+                result = d["results"].get((text(t["vn"]), lab), "")
+                code = (ppfs_cervix.hpv_code if lab == ppfs_cervix.HPV_LAB else ppfs_cervix.pap_code)(result)
+                tests.append({"date": iso(t["vstdate"]), "vn": text(t["vn"]), "method": "HPV" if lab == ppfs_cervix.HPV_LAB else "Pap",
+                              "name": text(t["name"]), "result": result, "code": code or "", "qty": f"{float(t['qty'] or 0):g}",
+                              "amount": money(t["amount"]), "sent": sent.get((text(t["vn"]), code or ""), "")})
+            return {**common(d), "tests": tests}
         if _service(body.get("service")).key == "instrument":
             d = ppfs_instrument.detail(q, vn)
             if not d:
@@ -470,6 +496,24 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
         out.sort(key=lambda r: (order.get(r["state"], 9), r["next_from"] or "9999", r["hn"]))
         return {"rows": out, "summary": registry.summary(), "today": today.isoformat()}
 
+    # ------------------------------------------------------------ 12) KTB eligibility check file
+    @app.post("/api/ppfs/cervix/ktb-csv")
+    def cervix_ktb_csv(body: dict = Body(...)):
+        """The 9-column CSV (Health Platform Format) for the people of the picked rows, made on request and not kept."""
+        if not settings.hcode:
+            raise HTTPException(400, "ยังไม่ได้ตั้งค่า HCODE")
+        hns = [text(h) for h in body.get("hns") or [] if text(h)]
+        if not hns:
+            raise HTTPException(400, "ยังไม่ได้เลือกรายการ")
+        content, written, skipped = ppfs_cervix.ktb_csv(q, settings.hcode, hns)
+        if not written:
+            raise HTTPException(400, "ไม่มีผู้ป่วยที่สร้างไฟล์ได้ (ต้องเป็นคนไทย มีเลขบัตร 13 หลักและวันเกิด)")
+        name = f"PPFS12_{settings.hcode}_{datetime.now():%Y%m%d%H%M}.CSV"
+        log.info("cervix ktb csv rows=%s skipped=%s", written, skipped)
+        return Response(content, media_type="text/csv; charset=utf-8",
+                        headers={"Content-Disposition": f'attachment; filename="{name}"', "Cache-Control": "no-store",
+                                 "X-Rows": str(written), "X-Skipped": str(skipped)})
+
     # ------------------------------------------------------------ Instrument: the device web export (ปุ่ม "ตรวจสอบ")
     @app.get("/api/ppfs/instrument/web")
     def instrument_web_summary():
@@ -556,6 +600,8 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
         if not visits:
             raise HTTPException(400, "ไม่พบ visit ที่เลือก")
         data = nhso18.Builder(q, config, settings.rcm_db, ECLAIM_DB, excluded).run(visits)
+        if service.key == "cervix":  # the lab code (38608 / 38302) -> the KTB code chosen from the result
+            ppfs_cervix.rewrite_adp(data, claimed, {r.key: r.extra.get("hosxp_adp", "") for r in picked})
         if service.key in ("ironchild", "anemiachild"):
             rate = ppfs_ironchild.RATE if service.key == "ironchild" else ppfs_anemiachild.RATE
             ppfs_ironchild.rewrite_adp(data, claimed, rate)  # 10000 -> the e-Claim code chosen for the visit
@@ -614,6 +660,8 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
         fdh_user, hashed, source = fdh_account(request)
         if not source:
             raise HTTPException(400, "ยังไม่ได้ตั้งบัญชี FDH (ตั้งที่ปุ่ม \"บัญชี FDH\" ในหน้า 18 แฟ้ม หรือ FDH_USER / FDH_PASSWORD ใน .env)")
+        if _service(body.get("service")).key == "cervix":
+            raise HTTPException(400, "ข้อ 12 เบิกผ่าน Krungthai Digital Health Platform ให้สร้าง ZIP แล้วอัปโหลดที่ KTB (ไม่ส่ง FDH)")
         if prescreen:
             body = {**body, "confirm_resend": True}  # PreScreen only checks; it never needs the resend question.
         built = build(body)
