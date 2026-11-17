@@ -163,7 +163,7 @@ def check(data: dict, sent: dict[tuple[str, str], str] | None = None) -> list[Ro
         if age is not None and not RISK_AGE[0] <= int(age) <= AGE[1]:
             row.add(ERROR, "AGE", f"อายุ {int(age)} ปี อยู่นอก {RISK_AGE[0]}–{AGE[1]} ปี")
         if last:
-            row.add(ERROR, "WITHIN_5Y", f"คัดกรองแล้วเมื่อ {last[0].isoformat()} (VN {last[1]}) ยังไม่ครบ {YEARS} ปี")
+            row.add(ERROR, "WITHIN_5Y", f"คัดกรองแล้วเมื่อ {last[0]:%d/%m}/{last[0].year + 543} (VN {last[1]}) ยังไม่ครบ {YEARS} ปี")
         if age is not None and RISK_AGE[0] <= int(age) <= RISK_AGE[1]:
             row.add(WARN, "RISK_AGE", f"อายุ {int(age)} ปี เบิกได้เฉพาะกลุ่มเสี่ยงสูง (มีเพศสัมพันธ์ตั้งแต่อายุน้อย มีคู่นอนหลายคน ไม่ใช้ถุงยาง)")
         if text(r.get("nationality")) != "99":

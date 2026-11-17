@@ -424,3 +424,82 @@ td.funds{min-width:180px}
 
 /* 18-file drawer: the chief complaint above the diagnoses */
 .cc-text { white-space: pre-wrap; margin: 0 0 8px; line-height: 1.6; }
+
+/* ================================================================ modern theme (2026-11-17)
+   The look of the login page carried to every page: a green gradient top bar, soft background, rounded cards with
+   soft shadows. It only overrides the rules above, so markup and scripts are unchanged. */
+:root{--radius:16px;--radius-sm:10px;--shadow:0 1px 2px #0f3a2e0d,0 8px 24px #0f3a2e0f;--shadow-lg:0 24px 70px #0f3a2e2e,0 2px 6px #0f3a2e14;--line:#e1e8e5}
+body{background:radial-gradient(1100px 620px at 0% -10%,#d5efe5 0,transparent 60%),radial-gradient(900px 560px at 105% 110%,#dde8f6 0,transparent 55%),var(--bg);background-attachment:fixed}
+
+/* top bar */
+.top{background:linear-gradient(120deg,#0b5c49 0%,#0d6b55 45%,#14957a 100%);border-bottom:0;box-shadow:0 6px 24px #0b5c4933;padding:12px 24px;color:#eafaf3}
+.top .logo{width:40px;height:40px;border-radius:12px;background:#ffffff26;border:1px solid #ffffff40;box-shadow:inset 0 1px 0 #ffffff33}
+.top .brand h1{color:#fff;font-size:18px;letter-spacing:.2px}
+.top .brand p{color:#cdeee2}
+.top .menu{background:#ffffff1f;border:1px solid #ffffff33;padding:4px;gap:2px}
+.top .menu>a,.top .menu-links>summary{color:#e3f6ee;padding:7px 15px}
+.top .menu>a:hover,.top .menu-links>summary:hover,.top .menu-links[open]>summary{color:#fff;background:#ffffff1f}
+.top .menu>a[aria-current=page]{background:#fff;color:var(--accent);box-shadow:0 4px 14px #0b3a2e33}
+.top .menu-links-list{border:0;border-radius:14px;padding:8px;box-shadow:var(--shadow-lg)}
+.top .menu .menu-links-list a{color:var(--ink);border-radius:9px}
+.top .menu .menu-links-list a:hover{background:var(--accent-soft);color:var(--accent)}
+.top .connection{color:#d7f0e6;background:#ffffff1a;border:1px solid #ffffff2e;border-radius:999px;padding:4px 10px}
+.top .dot.ok{background:#7ef0b8;box-shadow:0 0 0 3px #7ef0b840}
+.top .avatar{background:#ffffff2e;color:#fff;border:1px solid #ffffff40}
+.top .user-name{color:#fff}.top .user-name small{color:#cdeee2}
+.top .user-box button.ghost{color:#eafaf3;border-color:#ffffff40;border-radius:999px}
+.top .user-box button.ghost:hover:not(:disabled){background:#ffffff26;color:#fff;border-color:#ffffff66}
+
+/* layout and panels */
+main{padding:22px 24px;gap:16px}
+.page-head{align-items:center;gap:6px 14px}
+.page-head h2{font-size:24px;letter-spacing:.1px}
+.page-head p{font-size:14px}
+.panel{border-color:#e6ece9;border-radius:var(--radius);box-shadow:var(--shadow)}
+.notices{padding:0 24px}
+
+/* inputs and buttons */
+label{font-size:12.5px}
+input,select,.multi summary{min-height:42px;border-radius:var(--radius-sm);background-color:var(--panel-2)}
+input:focus,select:focus,.multi[open] summary{background-color:#fff;box-shadow:0 0 0 4px #0d6b5522}
+.dmy-text{background-color:var(--panel-2)}
+button{min-height:40px;border-radius:var(--radius-sm)}
+button.primary{background:linear-gradient(135deg,#0d6b55,#14957a);border-color:#0d6b55;box-shadow:0 6px 16px #0d6b5533}
+button.primary:hover:not(:disabled){background:linear-gradient(135deg,#0a5644,#0f7d66);box-shadow:0 8px 20px #0d6b5544}
+button.primary:disabled{box-shadow:none}
+button.small{min-height:30px;border-radius:8px}
+.presets button{border-radius:999px;background:var(--panel-2)}
+#pttype-list{border-radius:14px}
+.search{padding:16px 18px;gap:14px}
+
+/* summary cards */
+.cards{gap:12px}
+.card{padding:14px 16px 14px 18px;border-color:#e6ece9;background:#fff;background:linear-gradient(160deg,color-mix(in srgb,var(--tone,#5b6964) 9%,#fff) 0%,#fff 60%);transition:transform .15s,box-shadow .15s,border-color .15s}
+.card::before{inset:14px auto 14px 0;width:4px;border-radius:0 4px 4px 0}
+.card:hover:not(:disabled){transform:translateY(-2px);box-shadow:0 12px 28px #0f3a2e1a}
+.card-count{font-size:28px}
+
+/* tables */
+.table-tools{background:#fff;padding:12px 14px}
+.search-box input{border-radius:999px}
+th{background:#f4f8f6;color:#4f5e59;height:44px}
+td{padding:10px 12px}
+th{padding:0 12px}
+tbody tr:nth-child(even) td{background:#fbfdfc}
+tbody tr:hover td{background:#eef7f3}
+tbody tr.current td{background:#dff1ea}
+.badge{padding:3px 10px}
+
+/* drawer, dialogs, action bar */
+.drawer{border-radius:20px 0 0 20px;box-shadow:-24px 0 70px #0f3a2e2e}
+.drawer-head{background:linear-gradient(120deg,#f1f8f5,#fff);border-radius:20px 0 0 0;padding:18px 22px 14px}
+.drawer-head h2{font-size:20px}
+.drawer-backdrop{background:#0f1d1840;backdrop-filter:blur(2px)}
+.tabs{margin:0 -20px 16px}
+.tab[aria-selected=true]{color:var(--accent);border-bottom-width:3px}
+.info-grid{border-radius:14px;background:#f6faf8}
+dialog{border-radius:18px}
+.actions{background:#ffffffe6;border-top-color:#e6ece9;box-shadow:0 -10px 30px #0f3a2e14}
+.actions-inner{padding:12px 24px}
+.notice{border-radius:12px}
+@media(max-width:720px){main{padding:14px}.top{padding:10px 14px}.notices{padding:0 14px}.search-inline{grid-template-columns:1fr 1fr}.search-inline .actions-cell{grid-column:1/-1}.drawer{border-radius:0}.drawer-head{border-radius:0}}
