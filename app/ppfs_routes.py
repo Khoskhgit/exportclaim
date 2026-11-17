@@ -16,7 +16,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 
 from . import (auth, fdh, nhso18, nhso18_service as svc, ppfs, ppfs_anemia, ppfs_fluoride, ppfs_fp, ppfs_iron, ppfs_ironchild,
-               ppfs_anemiachild, ppfs_dmrem,
+               ppfs_anemiachild, ppfs_dmrem, ppfs_instrument,
                ppfs_ncd, ppfs_pregtest)
 from . import dmrem_registry
 from .config import Settings
@@ -130,6 +130,7 @@ def _out(row: ppfs.Row) -> dict:
 def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templates: Jinja2Templates) -> None:
     store = PpfsStore(local)
     registry = dmrem_registry.RegistryStore(local)
+    web_store = ppfs_instrument.WebStore(local)
 
     def q(sql: str) -> list[dict]:
         return hosxp._select(sql, [])
@@ -156,6 +157,10 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
         return plan
 
     def check(service: ppfs.Service, start: date, end: date) -> list[ppfs.Row]:
+        if service.key == "instrument":
+            data = ppfs_instrument.fetch(q, start, end, settings.rcm_db, web_store.between(start, end))
+            vns = sorted({text(r["vn"]) for r in data["items"] + data["web_visits"]})
+            return ppfs_instrument.check(data, store.sent(vns))
         if service.key == "dmrem":
             summary = registry.summary()
             imported = summary["n"] > 0
@@ -238,6 +243,8 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
         out: dict[str, list[str]] = {}
         for icode, code in items:
             found = [k for k, s in ppfs.SERVICES.items() if code and code in s.codes and k not in ("anemiachild", "ironchild", "dmrem")]
+            if ppfs_instrument.is_instrument(code):
+                found.append("instrument")
             if icode in by_icode:
                 found = [by_icode[icode]]
             if icode in hba1c:
@@ -256,6 +263,23 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
                        "amount": money(i["amount"])} for i in d["items"]],
             "dx": [{"type": text(x["diagtype"]), "code": text(x["icd10"]), "name": text(x["name"])} for x in d["dx"]],
             "nationality": f"{text(d['visit'].get('nationality'))} {text(d['visit'].get('nationality_name'))}".strip()}
+        if _service(body.get("service")).key == "instrument":
+            d = ppfs_instrument.detail(q, vn)
+            if not d:
+                raise HTTPException(404, "ไม่พบ visit นี้ใน HOSxP")
+            sent = store.sent(sorted({text(h["vn"]) for h in d["history"]}))
+            visit = d["visit"]
+            web = ppfs_instrument.web_rows_for(web_store.between(visit["vstdate"], visit["vstdate"]), text(visit.get("cid")),
+                                               text(visit.get("hn")), iso(visit["vstdate"]))
+            return {**common(d),
+                    "history": [{"date": iso(h["vstdate"]), "vn": text(h["vn"]), "code": text(h["code"]), "name": text(h["name"]),
+                                 "qty": f"{float(h['qty'] or 0):g}", "amount": money(h["amount"]),
+                                 "sent": sent.get((text(h["vn"]), text(h["code"])), "")} for h in d["history"]],
+                    "deformed": [{"no": text(x["deformed_no"]), "date": iso(x["register_date"]), "cert": iso(x["certificate_date"])}
+                                 for x in d["deformed"]],
+                    "web": [{"code": w["code"], "name": w["name"], "amount": w["amount"], "request_price": w["request_price"],
+                             "income": w["income"], "reg_date": w["reg_date"], "status": w["status"], "serial_no": w["serial_no"]}
+                            for w in web]}
         if _service(body.get("service")).key == "dmrem":
             d = ppfs_dmrem.detail(q, vn)
             if not d:
@@ -445,6 +469,29 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
         order = {"wait3": 0, "wait2": 1, "relapse": 2, "not_yet": 3, "no_test": 4, "done": 5}
         out.sort(key=lambda r: (order.get(r["state"], 9), r["next_from"] or "9999", r["hn"]))
         return {"rows": out, "summary": registry.summary(), "today": today.isoformat()}
+
+    # ------------------------------------------------------------ Instrument: the device web export (ปุ่ม "ตรวจสอบ")
+    @app.get("/api/ppfs/instrument/web")
+    def instrument_web_summary():
+        return web_store.summary()
+
+    @app.post("/api/ppfs/instrument/web")
+    async def instrument_web_import(request: Request, name: str = ""):
+        data = await request.body()
+        if not data:
+            raise HTTPException(400, "ไม่ได้เลือกไฟล์")
+        if len(data) > 20 * 1024 * 1024:
+            raise HTTPException(413, "ไฟล์ใหญ่เกินไป")
+        try:
+            rows = ppfs_instrument.parse_csv(data)
+        except ppfs_instrument.CsvError as exc:
+            raise HTTPException(400, str(exc)) from None
+        units = {r.hospcode for r in rows if r.hospcode}
+        if settings.hcode and units and settings.hcode not in units:
+            raise HTTPException(400, f"เป็นข้อมูลของหน่วยบริการ {', '.join(sorted(units))} ไม่ใช่ {settings.hcode}")
+        result = web_store.save(rows, name[:200])
+        log.info("instrument web import %s rows=%s", name, len(rows))
+        return {**result, "summary": web_store.summary()}
 
     @app.post("/api/ppfs/item")
     def item_choice(body: dict = Body(...)):

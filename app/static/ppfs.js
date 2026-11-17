@@ -17,7 +17,17 @@ const shortLabel = (label) => { const chars = [...label]; return chars.length > 
 
 // Columns that differ by service: [header, sort key, numeric, cell].
 const uptBadge = (v) => !v ? dash() : el("span", { class: `badge ${/pos/i.test(v) ? "b-warn" : "b-ok"}` }, v);
+const flag = (on, yes, no = "—", tone = "b-ok") => (on ? el("span", { class: `badge ${tone}` }, yes) : el("span", { class: "muted" }, no));
 const COLUMNS = {
+  instrument: [
+    ["AuthenCode", "authen", false, (r) => r.extra.authen || el("span", { class: "badge b-warn" }, "ไม่มี")],
+    ["คนพิการ", "", false, (r) => (r.extra.disabled_right ? el("span", { class: "badge b-ok" }, "สิทธิผู้พิการ")
+      : r.extra.deformed ? el("span", {}, el("span", { class: "badge b-ok" }, "ทะเบียน"), el("span", { class: "sub" }, r.extra.deformed_no)) : el("span", { class: "badge b-warn" }, "ไม่พบ"))],
+    ["ADP", "", false, (r) => flag(r.extra.in_list, "Y", "นอกรายการ")],
+    ["เว็บ / เงินพึงได้", "", false, (r) => (r.extra.web ? el("span", {}, el("span", { class: "badge b-sent" }, "Y"),
+      el("span", { class: "sub" }, [r.extra.income ? `${money(r.extra.income)} บาท` : "", r.extra.web_reg ? `บันทึก ${toDmy(r.extra.web_reg)}` : ""].filter(Boolean).join(" · "))) : dash())],
+    ["e-Claim", "", false, (r) => r.extra.eclaim ? el("span", {}, r.extra.eclaim, r.extra.eclaim_paid ? el("span", { class: "sub" }, `${money(r.extra.eclaim_paid)} บาท`) : null) : dash()],
+  ],
   postnatal: [
     ["วันคลอด", "labor_date", false, (r) => (r.labor_date ? toDmy(r.labor_date) : dash())],
     ["หลังคลอด (วัน)", "days", true, (r) => (r.days === null ? dash() : String(r.days))],
@@ -73,7 +83,7 @@ const COLUMNS = {
     ["ช่วงอายุ / ชนิดยา / ADP", "", false, (r) => el("span", {}, r.extra.band, el("span", { class: "sub" }, r.extra.form ? `${r.extra.form} · ${r.extra.adp || "ไม่มีรหัส"}` : "ไม่ทราบชนิดยา"))],
   ],
 };
-const COUNT_LABEL = { postnatal: "ครั้งที่", pregtest: "ครั้งที่ในปีงบ", fp: "สะสมในปีงบ", ncd: "ครั้งที่", anemia: "ครั้งที่", iron: "ครั้งที่ในปีงบ", fluoride: "ครั้งที่ในปีงบ", ironchild: "ครั้งที่ในปีงบ", anemiachild: "ครั้งที่ในช่วงอายุ", dmrem: "ขั้น" };
+const COUNT_LABEL = { instrument: "จำนวน", postnatal: "ครั้งที่", pregtest: "ครั้งที่ในปีงบ", fp: "สะสมในปีงบ", ncd: "ครั้งที่", anemia: "ครั้งที่", iron: "ครั้งที่ในปีงบ", fluoride: "ครั้งที่ในปีงบ", ironchild: "ครั้งที่ในปีงบ", anemiachild: "ครั้งที่ในช่วงอายุ", dmrem: "ขั้น" };
 function labText(labs) {
   const parts = Object.entries(labs || {});
   if (!parts.length) return dash();
@@ -236,7 +246,14 @@ async function openDrawer(r) {
     const data = await api("/api/ppfs/detail", { vn: r.vn, service: kind, codes: state.rows.filter((x) => x.vn === r.vn).map((x) => x.code) });
     if (state.current !== r.key) return;
     const b = data.birth;
-    const own = kind === "dmrem" ? [
+    const own = kind === "instrument" ? [
+      ["AuthenCode", r.extra.authen || "ไม่มี"], ["สิทธิผู้พิการ", r.extra.disabled_right ? "ใช่" : "ไม่ใช่"],
+      ["ทะเบียนคนพิการ", r.extra.deformed ? `${r.extra.deformed_no || "มี"}${r.extra.deformed_date ? ` · ลงทะเบียน ${toDmy(r.extra.deformed_date)}` : ""}` : "ไม่พบ"],
+      ["รหัสในรายการ ADP", r.extra.in_list ? "ใช่" : "ไม่อยู่ในรายการ"],
+      ["เว็บบันทึกอุปกรณ์", r.extra.web ? `บันทึกแล้ว${r.extra.web_reg ? ` ${toDmy(r.extra.web_reg)}` : ""}${r.extra.web_status ? ` · ${r.extra.web_status}` : ""}` : "ยังไม่พบ"],
+      ["เงินพึงได้ (เว็บ)", r.extra.income ? `${money(r.extra.income)} บาท` : "—"],
+      ["REP e-Claim", r.extra.eclaim ? `${r.extra.eclaim}${r.extra.eclaim_paid ? ` · ชดเชย ${money(r.extra.eclaim_paid)} บาท` : ""}` : "ไม่มี"],
+    ] : kind === "dmrem" ? [
       ["อายุ", r.extra.age === null || r.extra.age === undefined ? "—" : `${r.extra.age} ปี`], ["สิทธิหลัก", r.extra.maininscl],
       ["ขั้น", r.extra.stage === 0 ? "ครั้งที่ 1 ลงทะเบียน e-Claim (ยังไม่มีค่าบริการ)" : r.extra.stage === 1 ? "1 เข้าสู่ระยะสงบ (4,000 บาท)" : "2 ยังคงระยะสงบ (2,000 บาท)"],
       ["HbA1c ที่ใช้", r.extra.tests.map((t, i) => `${toDmy(t.date)} ${t.value ? `${t.value}%` : "(ลงทะเบียน)"}${i ? ` (ห่าง ${r.extra.gaps[i - 1]} วัน)` : ""}`).join(" → ")],
@@ -292,7 +309,7 @@ async function openDrawer(r) {
       check.push(el("h3", {}, "ผลตรวจ"));
       check.push(el("ul", { class: "issues" }, ...issues.map((i) => el("li", { class: `issue ${i.level}` },
         el("div", { class: "issue-title" }, el("span", { class: `badge ${i.level === "error" ? "b-error" : "b-warn"}` }, i.level === "error" ? "Error" : "เตือน"), " ", i.message)))));
-      check.push(el("p", { class: "hint" }, kind === "dmrem" ? "ตรวจว่าลงทะเบียนผู้ป่วยในโปรแกรม e-Claim แล้ว และตั้งรหัส ADP ใน .env ก่อนส่ง" : kind === "anemiachild" ? "เบิกได้ช่วงอายุละ 1 ครั้ง (6–12 เดือน และ 3–5 ปี) รวมไม่เกิน 2 ครั้งต่อคน" : kind === "ironchild" ? "เบิกได้ช่วงละ 1 ครั้งต่อปีงบ ค่าบริการ 6–12 เดือนต้องให้เด็กอายุ 6–12 เดือน ค่าบริการ 2–5 ปีต้องให้เด็กอายุ 2–5 ปี" : kind === "fluoride" ? "เบิกได้อายุ 25–59 ปี ไม่เกิน 2 ครั้งต่อปีงบ ถ้ายังไม่คีย์ 15001 ให้คีย์ใน HOSxP แล้วค้นหาใหม่" : kind === "iron" ? "เบิกได้คนละ 1 ครั้งต่อปีงบ อายุ 13–45 ปี เฉพาะหญิงไทย รายที่ไม่ตรงเงื่อนไขไม่ต้องส่ง" : kind === "anemia" ? "เบิกได้คนละ 1 ครั้ง อายุ 13–24 ปี เฉพาะหญิงไทย รายที่ไม่ตรงเงื่อนไขไม่ต้องส่ง" : kind === "ncd" ? "ผู้ที่มีประวัติรักษาโรคมาก่อน หรือเบิกไปแล้วในรอบ ไม่ใช่กลุ่มที่เบิกได้ ไม่ต้องส่ง" : kind === "fp" ? "แก้ข้อมูลใน HOSxP (คีย์ค่าบริการ 18… ให้ตรงกับยาที่จ่าย) แล้วกดค้นหาอีกครั้ง" : kind === "pregtest" ? "แก้ข้อมูลใน HOSxP (รายการค่าบริการ / รหัสวินิจฉัย / ผล lab) แล้วกดค้นหาอีกครั้ง"
+      check.push(el("p", { class: "hint" }, kind === "instrument" ? "คำเตือนไม่บล็อกการส่ง ตรวจสิทธิคนพิการและรายการที่บันทึกในเว็บแล้วก่อนส่ง เพื่อไม่ให้เบิกซ้ำ" : kind === "dmrem" ? "ตรวจว่าลงทะเบียนผู้ป่วยในโปรแกรม e-Claim แล้ว และตั้งรหัส ADP ใน .env ก่อนส่ง" : kind === "anemiachild" ? "เบิกได้ช่วงอายุละ 1 ครั้ง (6–12 เดือน และ 3–5 ปี) รวมไม่เกิน 2 ครั้งต่อคน" : kind === "ironchild" ? "เบิกได้ช่วงละ 1 ครั้งต่อปีงบ ค่าบริการ 6–12 เดือนต้องให้เด็กอายุ 6–12 เดือน ค่าบริการ 2–5 ปีต้องให้เด็กอายุ 2–5 ปี" : kind === "fluoride" ? "เบิกได้อายุ 25–59 ปี ไม่เกิน 2 ครั้งต่อปีงบ ถ้ายังไม่คีย์ 15001 ให้คีย์ใน HOSxP แล้วค้นหาใหม่" : kind === "iron" ? "เบิกได้คนละ 1 ครั้งต่อปีงบ อายุ 13–45 ปี เฉพาะหญิงไทย รายที่ไม่ตรงเงื่อนไขไม่ต้องส่ง" : kind === "anemia" ? "เบิกได้คนละ 1 ครั้ง อายุ 13–24 ปี เฉพาะหญิงไทย รายที่ไม่ตรงเงื่อนไขไม่ต้องส่ง" : kind === "ncd" ? "ผู้ที่มีประวัติรักษาโรคมาก่อน หรือเบิกไปแล้วในรอบ ไม่ใช่กลุ่มที่เบิกได้ ไม่ต้องส่ง" : kind === "fp" ? "แก้ข้อมูลใน HOSxP (คีย์ค่าบริการ 18… ให้ตรงกับยาที่จ่าย) แล้วกดค้นหาอีกครั้ง" : kind === "pregtest" ? "แก้ข้อมูลใน HOSxP (รายการค่าบริการ / รหัสวินิจฉัย / ผล lab) แล้วกดค้นหาอีกครั้ง"
         : "แก้ข้อมูลใน HOSxP (บันทึกหลังคลอด / วันคลอด / รายการค่าบริการ) แล้วกดค้นหาอีกครั้ง"));
     } else check.push(el("div", { class: "all-good" }, "✓ ผ่านการตรวจทั้งหมด พร้อมส่ง"));
 
@@ -393,6 +410,23 @@ async function openDrawer(r) {
           el("td", { class: "num" }, Number(h.drug_qty) ? h.drug_qty : "—"), el("td", { class: "num" }, money(h.amount)),
           el("td", {}, h.sent ? thaiDateTime(h.sent) : "—"))))
         : el("p", { class: "muted" }, "ไม่มีรายการ"));
+    } else if (kind === "instrument") {
+      post.push(el("h3", {}, "อุปกรณ์ที่ได้รับย้อนหลัง 2 ปี (HOSxP)"));
+      post.push(data.history.length ? table(["วันที่", "VN", "ADP", "รายการ", { label: "จำนวน", num: true }, { label: "ยอด", num: true }, "ส่งออก"],
+        data.history.map((h) => el("tr", { class: h.vn === r.vn && h.code === r.code ? "current" : "" }, el("td", { class: "mono" }, toDmy(h.date)),
+          el("td", { class: "mono" }, h.vn), el("td", { class: "mono" }, h.code), el("td", {}, h.name),
+          el("td", { class: "num" }, h.qty), el("td", { class: "num" }, money(h.amount)), el("td", {}, h.sent ? thaiDateTime(h.sent) : "—"))))
+        : el("p", { class: "muted" }, "ไม่มี"));
+      post.push(el("h3", {}, "เว็บบันทึกอุปกรณ์คนพิการ (CSV ที่นำเข้า) วันนี้"));
+      post.push(data.web.length ? table(["Code", "รายการ", { label: "จำนวน", num: true }, { label: "ขอเบิก", num: true }, { label: "เงินพึงได้", num: true }, "บันทึก", "สถานะ"],
+        data.web.map((w) => el("tr", { class: w.code === r.code ? "current" : "" }, el("td", { class: "mono" }, w.code), el("td", {}, w.name, w.serial_no ? el("span", { class: "sub" }, `S/N ${w.serial_no}`) : null),
+          el("td", { class: "num" }, w.amount), el("td", { class: "num" }, money(w.request_price)), el("td", { class: "num" }, money(w.income)),
+          el("td", { class: "mono" }, w.reg_date ? toDmy(w.reg_date) : "—"), el("td", {}, w.status || "—"))))
+        : el("p", { class: "muted" }, "ไม่พบในไฟล์ที่นำเข้า"));
+      post.push(el("h3", {}, "ทะเบียนคนพิการ (person_deformed)"));
+      post.push(data.deformed.length ? table(["เลขทะเบียน", "วันที่ลงทะเบียน", "วันที่ออกบัตร"],
+        data.deformed.map((x) => el("tr", {}, el("td", { class: "mono" }, x.no || "—"), el("td", { class: "mono" }, x.date ? toDmy(x.date) : "—"), el("td", { class: "mono" }, x.cert ? toDmy(x.cert) : "—"))))
+        : el("p", { class: "muted" }, "ไม่พบ"));
     } else if (kind === "pregtest") {
       post.push(el("h3", {}, `ทดสอบการตั้งครรภ์ (30014) ของปีงบ ${data.year + 543}`));
       post.push(data.tests.length ? table(["#", "วันที่", "VN", "ผล UPT", { label: "จำนวน", num: true }, { label: "ยอด", num: true }, "ส่งออก"],
@@ -457,7 +491,8 @@ async function openDrawer(r) {
       }))];
     body.replaceChildren(...tabs([
       { id: "check", label: "สรุปและผลตรวจ", badge: issues.length || undefined, alert: r.errors.length > 0, content: check },
-      kind === "dmrem" ? { id: "dmrem", label: "HbA1c และยา", badge: data.tests.length || undefined, content: post }
+      kind === "instrument" ? { id: "instrument", label: "อุปกรณ์และเว็บ", badge: data.history.length || undefined, content: post }
+        : kind === "dmrem" ? { id: "dmrem", label: "HbA1c และยา", badge: data.tests.length || undefined, content: post }
         : kind === "anemiachild" ? { id: "anemiachild", label: "ประวัติคัดกรอง", badge: data.claims.length || undefined, content: post }
         : kind === "ironchild" ? { id: "ironchild", label: "ประวัติรับยา", badge: data.claims.length || undefined, content: post }
         : kind === "fluoride" ? { id: "fluoride", label: "ประวัติเคลือบฟลูออไรด์", badge: data.claims.length || undefined, content: post }
@@ -480,6 +515,8 @@ const FOLLOW = {
   relapse: ["หลุดระยะสงบ", "b-error"], not_yet: ["ยังไม่เข้าเกณฑ์", "b-warn"], no_test: ["ยังไม่มีผล HbA1c", "b-warn"],
 };
 function dmremPanel() {
+  $("instrument-panel").hidden = service() !== "instrument";
+  if (service() === "instrument") loadInstrumentWeb();
   $("dmrem-panel").hidden = service() !== "dmrem";
   if (service() === "dmrem") loadRegistry();
 }
@@ -600,6 +637,27 @@ async function loadHistory() {
   } catch (err) { notice(err.message); }
 }
 
+// ------------------------------------------------------------- Instrument: the device web export
+async function loadInstrumentWeb() {
+  try {
+    const s = await api("/api/ppfs/instrument/web");
+    $("instrument-summary").textContent = s.n
+      ? `${count.format(s.n)} รายการ วันที่รับบริการ ${toDmy(s.first)} – ${toDmy(s.last)} · นำเข้าล่าสุด ${thaiDateTime(s.imported_at)}${s.file ? ` (${s.file})` : ""}`
+      : "ยังไม่ได้นำเข้า (ยังตรวจกับ rcmdb.equipment_service ได้)";
+  } catch (err) { notice(err.message); }
+}
+async function importInstrumentWeb(file) {
+  try {
+    const response = await fetch(`/api/ppfs/instrument/web?name=${encodeURIComponent(file.name)}`, { method: "POST", body: file });
+    const data = await response.json().catch(() => ({}));
+    if (response.status === 401 && data.login) { window.location.assign("/login?error=expired"); return; }
+    if (!response.ok) throw new Error(data.detail || `ผิดพลาด (${response.status})`);
+    notice(`นำเข้า ${file.name}: ${count.format(data.rows)} รายการ (ใหม่ ${data.added}, อัปเดต ${data.updated}) กดค้นหาอีกครั้งเพื่อตรวจ`, "ok");
+    await loadInstrumentWeb();
+    if (state.rows.length) search();
+  } catch (err) { notice(err.message); }
+}
+
 async function loadServices() {
   try {
     state.services = await api("/api/ppfs/services");
@@ -622,6 +680,7 @@ $("search").addEventListener("submit", (e) => { e.preventDefault(); search(); })
 $("service").addEventListener("change", () => { state.rows = []; state.selected.clear(); state.sort.key = "date"; state.sort.dir = "asc"; renderRules(); renderHead(); render(); dmremPanel(); });
 $("dmrem-file").addEventListener("change", (e) => { if (e.target.files[0]) importRegistry(e.target.files[0]); });
 $("dmrem-follow").onclick = showFollowUp;
+$("instrument-file").addEventListener("change", (e) => { if (e.target.files[0]) importInstrumentWeb(e.target.files[0]); e.target.value = ""; });
 $("filter").addEventListener("input", (e) => { state.text = e.target.value; render(); });
 $("select-ready").onclick = () => { visible().filter((r) => selectable(r) && !r.warnings.length && !r.sent).forEach((r) => state.selected.add(r.key)); render(); };
 $("select-none").onclick = () => { state.selected.clear(); render(); };
