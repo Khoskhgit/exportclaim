@@ -3,6 +3,7 @@ shown by date range and exported to Excel for billing those hospitals. HOSxP is 
 from __future__ import annotations
 
 import io
+import re
 from collections import defaultdict
 from datetime import date
 from decimal import Decimal
@@ -65,12 +66,21 @@ def summarise(rows: list[dict]) -> list[dict]:
              "people": len(g["hns"]), "items": g["items"], "amount": str(g["amount"])} for g in groups.values()]
 
 
-def workbook(rows: list[dict], start: date, end: date, hname: str) -> bytes:
-    book = openpyxl.Workbook()
-    sheet = book.active
-    sheet.title = "LAB Walk-in"
+def sheet_title(code: str, name: str, used: set[str]) -> str:
+    """An Excel sheet name: the hospital code and name, at most 31 characters, without []:*?/\\ and never repeated."""
+    name = name.replace("โรงพยาบาลส่งเสริมสุขภาพตำบล", "รพ.สต.").replace("โรงพยาบาล", "รพ.")
+    title = re.sub(r"[\[\]:*?/\\]", " ", f"{code} {name}").strip()[:31].strip() or code or "-"
+    base, n = title, 2
+    while title.lower() in used:
+        suffix = f" ({n})"
+        title, n = base[:31 - len(suffix)] + suffix, n + 1
+    used.add(title.lower())
+    return title
+
+
+def item_sheet(sheet, rows: list[dict], heading: str, start: date, end: date) -> None:
     bold = Font(bold=True)
-    sheet.append([f"LAB Walk-in ในจังหวัด (UC ผู้ป่วยนอก สถานพยาบาลหลักอื่น) {hname}".strip()])
+    sheet.append([heading])
     sheet.append([f"วันที่รับบริการ {thai_date(start)} ถึง {thai_date(end)}"])
     sheet.append(HEADERS)
     for cell in sheet[3]:
@@ -82,8 +92,7 @@ def workbook(rows: list[dict], start: date, end: date, hname: str) -> bytes:
                   float(sum((r["sum_price"] for r in rows), Decimal(0)))])
     for cell in sheet[sheet.max_row]:
         cell.font = bold
-    widths = [14, 9, 16, 11, 26, 13, 34, 10, 34, 8, 12, 12]
-    for i, width in enumerate(widths, 1):
+    for i, width in enumerate([14, 9, 16, 11, 26, 13, 34, 10, 34, 8, 12, 12], 1):
         sheet.column_dimensions[get_column_letter(i)].width = width
     for row in sheet.iter_rows(min_row=4, min_col=10, max_col=12):
         for cell in row:
@@ -93,9 +102,17 @@ def workbook(rows: list[dict], start: date, end: date, hname: str) -> bytes:
             cell.number_format = "@"
     sheet.freeze_panes = "A4"
 
-    summary = book.create_sheet("สรุปตาม รพ.หลัก")
+
+def workbook(rows: list[dict], start: date, end: date, hname: str) -> bytes:
+    """The summary by main hospital first, then one sheet of items for each main hospital."""
+    book = openpyxl.Workbook()
+    bold = Font(bold=True)
+    summary = book.active
+    summary.title = "สรุปตาม รพ.หลัก"
+    summary.append([f"LAB Walk-in ในจังหวัด (UC ผู้ป่วยนอก สถานพยาบาลหลักอื่น) {hname}".strip()])
+    summary.append([f"วันที่รับบริการ {thai_date(start)} ถึง {thai_date(end)}"])
     summary.append(["สถานพยาบาลหลัก", "จำนวน visit", "จำนวนคน", "จำนวนรายการ", "รวมเงิน"])
-    for cell in summary[1]:
+    for cell in summary[3]:
         cell.font = bold
     totals = summarise(rows)
     for g in totals:
@@ -106,9 +123,19 @@ def workbook(rows: list[dict], start: date, end: date, hname: str) -> bytes:
         cell.font = bold
     for i, width in enumerate([40, 12, 12, 14, 14], 1):
         summary.column_dimensions[get_column_letter(i)].width = width
-    for row in summary.iter_rows(min_row=2, min_col=5, max_col=5):
+    for row in summary.iter_rows(min_row=4, min_col=5, max_col=5):
         for cell in row:
             cell.number_format = "#,##0.00"
+
+    groups: dict[str, list[dict]] = defaultdict(list)
+    for r in rows:
+        groups[r["hospmain"]].append(r)
+    used = {summary.title.lower()}
+    for code, mine in groups.items():
+        name = mine[0]["hospmain_name"]
+        short = name.split(" - ", 1)[-1]
+        item_sheet(book.create_sheet(sheet_title(code, short, used)), mine,
+                   f"LAB Walk-in · สถานพยาบาลหลัก {name}", start, end)
 
     buffer = io.BytesIO()
     book.save(buffer)

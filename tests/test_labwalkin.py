@@ -5,7 +5,7 @@ from decimal import Decimal
 import openpyxl
 from fastapi.testclient import TestClient
 
-from app.labwalkin_routes import thai_date
+from app.labwalkin_routes import sheet_title, thai_date
 from app.main import create_app
 from app.store import Store
 from factories import settings
@@ -45,16 +45,25 @@ def test_search_masks_cid_and_sums_by_hospital(tmp_path):
     assert (first["visits"], first["people"], first["items"], Decimal(first["amount"])) == (1, 1, 2, Decimal("350.50"))
 
 
-def test_excel_has_full_rows_and_summary(tmp_path):
+def test_excel_has_a_sheet_per_main_hospital(tmp_path):
     c, _ = client(tmp_path)
     res = c.post("/api/labwalkin/excel", json={"start": "2025-10-01", "end": "2025-10-31"})
     assert res.status_code == 200 and "LAB_WalkIn_20251001_20251031.xlsx" in res.headers["content-disposition"]
     book = openpyxl.load_workbook(io.BytesIO(res.content))
-    rows = list(book["LAB Walk-in"].iter_rows(values_only=True))
+    assert book.sheetnames == ["สรุปตาม รพ.หลัก", "11112 รพ.สต.ทดสอบ", "11113 รพ.สต.สอง"]
+    rows = list(book["11112 รพ.สต.ทดสอบ"].iter_rows(values_only=True))
     assert rows[2][0] == "VN" and rows[3][2] == CID and rows[3][5] == "03/10/2568"
-    assert rows[-1][0] == "รวม" and rows[-1][11] == 500.5
+    assert len(rows) == 6 and rows[-1][0] == "รวม" and rows[-1][11] == 350.5
     summary = list(book["สรุปตาม รพ.หลัก"].iter_rows(values_only=True))
     assert summary[-1] == ("รวม", 2, 2, 3, 500.5)
+
+
+def test_sheet_titles_are_short_safe_and_unique():
+    used = set()
+    first = sheet_title("10870", "โรงพยาบาลอรัญประเทศ/ทดสอบ:ชื่อยาวมากเกินสามสิบเอ็ดตัว", used)
+    assert len(first) <= 31 and "/" not in first and ":" not in first
+    again = sheet_title("10870", "โรงพยาบาลอรัญประเทศ/ทดสอบ:ชื่อยาวมากเกินสามสิบเอ็ดตัว", used)
+    assert again != first and again.endswith("(2)") and len(again) <= 31
 
 
 def test_bad_period_is_refused(tmp_path):
