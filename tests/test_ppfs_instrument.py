@@ -53,12 +53,14 @@ def test_a_registered_device_in_the_list():
 
 def test_warnings_do_not_block():
     (row,) = check(data([item(code="8705", authen="")], eclaim={"v1": {"rep": "OPUCS1", "paid": "250"}}))
-    assert codes(row) == ([], ["NOT_IN_LIST", "NOT_DISABLED", "NO_AUTHEN", "ECLAIM"])
+    assert codes(row) == ([], ["NOT_IN_LIST", "NO_AUTHEN", "ECLAIM"])
 
 
-def test_the_disabled_right_counts_as_disabled():
+def test_disability_is_shown_but_not_checked():
+    (row,) = check(data([item()]))
+    assert codes(row) == ([], []) and not row.extra["deformed"] and not row.extra["disabled_right"]
     (row,) = check(data([item(pttype_name="ผู้พิการ ในเขต", pcode="AD")]))
-    assert "NOT_DISABLED" not in codes(row)[1]
+    assert row.extra["disabled_right"]
 
 
 def test_web_record_and_income():

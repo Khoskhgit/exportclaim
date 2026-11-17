@@ -3,7 +3,7 @@
 Ported from the old program's "รายชื่อสิทธิผู้พิการ" report, with these choices of the user (2026-11-17):
    visits     every OPD visit under a UC right (pttype.hipdata_code UCS/WEL); at this hospital disabled patients
               mostly come under the normal UC rights, so the disabled right and the disability registry
-              (person_deformed) are a warning, not a filter
+              (person_deformed) are only shown, never checked (the user dropped the warning, 2026-11-17)
    devices    opitemrece + s_drugitems with nhso_adp_type_id=2 and an ADP code starting 25, 81, 82, 85, 87, 88, 89 or
               equal to 6006 (the old regexp '^25|6006|^8[1|2|5|7|8|9]', without the '|' it also matched)
    ADP list   the old program's list of device codes (the "ADP" flag); a code outside it is a warning
@@ -277,8 +277,6 @@ def check(data: dict, sent: dict[tuple[str, str], str] | None = None) -> list[Ro
         self_paid_error(row)
         if code not in ADP_LIST:
             row.add(WARN, "NOT_IN_LIST", f"รหัส {code} ไม่อยู่ในรายการ ADP อุปกรณ์คนพิการ")
-        if not disabled_right and not deformed:
-            row.add(WARN, "NOT_DISABLED", "ไม่ใช่สิทธิผู้พิการ และไม่พบในทะเบียนคนพิการ (person_deformed)")
         if not row.extra["authen"]:
             row.add(WARN, "NO_AUTHEN", "ไม่มี AuthenCode (Claim Code) ของ visit นี้")
         if billed and row.extra["web"]:
