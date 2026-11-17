@@ -189,7 +189,7 @@ def check(data: dict, start: date, end: date, sent: dict[tuple[str, str], str] |
                          "last_drug": drug[0].isoformat() if drug else "", "last_drug_name": drug[1] if drug else "",
                          "maininscl": text(visit.get("maininscl"))}
             if registry is not None and not reg:
-                row.add(ERROR, "NOT_REGISTERED", "ไม่พบการลงทะเบียน DM Remission ในโปรแกรม e-Claim (นำเข้าทะเบียนล่าสุดแล้วหรือยัง)")
+                row.add(ERROR, "NOT_REGISTERED", "ยังไม่ลงทะเบียน E-claim")
             elif reg and reg["reg_date"] > day.isoformat():
                 row.add(WARN, "LATE_REGISTER", f"ลงทะเบียนเมื่อ {_thai(date.fromisoformat(reg['reg_date']))} หลังวันที่ตรวจของขั้นนี้")
             if text(visit.get("maininscl")) not in ("UCS", "WEL"):
