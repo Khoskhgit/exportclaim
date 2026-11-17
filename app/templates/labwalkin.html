@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LAB Walk-in · Export Claim</title>
+<link rel="stylesheet" href="/static/app.css?v={{ v }}">
+</head>
+<body class="no-footer">
+{% set active = "labwalkin" %}{% include "_top.html" %}
+<main>
+  <div class="page-head"><h2>LAB Walk-in ในจังหวัด</h2><p>LAB ส่งตรวจนอก (outlab) ของผู้ป่วยนอกสิทธิ UC ที่สถานพยาบาลหลักเป็น รพ./รพ.สต. อื่นในจังหวัดเดียวกัน (รวม refer-in) · อ่านจาก HOSxP อย่างเดียว</p></div>
+
+  <form id="search" class="panel search">
+    <label>วันที่รับบริการตั้งแต่<input type="date" name="start" required></label>
+    <label>ถึงวันที่<input type="date" name="end" required></label>
+    <div class="actions-cell"><button class="primary" type="submit">แสดง</button><button type="button" id="excel" class="ghost" disabled>ส่งออก Excel</button></div>
+    <div class="presets"><span>ช่วงด่วน:</span><button type="button" data-preset="this">เดือนนี้</button><button type="button" data-preset="last">เดือนก่อน</button></div>
+  </form>
+
+  <section id="summary" class="cards" aria-label="สรุปตามสถานพยาบาลหลัก"></section>
+
+  <section class="panel table-panel">
+    <div class="table-tools">
+      <div class="search-box"><input id="filter" type="search" placeholder="กรองจาก VN, HN, ชื่อ หรือรายการ LAB" aria-label="กรองรายการ"></div>
+      <span id="result-count" class="result-count"></span>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead id="thead"><tr>
+          <th data-sort="vstdate">วันที่รับบริการ</th><th data-sort="vn">VN</th><th data-sort="hn">HN</th><th data-sort="ptname">ชื่อ-สกุล</th>
+          <th>เลขบัตร</th><th data-sort="hospmain">สถานพยาบาลหลัก</th><th data-sort="lab_name">รายการ LAB</th>
+          <th class="num" data-sort="qty">จำนวน</th><th class="num" data-sort="unitcost">ราคา/หน่วย</th><th class="num" data-sort="sum_price">รวมเงิน</th>
+        </tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+      <div id="empty" class="empty"><div class="empty-icon" aria-hidden="true">⌕</div><div>เลือกช่วงวันที่แล้วกด "แสดง"</div></div>
+    </div>
+  </section>
+</main>
+<script src="/static/common.js?v={{ v }}"></script>
+<script src="/static/labwalkin.js?v={{ v }}"></script>
+</body>
+</html>

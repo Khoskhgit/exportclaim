@@ -436,6 +436,27 @@ class Hosxp:
                                              [start, end, *pttypes]) if str(r["vn"]) not in seen]
         return rows
 
+    def lab_walkin(self, start, end, hcode: str) -> list[dict]:
+        """Out-lab items (lab_items.items_is_outlab='Y') on OPD visits of UC patients whose main hospital is another
+        hospital in our province. Refer-in visits are included. lab_items is grouped by icode so an item is never doubled."""
+        return self._select(
+            """SELECT op.vn, op.icode, pt.cid, op.hn,
+            CONCAT(IFNULL(pt.pname,''), IFNULL(pt.fname,''), ' ', IFNULL(pt.lname,'')) AS ptname,
+            op.vstdate, v.hospmain, hp.name AS hospmain_name,
+            IFNULL(li.lab_name, MID(nd.name, 3)) AS lab_name, op.qty, nd.unitcost, op.sum_price
+            FROM opitemrece op
+            JOIN (SELECT icode, MAX(lab_items_name) AS lab_name FROM lab_items
+                  WHERE items_is_outlab='Y' GROUP BY icode) li ON li.icode=op.icode
+            JOIN vn_stat v ON v.vn=op.vn
+            JOIN hospcode hp ON hp.hospcode=v.hospmain
+            JOIN pttype py ON py.pttype=v.pttype
+            LEFT JOIN nondrugitems nd ON nd.icode=op.icode
+            LEFT JOIN patient pt ON pt.hn=op.hn
+            WHERE op.vstdate BETWEEN %s AND %s AND op.an IS NULL AND v.hospmain<>%s AND py.pcode='UC'
+            AND hp.chwpart=(SELECT h.chwpart FROM hospcode h WHERE h.hospcode=%s)
+            ORDER BY v.hospmain, op.vstdate, op.vn, op.icode""",
+            [start, end, hcode, hcode])
+
     def close(self) -> None:
         with self._all_lock:
             conns, self._all = list(self._all), set()
