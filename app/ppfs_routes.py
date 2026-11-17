@@ -429,7 +429,7 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
             hn = text(p["hn"]) if p else ""
             series = sorted(tests.get(hn, {}).items())
             since = ppfs_dmrem.window_start(reg["reg_date"]) if reg["reg_date"] else None
-            f = ppfs_dmrem.follow_up(series, drugs.get(hn, []), today, since, ppfs_dmrem.stop_day(entries))
+            f = ppfs_dmrem.follow_up(series, drugs.get(hn, []), today, since, ppfs_dmrem.stop_day(entries, today))
             due = f["next_from"]
             overdue = bool(f.get("next_to") and f["next_to"] < today and f["state"] == "wait3")
             out.append({

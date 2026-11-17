@@ -128,3 +128,14 @@ def test_the_registration_is_the_first_test():
     assert stage_visits([row]) == ["v2"]
     wait = follow_up([], [], d("2026-05-01"), stop=d("2026-04-10"))
     assert (wait["state"], wait["next_from"]) == ("wait2", d("2026-07-09"))
+
+
+def test_a_patient_registered_again_counts_from_the_latest_registration():
+    from app.ppfs_dmrem import stop_day
+    regs = [{"status": "Y", "visit_date": "2025-05-23"}, {"status": "Y", "visit_date": "2026-04-10"},
+            {"status": "N", "visit_date": "2026-06-01"}]
+    assert stop_day(regs) == d("2026-04-10") and stop_day(regs, d("2025-09-30")) == d("2025-05-23")
+    data = {"tests": [hba1c("v2", "2026-04-10", "5.3"), hba1c("v3", "2026-07-24", "5.2")],
+            "drugs": [{"hn": "1", "vstdate": date(2026, 1, 9), "name": "METFORMIN"}], "e11": {"1"}}
+    registry = {"1" * 13: [{**r, "reg_date": r["visit_date"], "expire_date": ""} for r in regs]}
+    assert [r.code for r in check(data, date(2025, 10, 1), date(2026, 9, 30), registry=registry)] == ["DMR1"]

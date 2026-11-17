@@ -42,13 +42,14 @@ def window_start(reg_date: str) -> date:
     return fiscal_range(fiscal_year(date.fromisoformat(reg_date)))[0] - timedelta(days=BEFORE_REGISTRATION_DAYS)
 
 
-def stop_day(registrations: list[dict]) -> date | None:
-    """The first day off the drugs from the e-Claim registry: the earliest วันที่เข้ารับบริการ of its Y registrations.
+def stop_day(registrations: list[dict], until: date | None = None) -> date | None:
+    """The first day off the drugs from the e-Claim registry: the วันที่เข้ารับบริการ of the latest Y registration
+    that began on or before `until` (a patient registered again starts over from the new one).
 
     With it the registration is the first test (stages_registered): the drugs dispensed before it are ignored, a drug
     dispensed after it still breaks the remission. Without it the HbA1c and drugs in HOSxP decide (stages)."""
     days = [date.fromisoformat(r["visit_date"]) for r in registrations if r.get("status") == "Y" and r.get("visit_date")]
-    return min(days, default=None)
+    return max((x for x in days if until is None or x <= until), default=None)
 DRUG_BEFORE_DAYS = 90
 RATES = {1: Decimal("4000"), 2: Decimal("2000")}
 DM_DRUGS = ("METFORMIN|GLIPIZIDE|GLICLAZIDE|GLIBENCLAMIDE|GLIMEPIRIDE|INSULIN|PIOGLITAZONE|GLIPTIN|GLIFLOZIN|ACARBOSE|"
@@ -200,7 +201,7 @@ def check(data: dict, start: date, end: date, sent: dict[tuple[str, str], str] |
         tests = [t for i, t in enumerate(tests) if i == 0 or t[0] != tests[i - 1][0]]
         cid_regs = [x for x in (registry or {}).get(text(tests[0][2].get("cid")), []) if x["status"] == "Y" and x["reg_date"]]
         since = window_start(cid_regs[0]["reg_date"]) if cid_regs else start - timedelta(days=365)
-        stop = stop_day(cid_regs)
+        stop = stop_day(cid_regs, end)
         hn_drugs = drugs.get(hn, [])
         if stop:
             since = stop
