@@ -242,6 +242,7 @@ async function openDrawer(r) {
       ["HbA1c ที่ใช้", r.extra.tests.map((t, i) => `${toDmy(t.date)} ${t.value}%${i ? ` (ห่าง ${r.extra.gaps[i - 1]} วัน)` : ""}`).join(" → ")],
       ["ลงทะเบียน e-Claim", r.extra.registered ? toDmy(r.extra.registered) : r.extra.registry_checked ? "ไม่พบในทะเบียน" : "ยังไม่ได้นำเข้าทะเบียน"],
       ["ยาลดน้ำตาลครั้งล่าสุด", r.extra.last_drug ? `${toDmy(r.extra.last_drug)} · ${r.extra.last_drug_name}` : "ไม่เคยได้ยา"],
+      ["เริ่มนับหยุดยา", r.extra.stopped ? `${toDmy(r.extra.stopped)} (วันที่เข้ารับบริการในทะเบียน)` : "ไม่มีในทะเบียน ใช้การจ่ายยาใน HOSxP (qty > 0)"],
       ["รหัส ADP ที่ส่ง", r.extra.adp || "ยังไม่ได้ตั้ง"],
     ] : kind === "anemiachild" ? [
       ["อายุ", r.extra.age_text ? `${r.extra.age_text} (${r.extra.months} เดือน)` : "—"],

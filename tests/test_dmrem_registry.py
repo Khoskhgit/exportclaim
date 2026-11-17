@@ -89,3 +89,23 @@ def test_follow_up_states_and_due_windows():
                     today, since=d("2025-04-04"))
     assert old["state"] == "wait2"  # an old remission does not count
     assert cutoff(d("2026-02-01")) == d("2026-03-31") and cutoff(d("2026-04-01")) == d("2026-09-15") and cutoff(d("2026-10-01")) == d("2027-03-31")
+
+
+def test_the_registry_service_date_is_the_first_day_off_the_drugs():
+    tests = [hba1c("v1", "2026-01-09", "6.1"), hba1c("v2", "2026-04-10", "5.3"), hba1c("v3", "2026-07-24", "5.2")]
+    drugs = [{"hn": "1", "vstdate": date(2026, 1, 9), "name": "METFORMIN"}, {"hn": "1", "vstdate": date(2026, 3, 20), "name": "METFORMIN"}]
+    data = {"tests": tests, "drugs": drugs, "e11": {"1"}}
+    reg = {"status": "Y", "reg_date": "2026-05-01", "expire_date": "", "visit_date": "2026-04-10"}
+    rows = check(data, date(2025, 10, 1), date(2026, 9, 30), registry={"1" * 13: [reg]})
+    # The drug of 20 March is before the day in the registry, so it does not count; the stage starts on that day.
+    assert [(r.code, [t["vn"] for t in r.extra["tests"]], r.extra["stopped"]) for r in rows] == [("DMR1", ["v2", "v3"], "2026-04-10")]
+    assert check(data, date(2025, 10, 1), date(2026, 9, 30), registry={"1" * 13: [{**reg, "visit_date": ""}]}) == []  # HOSxP decides
+    later = {**data, "drugs": drugs + [{"hn": "1", "vstdate": date(2026, 5, 2), "name": "METFORMIN"}]}
+    assert check(later, date(2025, 10, 1), date(2026, 9, 30), registry={"1" * 13: [reg]}) == []  # a drug after it still counts
+
+
+def test_follow_up_counts_from_the_stop_day():
+    series = [(d("2026-01-09"), Decimal("6.1")), (d("2026-04-10"), Decimal("5.3"))]
+    f = follow_up(series, [d("2026-03-20")], d("2026-06-01"), stop=d("2026-04-10"))
+    assert (f["state"], f["next_from"], f["last_drug"]) == ("wait2", d("2026-07-09"), d("2026-03-20"))
+    assert follow_up(series, [d("2026-03-20")], d("2026-06-01"))["state"] == "not_yet"

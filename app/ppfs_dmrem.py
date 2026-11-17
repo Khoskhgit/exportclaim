@@ -40,6 +40,16 @@ BEFORE_REGISTRATION_DAYS = 180
 
 def window_start(reg_date: str) -> date:
     return fiscal_range(fiscal_year(date.fromisoformat(reg_date)))[0] - timedelta(days=BEFORE_REGISTRATION_DAYS)
+
+
+def stop_day(registrations: list[dict]) -> date | None:
+    """The first day off the drugs from the e-Claim registry: the earliest วันที่เข้ารับบริการ of its Y registrations.
+
+    With it the remission is counted from that day: the drugs dispensed before it are ignored and the first test of
+    stage 1 must be on or after it (a drug dispensed after it still breaks the remission). Without it the drugs in
+    HOSxP decide (none from 3 months before the first test)."""
+    days = [date.fromisoformat(r["visit_date"]) for r in registrations if r.get("status") == "Y" and r.get("visit_date")]
+    return min(days, default=None)
 DRUG_BEFORE_DAYS = 90
 RATES = {1: Decimal("4000"), 2: Decimal("2000")}
 DM_DRUGS = ("METFORMIN|GLIPIZIDE|GLICLAZIDE|GLIBENCLAMIDE|GLIMEPIRIDE|INSULIN|PIOGLITAZONE|GLIPTIN|GLIFLOZIN|ACARBOSE|"
@@ -161,8 +171,13 @@ def check(data: dict, start: date, end: date, sent: dict[tuple[str, str], str] |
         tests = [t for i, t in enumerate(tests) if i == 0 or t[0] != tests[i - 1][0]]
         cid_regs = [x for x in (registry or {}).get(text(tests[0][2].get("cid")), []) if x["status"] == "Y" and x["reg_date"]]
         since = window_start(cid_regs[0]["reg_date"]) if cid_regs else start - timedelta(days=365)
+        stop = stop_day(cid_regs)
+        hn_drugs = drugs.get(hn, [])
+        if stop:
+            since = stop
+            hn_drugs = [x for x in hn_drugs if x > stop]
         tests = [t for t in tests if t[0] >= since]
-        for stage, found in stages(tests, drugs.get(hn, [])).items():
+        for stage, found in stages(tests, hn_drugs).items():
             visit = found["visit"]
             day = _day(visit["vstdate"])
             if not (start <= day <= end):
@@ -184,6 +199,7 @@ def check(data: dict, start: date, end: date, sent: dict[tuple[str, str], str] |
             reg = next((x for x in regs if x["status"] == "Y" and not (x["expire_date"] and x["expire_date"] < day.isoformat())), None)
             row.extra = {"stage": stage, "age": int(age) if age is not None else None, "gaps": gaps,
                          "registered": reg["reg_date"] if reg else "", "registry_checked": registry is not None,
+                         "stopped": stop.isoformat() if stop else "",
                          "tests": [{"date": d.isoformat(), "value": f"{v}", "vn": text(t["vn"])} for d, v, t in found["tests"]],
                          "all_tests": [{"date": d.isoformat(), "value": f"{v}"} for d, v, _ in tests],
                          "last_drug": drug[0].isoformat() if drug else "", "last_drug_name": drug[1] if drug else "",
@@ -235,16 +251,19 @@ def cutoff(day: date) -> date:
     return date(day.year + 1, 3, 31)
 
 
-def follow_up(tests: list[tuple[date, Decimal]], drug_days: list[date], today: date, since: date | None = None) -> dict:
+def follow_up(tests: list[tuple[date, Decimal]], drug_days: list[date], today: date, since: date | None = None,
+              stop: date | None = None) -> dict:
     """Where a registered patient stands and when the next HbA1c should be done.
 
     state: "done" (stage 2 reached), "wait3" (stage 1 reached, the 3rd test is due), "wait2" (one test below 6.5% off
     drugs, the 2nd is due), "not_yet" (no test below 6.5% off drugs yet), "no_test"."""
+    last_drug = max(drug_days, default=None)
+    if stop:  # the first day off the drugs from the registry (stop_day)
+        since, drug_days = stop, [x for x in drug_days if x > stop]
     if since:
         tests = [t for t in tests if t[0] >= since]
     rows = [(d, v, {}) for d, v in tests]
     found = stages(rows, drug_days)
-    last_drug = max(drug_days, default=None)
     if 2 in found:
         d3 = found[2]["tests"][2][0]
         return {"state": "done", "stage": 2, "since": found[2]["tests"][1][0], "next_from": None, "next_to": None,

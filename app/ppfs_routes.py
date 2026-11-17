@@ -157,8 +157,9 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
         if service.key == "dmrem":
             summary = registry.summary()
             imported = summary["n"] > 0
-            first = summary.get("first")
-            data = ppfs_dmrem.fetch(q, start, end, ppfs_dmrem.window_start(first) if first else None)
+            first = [d for d in (ppfs_dmrem.window_start(summary["first"]) if summary.get("first") else None,
+                                 date.fromisoformat(summary["first_visit"]) if summary.get("first_visit") else None) if d]
+            data = ppfs_dmrem.fetch(q, start, end, min(first, default=None))
             vns = sorted({text(r["vn"]) for r in data["tests"]})
             cids = {text(r.get("cid")) for r in data["tests"]}
             return ppfs_dmrem.check(data, start, end, store.sent(vns), registry.by_pid(cids) if imported else None)
@@ -428,7 +429,7 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
             hn = text(p["hn"]) if p else ""
             series = sorted(tests.get(hn, {}).items())
             since = ppfs_dmrem.window_start(reg["reg_date"]) if reg["reg_date"] else None
-            f = ppfs_dmrem.follow_up(series, drugs.get(hn, []), today, since)
+            f = ppfs_dmrem.follow_up(series, drugs.get(hn, []), today, since, ppfs_dmrem.stop_day(entries))
             due = f["next_from"]
             overdue = bool(f.get("next_to") and f["next_to"] < today and f["state"] == "wait3")
             out.append({
