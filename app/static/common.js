@@ -323,3 +323,11 @@ async function showUser() {
 }
 setupDateInputs();
 showUser();
+// The KHH LINK menu closes on a click elsewhere, Escape, or after a link is opened.
+(() => {
+  const menu = $("khh-links");
+  if (!menu) return;
+  document.addEventListener("click", (e) => { if (menu.open && !menu.contains(e.target)) menu.open = false; });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && menu.open) { menu.open = false; menu.querySelector("summary").focus(); } });
+  menu.querySelectorAll("a").forEach((a) => a.addEventListener("click", () => { menu.open = false; }));
+})();
