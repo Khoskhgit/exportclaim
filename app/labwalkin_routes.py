@@ -46,6 +46,7 @@ def clean(rows: list[dict]) -> list[dict]:
             "vn": text(row.get("vn")), "icode": text(row.get("icode")), "cid": text(row.get("cid")),
             "hn": text(row.get("hn")), "ptname": text(row.get("ptname")), "vstdate": str(row.get("vstdate") or "")[:10],
             "hospmain": code, "hospmain_name": f"{code} - {text(row.get('hospmain_name'))}",
+            "pttype": " ".join(x for x in (text(row.get("pttype")), text(row.get("pttype_name"))) if x), "pdx": text(row.get("pdx")),
             "lab_name": text(row.get("lab_name")), "qty": dec(row.get("qty")), "unitcost": dec(row.get("unitcost")),
             "sum_price": dec(row.get("sum_price")),
         })

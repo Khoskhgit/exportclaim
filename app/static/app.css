@@ -67,6 +67,9 @@ input[type=checkbox]:disabled{cursor:not-allowed}
 .search>*{min-width:0}
 .search .wide{grid-column:span 2}
 .search .actions-cell{display:flex;gap:8px;align-items:end;flex-wrap:wrap}
+.search-inline{grid-template-columns:repeat(2,minmax(150px,190px)) auto;justify-content:start}
+.search-inline .actions-cell{flex-wrap:nowrap}
+.drawer tr.outlab td{background:#fff7e0}
 .presets{display:flex;gap:6px;grid-column:1/-1;margin-top:-4px}
 .presets span{font-size:12px;color:var(--faint);align-self:center}
 .presets button{min-height:26px;padding:1px 10px;font-size:12px;border-radius:999px}

@@ -442,7 +442,7 @@ class Hosxp:
         return self._select(
             """SELECT op.vn, op.icode, pt.cid, op.hn,
             CONCAT(IFNULL(pt.pname,''), IFNULL(pt.fname,''), ' ', IFNULL(pt.lname,'')) AS ptname,
-            op.vstdate, v.hospmain, hp.name AS hospmain_name,
+            op.vstdate, v.hospmain, hp.name AS hospmain_name, v.pttype, py.name AS pttype_name, v.pdx,
             IFNULL(li.lab_name, MID(nd.name, 3)) AS lab_name, op.qty, nd.unitcost, op.sum_price
             FROM opitemrece op
             JOIN (SELECT icode, MAX(lab_items_name) AS lab_name FROM lab_items

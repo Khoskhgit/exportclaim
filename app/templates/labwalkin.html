@@ -11,10 +11,10 @@
 <main>
   <div class="page-head"><h2>LAB Walk-in ในจังหวัด</h2><p>LAB ส่งตรวจนอก (outlab) ของผู้ป่วยนอกสิทธิ UC ที่สถานพยาบาลหลักเป็น รพ./รพ.สต. อื่นในจังหวัดเดียวกัน (รวม refer-in) · อ่านจาก HOSxP อย่างเดียว</p></div>
 
-  <form id="search" class="panel search">
+  <form id="search" class="panel search search-inline">
     <label>วันที่รับบริการตั้งแต่<input type="date" name="start" required></label>
     <label>ถึงวันที่<input type="date" name="end" required></label>
-    <div class="actions-cell"><button class="primary" type="submit">แสดง</button><button type="button" id="excel" class="ghost" disabled>ส่งออก Excel</button></div>
+    <div class="actions-cell"><button class="primary" type="submit">แสดง</button><button type="button" id="excel" class="primary" disabled>ส่งออก Excel</button></div>
     <div class="presets"><span>ช่วงด่วน:</span><button type="button" data-preset="this">เดือนนี้</button><button type="button" data-preset="last">เดือนก่อน</button></div>
   </form>
 
@@ -38,6 +38,12 @@
     </div>
   </section>
 </main>
+
+<div id="drawer-backdrop" class="drawer-backdrop" hidden></div>
+<aside id="drawer" class="drawer" hidden aria-label="รายละเอียด">
+  <div class="drawer-head"><div><h2 id="drawer-title"></h2><span id="drawer-sub" class="sub"></span></div><button type="button" id="drawer-close" class="ghost">ปิด ✕</button></div>
+  <div id="drawer-body"></div>
+</aside>
 <script src="/static/common.js?v={{ v }}"></script>
 <script src="/static/labwalkin.js?v={{ v }}"></script>
 </body>
