@@ -144,11 +144,13 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
         special = {"ironchild": ppfs_ironchild, "anemiachild": ppfs_anemiachild}.get(service.key)
         fee_icodes = set(special.all_icodes(special.bands(settings))) if special else set()
         chosen = store.choices(service.key, vns)
+        # 6) ticks everything of the HbA1c visit except the glucose-lowering drugs (the user asked, 2026-11-17).
+        dm_drugs = set(ppfs_dmrem.drug_icodes(q)) if service.key == "dmrem" else set()
         plan: dict[str, dict[str, dict]] = {}
         for i in items:
             vn, icode = text(i["vn"]), text(i["icode"])
             fee = icode in fee_icodes if special else (text(i.get("code")) in claimed.get(vn, set()) and not i.get("is_drug"))
-            default = service.key != "dmrem"  # 6) sends the HbA1c visits without charges: they are billed on the 18-file page
+            default = icode not in dm_drugs
             send = True if fee else chosen.get((vn, icode), default)
             plan.setdefault(vn, {})[icode] = {"send": send, "locked": fee, "default": default}
         return plan

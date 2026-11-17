@@ -433,7 +433,7 @@ async function openDrawer(r) {
     };
     showTotal();
     const costs = [el("p", { class: "muted-note" }, kind === "dmrem"
-      ? "ข้อนี้ไม่มีค่าบริการ ZIP ส่ง visit ที่ตรวจ HbA1c ของขั้นนี้พร้อมแฟ้ม LAB (HbA1c = LABTEST 05) โดยไม่มีค่าใช้จ่าย ค่ารักษาของ visit ส่งตามปกติที่หน้า 18 แฟ้ม"
+      ? "ข้อนี้ไม่มีค่าบริการ ZIP ส่ง visit ที่ตรวจ HbA1c ของขั้นนี้พร้อมแฟ้ม LAB (HbA1c = LABTEST 05) · ติ๊กไว้ทุกรายการยกเว้นยาเบาหวาน ติ๊กออกรายการที่ไม่ต้องการส่ง ไม่แก้ข้อมูลใน HOSxP"
       : `ค่าบริการ ${[...claimed].join(" / ")} ส่งเสมอ · รายการอื่นติ๊กไว้ทั้งหมด ติ๊กออกรายการที่ไม่ต้องการส่ง (ยาอยู่ในแฟ้ม DRU) ไม่แก้ข้อมูลใน HOSxP`),
       sentTotal,
       table(["ส่ง", "รายการ", "ADP", "ประเภทบริการ PPFS", { label: "จำนวน", num: true }, { label: "รวม", num: true }], data.items.map((i) => {
