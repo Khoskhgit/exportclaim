@@ -115,7 +115,7 @@ def register(app: FastAPI, settings: Settings, db: AipnDb, local: Store, templat
         skipped = sorted({text(i.get("icode")) for i in items if not aipn.exported(i)})
         claim = aipn_service.claims(db, bundle, settings, excluded, included, local.aipn_care_as([an]))[0]
         return {
-            "items": rows, "skipped": skipped,
+            "items": rows, "skipped": skipped, "cc": db.cc(an) if hasattr(db, "cc") else "",
             "dx": [{"type": text(d.get("subclass")), "code": text(d.get("code")), "name": text(d.get("name"))} for d in claim.dx],
             "ops": [{"line": line.rstrip("\r\n")} for line in aipn.op_lines(claim.ops)],
         }

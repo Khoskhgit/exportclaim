@@ -210,6 +210,12 @@ class AipnDb:
         ORDER BY dx.an, dx.diagtype, dx.ipt_diag_id
         """, list(ans))
 
+    def cc(self, an: str) -> str:
+        """The chief complaint of the visit the patient was admitted from (opdscreen of ipt.vn)."""
+        from .hosxp import clean_cc
+        rows = self.h._select("SELECT s.cc FROM ipt i JOIN opdscreen s ON s.vn=i.vn WHERE i.an=%s", [an])
+        return "\n".join(c for c in (clean_cc(r["cc"]) for r in rows) if c)
+
     def ops(self, ans: Sequence[str]) -> list[dict]:
         if not ans:
             return []

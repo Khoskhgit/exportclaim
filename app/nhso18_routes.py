@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import logging
-import re
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any
@@ -13,6 +12,7 @@ from fastapi.templating import Jinja2Templates
 
 from . import auth, eclaim_api, fdh, nhso18, nhso18_service as svc
 from .config import Settings
+from .hosxp import clean_cc as hosxp_clean_cc
 from .store import Store
 from .aipn import number
 from .validate import text
@@ -136,7 +136,7 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
         table = "iptdiag" if kind == "IPD" else "ovstdiag"
         dx = q(f"SELECT diagtype, icd10, icdname(icd10) name FROM {table} WHERE {col}={nhso18.lit(key)} ORDER BY diagtype, icd10")
         visit = f"(SELECT vn FROM ipt WHERE an={nhso18.lit(key)})" if kind == "IPD" else nhso18.lit(key)
-        cc = "\n".join(c for c in (clean_cc(r["cc"]) for r in q(f"SELECT cc FROM opdscreen WHERE vn={visit}")) if c)
+        cc = "\n".join(c for c in (hosxp_clean_cc(r["cc"]) for r in q(f"SELECT cc FROM opdscreen WHERE vn={visit}")) if c)
         return {
             "cc": cc,
             "procedures": procedures(key, kind),
@@ -148,10 +148,6 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
                       for i in items],
             "dx": [{"type": text(d["diagtype"]), "code": text(d["icd10"]), "name": text(d["name"])} for d in dx],
         }
-
-    def clean_cc(value) -> str:
-        """opdscreen.cc without the "|recorder|" HOSxP puts in front."""
-        return re.sub(r"^\s*\|[^|]*\|\s*", "", text(value)).strip()
 
     OOP_SOURCE = {1: "วินิจฉัย", 2: "ER", 3: "หัตถการ", 4: "ทันตกรรม", 5: "ER (ICD-10-TM)", 6: "หัตถการ (ICD-10-TM)",
                   7: "ทันตกรรม (ICD-10-TM)", 8: "แพทย์แผนไทย"}

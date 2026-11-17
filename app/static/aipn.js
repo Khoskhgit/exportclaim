@@ -109,11 +109,14 @@ async function openDrawer(r) {
       check.push(el("div", { class: "all-good" }, "✓ ผ่านการตรวจทั้งหมด พร้อมส่ง"));
     }
 
-    const dx = [data.dx.length ? table(["ประเภท", "รหัส", "ชื่อโรค"], data.dx.map((d) => el("tr", {}, el("td", {}, d.type), el("td", { class: "mono" }, d.code), el("td", {}, d.name)))) : el("p", { class: "muted" }, "ไม่มีข้อมูลการวินิจฉัย")];
-    const ops = [data.ops.length ? table(["รหัส", "ชื่อหัตถการ", "แพทย์", "เริ่ม", "สิ้นสุด"], data.ops.map((o) => {
+    const dx = [el("h3", {}, "CC (อาการสำคัญ ตอนรับ Admit)"),
+      data.cc ? el("p", { class: "cc-text" }, data.cc) : el("p", { class: "muted" }, "ไม่มีข้อมูล CC"),
+      el("h3", {}, "การวินิจฉัย"),
+      data.dx.length ? table(["ประเภท", "รหัส", "ชื่อโรค"], data.dx.map((d) => el("tr", {}, el("td", {}, d.type), el("td", { class: "mono" }, d.code), el("td", {}, d.name)))) : el("p", { class: "muted" }, "ไม่มีข้อมูลการวินิจฉัย")];
+    dx.push(el("h3", {}, "หัตถการ (IOP)"), data.ops.length ? table(["รหัส", "ชื่อหัตถการ", "แพทย์", "เริ่ม", "สิ้นสุด"], data.ops.map((o) => {
       const f = o.line.split("|");
       return el("tr", {}, el("td", { class: "mono" }, f[2]), el("td", {}, f[3]), el("td", {}, f[4]), el("td", { class: "mono" }, thaiDateTime(f[5])), el("td", { class: "mono" }, thaiDateTime(f[6])));
-    })) : el("p", { class: "muted" }, "ไม่มีหัตถการ")];
+    })) : el("p", { class: "muted" }, "ไม่มีหัตถการ"));
 
     const amount = el("div", { class: "amount-bar" });
     const showAmount = () => amount.replaceChildren(
@@ -170,8 +173,7 @@ async function openDrawer(r) {
     const flagged = data.items.filter((i) => i.price_wrong && !i.excluded).length;
     body.replaceChildren(...tabs([
       { id: "check", label: "สรุปและผลตรวจ", badge: r.issues.length + (r.special ? 1 : 0) || undefined, alert: r.has_error || !!r.special, content: check },
-      { id: "dx", label: "การวินิจฉัย", badge: data.dx.length, content: dx },
-      { id: "ops", label: "หัตถการ", badge: data.ops.length, content: ops },
+      { id: "dx", label: "การวินิจฉัย", badge: data.dx.length + data.ops.length, content: dx },
       { id: "cost", label: "ค่าใช้จ่าย", badge: flagged ? `${flagged} ราคาไม่ตรง` : data.items.length, alert: flagged > 0, content: costs },
     ]));
   } catch (err) { body.replaceChildren(el("p", {}, err.message)); }

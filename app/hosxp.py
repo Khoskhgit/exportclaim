@@ -31,6 +31,11 @@ WRITE_PRIVILEGES = re.compile(
 _READ_ONLY_SQL = re.compile(r"^\s*(SELECT|SHOW)\b", re.I)
 
 
+def clean_cc(value: Any) -> str:
+    """opdscreen.cc without the "|recorder|" HOSxP puts in front."""
+    return re.sub(r"^\s*\|[^|]*\|\s*", "", "" if value is None else str(value)).strip()
+
+
 class HosxpError(RuntimeError):
     """A database problem that can be shown to the user."""
 
