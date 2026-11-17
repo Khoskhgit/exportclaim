@@ -43,12 +43,12 @@ def window_start(reg_date: str) -> date:
 
 
 def stop_day(registrations: list[dict], until: date | None = None) -> date | None:
-    """The first day off the drugs from the e-Claim registry: the วันที่เข้ารับบริการ of the latest Y registration
+    """The first day off the drugs from the e-Claim registry: the วันที่ลงทะเบียน of the latest Y registration
     that began on or before `until` (a patient registered again starts over from the new one).
 
     With it the registration is the first test (stages_registered): the drugs dispensed before it are ignored, a drug
     dispensed after it still breaks the remission. Without it the HbA1c and drugs in HOSxP decide (stages)."""
-    days = [date.fromisoformat(r["visit_date"]) for r in registrations if r.get("status") == "Y" and r.get("visit_date")]
+    days = [date.fromisoformat(r["reg_date"]) for r in registrations if r.get("status") == "Y" and r.get("reg_date")]
     return max((x for x in days if until is None or x <= until), default=None)
 DRUG_BEFORE_DAYS = 90
 RATES = {1: Decimal("4000"), 2: Decimal("2000")}
@@ -144,7 +144,7 @@ def stages(tests: list[tuple[date, Decimal, dict]], drug_days: list[date]) -> di
 
 
 def stages_registered(tests: list[tuple[date, Decimal, dict]], drug_days: list[date], stop: date) -> dict[int, dict]:
-    """The stages of a patient in the e-Claim registry: the registration (its วันที่เข้ารับบริการ, `stop`) is the first
+    """The stages of a patient in the e-Claim registry: the registration (its วันที่ลงทะเบียน, `stop`) is the first
     test; the 2nd (stage 1) and 3rd (stage 2) are the next HbA1c below 6.5% at least 3 months after the one before,
     with no glucose-lowering drug dispensed (qty > 0) in between. A result of 6.5% or more on the way ends it; a lower
     one sooner than 3 months is passed over.

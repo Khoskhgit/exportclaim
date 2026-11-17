@@ -60,10 +60,10 @@ def test_six_checks_the_registration_and_shows_the_gaps():
                       hba1c("w1", "2025-11-01", "6.0", hn="2", cid="2" * 13), hba1c("w2", "2026-02-15", "6.1", hn="2", cid="2" * 13)],
             "drugs": [{"hn": "1", "vstdate": date(2024, 1, 1), "name": "METFORMIN"}, {"hn": "2", "vstdate": date(2024, 1, 1), "name": "METFORMIN"}],
             "e11": {"1", "2"}}
-    registry = {"1" * 13: [{"status": "Y", "reg_date": "2026-03-01", "expire_date": ""}]}
+    registry = {"1" * 13: [{"status": "Y", "reg_date": "2025-11-01", "expire_date": ""}]}
     rows = {r.hn: r for r in check(data, date(2025, 10, 1), date(2026, 9, 30), registry=registry)}
-    assert rows["1"].extra["gaps"] == [106] and rows["1"].extra["registered"] == "2026-03-01"
-    assert [w["code"] for w in rows["1"].warnings] == ["LATE_REGISTER"]  # registered after the test of the stage
+    assert rows["1"].extra["gaps"] == [106] and rows["1"].extra["registered"] == "2025-11-01"
+    assert rows["1"].warnings == [] and rows["1"].extra["stopped"] == "2025-11-01"  # the registration is test 1
     assert [e["code"] for e in rows["2"].errors] == ["NOT_REGISTERED"]
     unchecked = check(data, date(2025, 10, 1), date(2026, 9, 30), registry=None)
     assert not any(e["code"] == "NOT_REGISTERED" for r in unchecked for e in r.errors)  # no registry imported yet
@@ -95,11 +95,11 @@ def test_the_registry_service_date_is_the_first_day_off_the_drugs():
     tests = [hba1c("v1", "2026-01-09", "6.1"), hba1c("v2", "2026-04-10", "5.3"), hba1c("v3", "2026-07-24", "5.2")]
     drugs = [{"hn": "1", "vstdate": date(2026, 1, 9), "name": "METFORMIN"}, {"hn": "1", "vstdate": date(2026, 3, 20), "name": "METFORMIN"}]
     data = {"tests": tests, "drugs": drugs, "e11": {"1"}}
-    reg = {"status": "Y", "reg_date": "2026-05-01", "expire_date": "", "visit_date": "2026-04-10"}
+    reg = {"status": "Y", "reg_date": "2026-04-10", "expire_date": "", "visit_date": "2026-05-01"}  # วันที่ลงทะเบียน counts
     rows = check(data, date(2025, 10, 1), date(2026, 9, 30), registry={"1" * 13: [reg]})
     # The drug of 20 March is before the day in the registry, so it does not count; the stage starts on that day.
     assert [(r.code, [t["vn"] for t in r.extra["tests"]], r.extra["stopped"]) for r in rows] == [("DMR1", ["v2", "v3"], "2026-04-10")]
-    assert check(data, date(2025, 10, 1), date(2026, 9, 30), registry={"1" * 13: [{**reg, "visit_date": ""}]}) == []  # HOSxP decides
+    assert check(data, date(2025, 10, 1), date(2026, 9, 30), registry=None) == []  # no registry: HOSxP decides
     later = {**data, "drugs": drugs + [{"hn": "1", "vstdate": date(2026, 5, 2), "name": "METFORMIN"}]}
     assert check(later, date(2025, 10, 1), date(2026, 9, 30), registry={"1" * 13: [reg]}) == []  # a drug after it still counts
 
@@ -132,10 +132,10 @@ def test_the_registration_is_the_first_test():
 
 def test_a_patient_registered_again_counts_from_the_latest_registration():
     from app.ppfs_dmrem import stop_day
-    regs = [{"status": "Y", "visit_date": "2025-05-23"}, {"status": "Y", "visit_date": "2026-04-10"},
-            {"status": "N", "visit_date": "2026-06-01"}]
+    regs = [{"status": "Y", "reg_date": "2025-05-23"}, {"status": "Y", "reg_date": "2026-04-10"},
+            {"status": "N", "reg_date": "2026-06-01"}]
     assert stop_day(regs) == d("2026-04-10") and stop_day(regs, d("2025-09-30")) == d("2025-05-23")
     data = {"tests": [hba1c("v2", "2026-04-10", "5.3"), hba1c("v3", "2026-07-24", "5.2")],
             "drugs": [{"hn": "1", "vstdate": date(2026, 1, 9), "name": "METFORMIN"}], "e11": {"1"}}
-    registry = {"1" * 13: [{**r, "reg_date": r["visit_date"], "expire_date": ""} for r in regs]}
+    registry = {"1" * 13: [{**r, "expire_date": ""} for r in regs]}
     assert [r.code for r in check(data, date(2025, 10, 1), date(2026, 9, 30), registry=registry)] == ["DMR1"]

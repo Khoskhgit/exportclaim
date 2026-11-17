@@ -157,9 +157,8 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
         if service.key == "dmrem":
             summary = registry.summary()
             imported = summary["n"] > 0
-            first = [d for d in (ppfs_dmrem.window_start(summary["first"]) if summary.get("first") else None,
-                                 date.fromisoformat(summary["first_visit"]) if summary.get("first_visit") else None) if d]
-            data = ppfs_dmrem.fetch(q, start, end, min(first, default=None))
+            first = summary.get("first")
+            data = ppfs_dmrem.fetch(q, start, end, ppfs_dmrem.window_start(first) if first else None)
             vns = sorted({text(r["vn"]) for r in data["tests"]})
             cids = {text(r.get("cid")) for r in data["tests"]}
             return ppfs_dmrem.check(data, start, end, store.sent(vns), registry.by_pid(cids) if imported else None)

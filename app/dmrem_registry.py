@@ -173,7 +173,7 @@ class RegistryStore:
 
     def summary(self) -> dict:
         with self._db() as db:
-            row = db.execute("SELECT COUNT(*) n, COUNT(DISTINCT pid) people, MIN(reg_date) first, MAX(reg_date) last, MIN(NULLIF(visit_date,'')) first_visit "
+            row = db.execute("SELECT COUNT(*) n, COUNT(DISTINCT pid) people, MIN(reg_date) first, MAX(reg_date) last "
                              "FROM dmrem_registry").fetchone()
             upload = db.execute("SELECT at, name, row_count, created_by FROM dmrem_uploads ORDER BY id DESC LIMIT 1").fetchone()
         return {**dict(row), "last_upload": dict(upload) if upload else None}
