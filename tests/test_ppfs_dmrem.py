@@ -58,3 +58,30 @@ def test_only_rows_whose_visit_is_in_the_range_and_the_visits_sent():
     rows = run(d, start="2025-08-01", end="2025-12-31")
     assert list(rows) == ["DMR2"]  # stage 1 (v2) is before the range
     assert stage_visits(list(rows.values())) == ["v1", "v2", "v3"]  # every HbA1c of the stage goes into the ZIP
+
+
+def test_a_drug_before_the_window_still_counts_as_a_drug():
+    d = {**data([hba1c("v1", "2025-01-01", "6.0"), hba1c("v2", "2025-05-01", "6.1")]),
+         "last_drug": {"1": (date(2019, 3, 1), "METFORMIN 500 mg")}}
+    (row,) = run(d).values()
+    assert codes(row) == ([], []) and row.extra["last_drug"] == "2019-03-01"
+
+
+def test_fetch_reads_the_range_once_and_the_drugs_by_icode():
+    from app.ppfs_dmrem import fetch
+    seen = []
+
+    def q(sql):
+        seen.append(sql)
+        if "lab_order" in sql:
+            return [hba1c("v0", "2024-12-01", "6.3"), hba1c("v1", "2025-11-01", "6.0"), hba1c("x1", "2025-02-01", "6.0", hn="2")]
+        if "FROM drugitems" in sql:
+            return [{"icode": "1500198", "name": "METFORMIN 500 mg"}]
+        if "MAX(vstdate)" in sql:
+            return [{"hn": "1", "d": date(2020, 1, 1), "icode": "1500198"}]
+        return []
+
+    got = fetch(q, date(2025, 10, 1), date(2026, 9, 30))
+    assert [t["vn"] for t in got["tests"]] == ["v0", "v1"]  # hn 2 had no test in the range
+    assert got["last_drug"] == {"1": (date(2020, 1, 1), "METFORMIN 500 mg")}
+    assert "2024-10-01" in seen[0] and "REGEXP" not in seen[2]  # a year back; drugs by icode, not a name match per item

@@ -55,28 +55,61 @@ def value(result) -> Decimal | None:
     return Decimal(match.group(1)) if match else None
 
 
-def fetch(q: Select, start: date, end: date) -> dict:
-    """Every HbA1c and glucose-lowering drug of the patients with an HbA1c in the range."""
-    hns = sorted({text(r["hn"]) for r in q(f"""
-        SELECT DISTINCT o.hn FROM lab_head lh JOIN lab_order lo ON lo.lab_order_number=lh.lab_order_number
-        JOIN ovst o ON o.vn=lh.vn
-        WHERE lo.lab_items_code={HBA1C_LAB} AND o.vstdate BETWEEN {lit(start)} AND {lit(end)}""")})
+def drug_icodes(q: Select) -> dict[str, str]:
+    """icode -> name of the glucose-lowering drugs (a few dozen rows of drugitems)."""
+    return {text(r["icode"]): text(r["name"]) for r in q(f"""
+        SELECT icode, CONCAT_WS(' ',name,strength) name FROM drugitems
+        WHERE CONCAT_WS(' ',name,generic_name) REGEXP {lit(DM_DRUGS)}""")}
+
+
+def drug_days(q: Select, icodes: dict[str, str], since: date, end: date, hns: set[str] | None = None) -> list[dict]:
+    """OPD dispensing of those drugs between the days: one row per patient, day and drug.
+
+    opitemrece is read through its icode (or hn) index, not joined from every visit of the patients: the old join
+    read the whole history of thousands of patients and took about a minute."""
+    if not icodes:
+        return []
+    by_hn = f"AND hn IN ({lit_list(sorted(hns))})" if hns is not None and len(hns) <= 500 else ""
+    rows = q(f"""
+        SELECT DISTINCT hn, vstdate, icode FROM opitemrece
+        WHERE icode IN ({lit_list(sorted(icodes))}) AND vstdate BETWEEN {lit(since)} AND {lit(end)} AND IFNULL(vn,'')<>'' {by_hn}""")
+    return [{**r, "hn": text(r["hn"]), "name": icodes.get(text(r["icode"]), "")} for r in rows
+            if hns is None or text(r["hn"]) in hns]
+
+
+def last_drugs(q: Select, icodes: dict[str, str], end: date, hns: set[str]) -> dict[str, tuple[date, str]]:
+    """hn -> the last day a glucose-lowering drug was dispensed (any time up to end) and its name."""
+    if not icodes or not hns:
+        return {}
+    out = {}
+    for r in q(f"""
+        SELECT hn, MAX(vstdate) d, SUBSTRING_INDEX(GROUP_CONCAT(icode ORDER BY vstdate DESC),',',1) icode FROM opitemrece
+        WHERE icode IN ({lit_list(sorted(icodes))}) AND vstdate<={lit(end)} AND IFNULL(vn,'')<>'' GROUP BY hn"""):
+        hn = text(r["hn"])
+        if hn in hns and (day := _day(r["d"])):
+            out[hn] = (day, icodes.get(text(r["icode"]), ""))
+    return out
+
+
+def fetch(q: Select, start: date, end: date, since: date | None = None) -> dict:
+    """The HbA1c from `since` (default a year before the range) to the end of the range of the patients with an HbA1c in
+    the range, and their glucose-lowering drugs.
+
+    since: how far back a remission may have begun, from the earliest registration in the registry (window_start)."""
+    since = min(since or start, start - timedelta(days=365))
+    found = q(f"""
+        SELECT {VISIT_COLS}, lo.lab_order_result result FROM ovst o JOIN lab_head lh ON lh.vn=o.vn
+        JOIN lab_order lo ON lo.lab_order_number=lh.lab_order_number AND lo.lab_items_code={HBA1C_LAB} {VISIT_JOINS}
+        WHERE o.vstdate BETWEEN {lit(since)} AND {lit(end)} AND IFNULL(lo.lab_order_result,'')<>''""")
+    hns = {text(r["hn"]) for r in found if start <= (_day(r["vstdate"]) or since) <= end}
     if not hns:
-        return {"tests": [], "drugs": [], "e11": set()}
-    tests = q(f"""
-        SELECT {VISIT_COLS}, lo.lab_order_result result FROM lab_head lh
-        JOIN lab_order lo ON lo.lab_order_number=lh.lab_order_number JOIN ovst o ON o.vn=lh.vn {VISIT_JOINS}
-        WHERE lo.lab_items_code={HBA1C_LAB} AND o.hn IN ({lit_list(hns)}) AND o.vstdate<={lit(end)}
-          AND IFNULL(lo.lab_order_result,'')<>''""")
-    drugs = q(f"""
-        SELECT DISTINCT o.hn, o.vstdate, CONCAT_WS(' ',di.name,di.strength) name FROM ovst o
-        JOIN opitemrece oo ON oo.vn=o.vn JOIN drugitems di ON di.icode=oo.icode
-        WHERE o.hn IN ({lit_list(hns)}) AND o.vstdate<={lit(end)}
-          AND CONCAT_WS(' ',di.name,di.generic_name) REGEXP {lit(DM_DRUGS)}""")
+        return {"tests": [], "drugs": [], "e11": set(), "last_drug": {}}
+    tests = [r for r in found if text(r["hn"]) in hns]
+    icodes = drug_icodes(q)
+    drugs = drug_days(q, icodes, since - timedelta(days=DRUG_BEFORE_DAYS), end, hns)
     e11 = {text(r["hn"]) for r in q(f"""
-        SELECT DISTINCT o.hn FROM ovst o JOIN ovstdiag x ON x.vn=o.vn
-        WHERE o.hn IN ({lit_list(hns)}) AND o.vstdate<={lit(end)} AND x.icd10 REGEXP '^E11'""")}
-    return {"tests": tests, "drugs": drugs, "e11": e11}
+        SELECT DISTINCT hn FROM ovstdiag WHERE hn IN ({lit_list(sorted(hns))}) AND icd10 LIKE 'E11%%'""")}
+    return {"tests": tests, "drugs": drugs, "e11": e11, "last_drug": last_drugs(q, icodes, end, hns)}
 
 
 def stages(tests: list[tuple[date, Decimal, dict]], drug_days: list[date]) -> dict[int, dict]:
@@ -117,6 +150,9 @@ def check(data: dict, start: date, end: date, sent: dict[tuple[str, str], str] |
             drugs.setdefault(hn, []).append(day)
             if hn not in last_drug or day > last_drug[hn][0]:
                 last_drug[hn] = (day, text(r["name"]))
+    for hn, (day, name) in data.get("last_drug", {}).items():  # the last drug before the window
+        if hn not in last_drug or day > last_drug[hn][0]:
+            last_drug[hn] = (day, name)
 
     rows: list[Row] = []
     for hn, tests in by_hn.items():

@@ -155,10 +155,12 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
 
     def check(service: ppfs.Service, start: date, end: date) -> list[ppfs.Row]:
         if service.key == "dmrem":
-            data = ppfs_dmrem.fetch(q, start, end)
+            summary = registry.summary()
+            imported = summary["n"] > 0
+            first = summary.get("first")
+            data = ppfs_dmrem.fetch(q, start, end, ppfs_dmrem.window_start(first) if first else None)
             vns = sorted({text(r["vn"]) for r in data["tests"]})
             cids = {text(r.get("cid")) for r in data["tests"]}
-            imported = registry.summary()["n"] > 0
             return ppfs_dmrem.check(data, start, end, store.sent(vns), registry.by_pid(cids) if imported else None)
         if service.key == "anemiachild":
             band_list = ppfs_anemiachild.bands(settings)
@@ -413,10 +415,11 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
                 v = ppfs_dmrem.value(r["result"])
                 if v is not None and r["vstdate"]:
                     tests.setdefault(text(r["hn"]), {})[r["vstdate"]] = v  # one result a day
-            for r in q(f"""
-                SELECT DISTINCT o.hn, o.vstdate FROM ovst o JOIN opitemrece oo ON oo.vn=o.vn JOIN drugitems di ON di.icode=oo.icode
-                WHERE o.hn IN ({nhso18.lit_list(hns)}) AND CONCAT_WS(' ',di.name,di.generic_name) REGEXP {nhso18.lit(ppfs_dmrem.DM_DRUGS)}"""):
-                drugs.setdefault(text(r["hn"]), []).append(r["vstdate"])
+            seen = set()
+            for r in ppfs_dmrem.drug_days(q, ppfs_dmrem.drug_icodes(q), date(1900, 1, 1), today, set(hns)):
+                if (r["hn"], r["vstdate"]) not in seen:
+                    seen.add((r["hn"], r["vstdate"]))
+                    drugs.setdefault(r["hn"], []).append(r["vstdate"])
         iso = lambda d: d.isoformat() if d else ""
         out = []
         for pid, entries in regs.items():
