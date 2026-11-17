@@ -141,8 +141,16 @@ def checks(q: Select, rcm: str, rows: list[dict]) -> dict[str, dict]:
                                     f"JOIN drugitems d ON d.icode=oo.icode LEFT JOIN {rcm}.eclaim_drugcatalog dd ON dd.hospdrugcode=oo.icode "
                                     f"WHERE oo.{key} IN ({{ids}}) AND oo.qty*oo.unitprice<>0 AND {where}")
     drug_missing = flag(items_sql("vn", "IFNULL(dd.hospdrugcode,'')=''"), items_sql("an", "IFNULL(dd.hospdrugcode,'')=''")) if has_catalog else {}
-    tmt_wrong = flag(items_sql("vn", "IFNULL(d.tpu_code_list,'')<>IFNULL(dd.tmtid,'')"),
-                     items_sql("an", "IFNULL(d.tpu_code_list,'')<>IFNULL(dd.tmtid,'')")) if has_catalog else {}
+    # HOSxP drugitems.tpu_code_list (TMT) against the e-Claim catalog's TMTID. Herbal drugs are listed in the
+    # catalog under their TTMT code, so a TTMT (drugitems.ttmt_code) that matches the catalog is correct too.
+    tmt_sql = lambda key: (f"SELECT DISTINCT oo.{key} k, CONCAT(CONCAT_WS(' ',oo.icode,d.name), ' | TMT ', "
+                           f"IFNULL(NULLIF(d.tpu_code_list,''),'-'), ' | TTMT ', IFNULL(NULLIF(d.ttmt_code,''),'-'), "
+                           f"' | e-Claim ', IFNULL(NULLIF(dd.tmtid,''),'-')) item FROM opitemrece oo "
+                           f"JOIN drugitems d ON d.icode=oo.icode LEFT JOIN {rcm}.eclaim_drugcatalog dd ON dd.hospdrugcode=oo.icode "
+                           f"WHERE oo.{key} IN ({{ids}}) AND oo.qty*oo.unitprice<>0 "
+                           f"AND IFNULL(d.tpu_code_list,'')<>IFNULL(dd.tmtid,'') "
+                           f"AND NOT (IFNULL(d.ttmt_code,'')<>'' AND d.ttmt_code=dd.tmtid)")
+    tmt_wrong = flag(tmt_sql("vn"), tmt_sql("an")) if has_catalog else {}
     adp_sql = lambda key: (f"SELECT oo.{key} k, CONCAT_WS(' ',oo.icode,d.name) item FROM opitemrece oo "
                            f"LEFT JOIN income inc ON inc.income=oo.income LEFT JOIN s_drugitems d ON d.icode=oo.icode "
                            f"WHERE oo.{key} IN ({{ids}}) AND inc.drg_chrgitem_id IN (1,2,5,6,7,8,9,10,11,12,13,14,15,19) "
