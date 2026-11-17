@@ -5,7 +5,7 @@ const errorBox = document.getElementById("login-error");
 form.addEventListener("submit", async (e) => {
   e.preventDefault();
   errorBox.hidden = true;
-  const button = form.querySelector("button");
+  const button = form.querySelector(".login-submit");
   button.disabled = true;
   button.textContent = "กำลังตรวจสอบ…";
   try {
@@ -26,3 +26,19 @@ form.addEventListener("submit", async (e) => {
     button.textContent = "เข้าสู่ระบบ";
   }
 });
+
+// Show or hide the password, and warn when Caps Lock is on.
+const toggle = document.getElementById("toggle-password");
+toggle.addEventListener("click", () => {
+  const show = form.password.type === "password";
+  form.password.type = show ? "text" : "password";
+  toggle.textContent = show ? "ซ่อน" : "แสดง";
+  toggle.setAttribute("aria-pressed", String(show));
+  toggle.setAttribute("aria-label", show ? "ซ่อนรหัสผ่าน" : "แสดงรหัสผ่าน");
+  form.password.focus();
+});
+const caps = document.getElementById("caps-warning");
+["keydown", "keyup"].forEach((type) => form.password.addEventListener(type, (e) => {
+  if (e.getModifierState) caps.hidden = !e.getModifierState("CapsLock");
+}));
+form.password.addEventListener("blur", () => { caps.hidden = true; });

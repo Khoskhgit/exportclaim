@@ -3,34 +3,64 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>เข้าสู่ระบบ · Export Claim</title>
+<title>เข้าสู่ระบบ · KHH Claim Sure</title>
 <link rel="stylesheet" href="/static/app.css?v={{ v }}">
 </head>
 <body class="login-page">
-<main class="login-box panel">
-  <div class="login-brand">
-    <div class="logo" aria-hidden="true">EC</div>
-    <div><h1>Export Claim</h1><p>{{ hname or "ส่งออกข้อมูลเบิก SSOP / AIPN" }}</p></div>
-  </div>
-  {% if error %}<div class="notice error login-notice" role="alert"><span class="notice-icon" aria-hidden="true">!</span><div class="notice-text">{{ error }}</div></div>{% endif %}
-  <div id="login-error" class="notice error login-notice" role="alert" hidden><span class="notice-icon" aria-hidden="true">!</span><div class="notice-text"></div></div>
+<main class="login-shell">
+  <section class="login-hero" aria-label="เกี่ยวกับระบบ">
+    <div class="login-hero-brand">
+      <div class="login-mark" aria-hidden="true"><svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.8 4.5 5.6v6.1c0 4.6 3.1 8.2 7.5 9.5 4.4-1.3 7.5-4.9 7.5-9.5V5.6z"/><path d="m8.6 12.1 2.4 2.4 4.6-4.9"/></svg></div>
+      <div><h1>KHH Claim Sure</h1><p>{{ hname or "ตรวจและส่งข้อมูลเบิกชดเชย" }}</p></div>
+    </div>
+    <p class="login-tagline">ตรวจก่อนส่ง เบิกได้ครบ<br>มั่นใจทุกเคลม</p>
+    <ul class="login-features">
+      <li><span aria-hidden="true">✓</span>SSOP / AIPN ประกันสังคม</li>
+      <li><span aria-hidden="true">✓</span>18 แฟ้ม สปสช. และส่ง FDH</li>
+      <li><span aria-hidden="true">✓</span>รายการ PPFS และ KTB Health Platform</li>
+      <li><span aria-hidden="true">✓</span>ติดตาม REP / STM และยอดชดเชย</li>
+    </ul>
+    <p class="login-hero-foot">อ่านข้อมูลจาก HOSxP อย่างเดียว ไม่แก้ไขฐานข้อมูล</p>
+  </section>
 
-  <form id="login-form" class="login-form">
-    <h2>เข้าสู่ระบบด้วยบัญชี HOSxP</h2>
-    <label>ชื่อผู้ใช้<input name="username" autocomplete="username" required autofocus></label>
-    <label>รหัสผ่าน<input name="password" type="password" autocomplete="current-password" required></label>
-    <button class="primary big" type="submit">เข้าสู่ระบบ</button>
-  </form>
+  <section class="login-card" aria-label="เข้าสู่ระบบ">
+    <div class="login-card-head">
+      <h2>ยินดีต้อนรับ</h2>
+      <p>เข้าสู่ระบบด้วยบัญชี HOSxP หรือ MOPH ID</p>
+    </div>
+    {% if error %}<div class="notice error login-notice" role="alert"><span class="notice-icon" aria-hidden="true">!</span><div class="notice-text">{{ error }}</div></div>{% endif %}
+    <div id="login-error" class="notice error login-notice" role="alert" hidden><span class="notice-icon" aria-hidden="true">!</span><div class="notice-text"></div></div>
 
-  <div class="login-divider"><span>หรือ</span></div>
+    <form id="login-form" class="login-form">
+      <label class="login-field">ชื่อผู้ใช้ HOSxP
+        <span class="login-input">
+          <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c1.5-3.6 4.4-5.4 8-5.4s6.5 1.8 8 5.4"/></svg>
+          <input name="username" autocomplete="username" required autofocus placeholder="ชื่อผู้ใช้">
+        </span>
+      </label>
+      <label class="login-field">รหัสผ่าน
+        <span class="login-input">
+          <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="10.5" width="15" height="10" rx="2.2"/><path d="M8 10.5V7.8a4 4 0 0 1 8 0v2.7"/></svg>
+          <input name="password" type="password" autocomplete="current-password" required placeholder="รหัสผ่าน">
+          <button type="button" id="toggle-password" class="login-eye" aria-label="แสดงรหัสผ่าน" aria-pressed="false">แสดง</button>
+        </span>
+      </label>
+      <p id="caps-warning" class="login-caps" hidden>Caps Lock เปิดอยู่</p>
+      <button class="primary big login-submit" type="submit">เข้าสู่ระบบ</button>
+    </form>
 
-  {% if moph_ready %}
-  <a class="moph-button" href="/auth/moph/start">เข้าสู่ระบบด้วย MOPH ID</a>
-  <p class="login-foot">สำหรับบุคลากรที่สังกัดโรงพยาบาลนี้ (Provider ID)</p>
-  {% else %}
-  <button class="moph-button" type="button" disabled>เข้าสู่ระบบด้วย MOPH ID</button>
-  <p class="login-foot">ยังไม่ได้ตั้งค่า MOPH ID ให้ผู้ดูแลใส่ client ID และ secret key ใน .env</p>
-  {% endif %}
+    <div class="login-divider"><span>หรือ</span></div>
+
+    {% if moph_ready %}
+    <a class="moph-button" href="/auth/moph/start">
+      <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="14" rx="2.5"/><circle cx="9" cy="11" r="2.2"/><path d="M5.8 16.2c.7-1.5 1.8-2.2 3.2-2.2s2.5.7 3.2 2.2M14.5 10h3.5M14.5 13.5h3.5"/></svg>
+      เข้าสู่ระบบด้วย MOPH ID</a>
+    <p class="login-foot">สำหรับบุคลากรที่สังกัดโรงพยาบาลนี้ (Provider ID)</p>
+    {% else %}
+    <button class="moph-button" type="button" disabled>เข้าสู่ระบบด้วย MOPH ID</button>
+    <p class="login-foot">ยังไม่ได้ตั้งค่า MOPH ID ให้ผู้ดูแลใส่ client ID และ secret key ใน .env</p>
+    {% endif %}
+  </section>
 </main>
 <script src="/static/login.js?v={{ v }}"></script>
 </body>
