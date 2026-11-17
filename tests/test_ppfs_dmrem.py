@@ -85,3 +85,4 @@ def test_fetch_reads_the_range_once_and_the_drugs_by_icode():
     assert [t["vn"] for t in got["tests"]] == ["v0", "v1"]  # hn 2 had no test in the range
     assert got["last_drug"] == {"1": (date(2020, 1, 1), "METFORMIN 500 mg")}
     assert "2024-10-01" in seen[0] and "REGEXP" not in seen[2]  # a year back; drugs by icode, not a name match per item
+    assert "qty>0" in seen[2] and "qty>0" in seen[4]  # a drug keyed with qty 0 means it was stopped

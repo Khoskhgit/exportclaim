@@ -12,8 +12,8 @@ is billed twice.
 
 "After stopping the drugs" is read as: no glucose-lowering drug dispensed from 3 months before the first of the two
 tests until the second (and, for stage 2, until the third). The registry imported from e-Claim (dmrem_registry) is
-checked: no registration in force is an error, a registration made after the stage's test a warning. A drug keyed with quantity 0 still counts: in HOSxP it
-usually means the patient has the drug at home, so is still on it. A patient who never had one is shown with a warning
+checked: no registration in force is an error, a registration made after the stage's test a warning. A drug keyed with quantity 0 does not count: the user
+reads it as the drug being stopped (2026-11-17). A patient who never had one is shown with a warning
 (the lifestyle route, or a diagnosis to check). The patient must also be registered in the e-Claim program, which
 HOSxP does not hold.
 """
@@ -72,7 +72,7 @@ def drug_days(q: Select, icodes: dict[str, str], since: date, end: date, hns: se
     by_hn = f"AND hn IN ({lit_list(sorted(hns))})" if hns is not None and len(hns) <= 500 else ""
     rows = q(f"""
         SELECT DISTINCT hn, vstdate, icode FROM opitemrece
-        WHERE icode IN ({lit_list(sorted(icodes))}) AND vstdate BETWEEN {lit(since)} AND {lit(end)} AND IFNULL(vn,'')<>'' {by_hn}""")
+        WHERE icode IN ({lit_list(sorted(icodes))}) AND vstdate BETWEEN {lit(since)} AND {lit(end)} AND IFNULL(vn,'')<>'' AND qty>0 {by_hn}""")
     return [{**r, "hn": text(r["hn"]), "name": icodes.get(text(r["icode"]), "")} for r in rows
             if hns is None or text(r["hn"]) in hns]
 
@@ -84,7 +84,7 @@ def last_drugs(q: Select, icodes: dict[str, str], end: date, hns: set[str]) -> d
     out = {}
     for r in q(f"""
         SELECT hn, MAX(vstdate) d, SUBSTRING_INDEX(GROUP_CONCAT(icode ORDER BY vstdate DESC),',',1) icode FROM opitemrece
-        WHERE icode IN ({lit_list(sorted(icodes))}) AND vstdate<={lit(end)} AND IFNULL(vn,'')<>'' GROUP BY hn"""):
+        WHERE icode IN ({lit_list(sorted(icodes))}) AND vstdate<={lit(end)} AND IFNULL(vn,'')<>'' AND qty>0 GROUP BY hn"""):
         hn = text(r["hn"])
         if hn in hns and (day := _day(r["d"])):
             out[hn] = (day, icodes.get(text(r["icode"]), ""))
