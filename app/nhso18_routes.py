@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any
@@ -134,7 +135,11 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
         GROUP BY oo.icode ORDER BY inc.drg_chrgitem_id, oo.icode""")
         table = "iptdiag" if kind == "IPD" else "ovstdiag"
         dx = q(f"SELECT diagtype, icd10, icdname(icd10) name FROM {table} WHERE {col}={nhso18.lit(key)} ORDER BY diagtype, icd10")
+        visit = f"(SELECT vn FROM ipt WHERE an={nhso18.lit(key)})" if kind == "IPD" else nhso18.lit(key)
+        cc = "\n".join(c for c in (clean_cc(r["cc"]) for r in q(f"SELECT cc FROM opdscreen WHERE vn={visit}")) if c)
         return {
+            "cc": cc,
+            "procedures": procedures(key, kind),
             "uuc_auto": auto_uuc(key, kind), "uuc_set": local.nhso18_uuc([key]).get(key, ""),
             "items": [{"icode": text(i["icode"]), "name": text(i["name"]), "billmaud": text(i["billmaud"]),
                        "billmaud_name": text(i.get("billmaud_name")), "adp": text(i["adp"]),
@@ -143,6 +148,37 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
                       for i in items],
             "dx": [{"type": text(d["diagtype"]), "code": text(d["icd10"]), "name": text(d["name"])} for d in dx],
         }
+
+    def clean_cc(value) -> str:
+        """opdscreen.cc without the "|recorder|" HOSxP puts in front."""
+        return re.sub(r"^\s*\|[^|]*\|\s*", "", text(value)).strip()
+
+    OOP_SOURCE = {1: "วินิจฉัย", 2: "ER", 3: "หัตถการ", 4: "ทันตกรรม", 5: "ER (ICD-10-TM)", 6: "หัตถการ (ICD-10-TM)",
+                  7: "ทันตกรรม (ICD-10-TM)", 8: "แพทย์แผนไทย"}
+
+    def procedures(key: str, kind: str) -> list[dict]:
+        """The procedures that go into OOP (OPD) or IOP (IPD), read with the same queries as the export."""
+        config, _ = svc.load_setup(q, settings.hcode)
+        builder = nhso18.Builder(q, config, settings.rcm_db, ECLAIM_DB)
+        builder.visits = [nhso18.Visit(vn=key)]
+        rows = builder.f_iop() if kind == "IPD" else builder.f_oop()
+        codes = sorted({text(r["oper"]).split("+")[0] for r in rows if text(r.get("oper"))})
+        names = {text(r["code"]): text(r["name"]) for r in q(
+            f"SELECT code, name FROM icd9cm1 WHERE code IN ({nhso18.lit_list(codes)})")} if codes else {}
+        day = lambda d: d.isoformat() if hasattr(d, "isoformat") else text(d)
+        hhmm = lambda t: f"{text(t)[:2]}:{text(t)[2:4]}" if len(text(t)) >= 4 else text(t)
+        out: dict[str, dict] = {}  # one row per code, as in the file (OOP keeps the last, IOP the first)
+        for r in rows:
+            oper = text(r["oper"])
+            item = {"code": oper, "name": names.get(oper.split("+")[0], ""), "dropid": text(r.get("dropid"))}
+            if kind == "IPD":
+                item.update(type=text(r.get("optype")), start=f"{day(r.get('datein'))} {hhmm(r.get('timein'))}".strip(),
+                            end=f"{day(r.get('dateout'))} {hhmm(r.get('timeout'))}".strip())
+                out.setdefault(oper, item)
+            else:
+                item.update(type=OOP_SOURCE.get(r.get("part"), ""), start=day(r.get("dateopd")), end="")
+                out[oper] = item
+        return list(out.values())
 
     def auto_uuc(key: str, kind: str) -> str:
         """UUC this visit gets without a hand choice here: 1, or 2 when HOSxP marks it not claimed; IPD is always 1."""

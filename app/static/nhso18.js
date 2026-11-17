@@ -159,7 +159,19 @@ async function openDrawer(r) {
       check.push(el("p", { class: "hint" }, "แก้ข้อมูลใน HOSxP หรือติ๊กไม่ส่งรายการที่มีปัญหาในแท็บค่าใช้จ่าย แล้วกดค้นหาอีกครั้ง"));
     } else check.push(el("div", { class: "all-good" }, "✓ ผ่านการตรวจทั้งหมด พร้อมส่ง"));
 
-    const dx = [data.dx.length ? table(["ประเภท", "รหัส", "ชื่อโรค"], data.dx.map((d) => el("tr", {}, el("td", {}, d.type), el("td", { class: "mono" }, d.code), el("td", {}, d.name)))) : el("p", { class: "muted" }, "ไม่มีข้อมูล")];
+    const procs = data.procedures || [];
+    const ipd = r.kind === "IPD";
+    const dx = [el("h3", {}, `CC (อาการสำคัญ${ipd ? " ตอนรับ Admit" : ""})`),
+      data.cc ? el("p", { class: "cc-text" }, data.cc) : el("p", { class: "muted" }, "ไม่มีข้อมูล CC"),
+      el("h3", {}, "การวินิจฉัย"),
+      data.dx.length ? table(["ประเภท", "รหัส", "ชื่อโรค"], data.dx.map((d) => el("tr", {}, el("td", {}, d.type), el("td", { class: "mono" }, d.code), el("td", {}, d.name)))) : el("p", { class: "muted" }, "ไม่มีข้อมูล"),
+      el("h3", {}, `หัตถการ (${ipd ? "IOP" : "OOP"})`),
+      procs.length ? table([ipd ? "ประเภท" : "ที่มา", "รหัส", "ชื่อหัตถการ", ipd ? "เริ่ม" : "วันที่", ...(ipd ? ["สิ้นสุด"] : []), "ผู้ทำ (ว.)"],
+        procs.map((p) => el("tr", {}, el("td", {}, p.type), el("td", { class: "mono" }, p.code), el("td", {}, p.name || "—"),
+          el("td", { class: "mono" }, p.start ? `${toDmy(p.start.slice(0, 10))}${p.start.slice(10)}` : "—"),
+          ...(ipd ? [el("td", { class: "mono" }, p.end ? `${toDmy(p.end.slice(0, 10))}${p.end.slice(10)}` : "—")] : []),
+          el("td", { class: "mono" }, p.dropid || "—"))))
+        : el("p", { class: "muted" }, "ไม่มีหัตถการ")];
     const summary = el("div", { class: "cost-summary" });
     const showSummary = () => summary.replaceChildren(costSummary(data.items));
     showSummary();
@@ -182,7 +194,7 @@ async function openDrawer(r) {
       }))];
     body.replaceChildren(...tabs([
       { id: "check", label: "สรุปและผลตรวจ", badge: issues.length || undefined, alert: r.has_error, content: check },
-      { id: "dx", label: "การวินิจฉัย", badge: data.dx.length, content: dx },
+      { id: "dx", label: "การวินิจฉัย", badge: data.dx.length + procs.length, content: dx },
       { id: "cost", label: "ค่าใช้จ่าย", badge: data.items.length, content: costs },
     ]));
   } catch (err) { body.replaceChildren(el("p", {}, err.message)); }
