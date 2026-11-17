@@ -238,7 +238,7 @@ async function openDrawer(r) {
     const b = data.birth;
     const own = kind === "dmrem" ? [
       ["อายุ", r.extra.age === null || r.extra.age === undefined ? "—" : `${r.extra.age} ปี`], ["สิทธิหลัก", r.extra.maininscl],
-      ["ขั้น", r.extra.stage === 1 ? "1 เข้าสู่ระยะสงบ (4,000 บาท)" : "2 ยังคงระยะสงบ (2,000 บาท)"],
+      ["ขั้น", r.extra.stage === 0 ? "ครั้งที่ 1 ลงทะเบียน e-Claim (ยังไม่มีค่าบริการ)" : r.extra.stage === 1 ? "1 เข้าสู่ระยะสงบ (4,000 บาท)" : "2 ยังคงระยะสงบ (2,000 บาท)"],
       ["HbA1c ที่ใช้", r.extra.tests.map((t, i) => `${toDmy(t.date)} ${t.value ? `${t.value}%` : "(ลงทะเบียน)"}${i ? ` (ห่าง ${r.extra.gaps[i - 1]} วัน)` : ""}`).join(" → ")],
       ["ลงทะเบียน e-Claim", r.extra.registered ? toDmy(r.extra.registered) : r.extra.registry_checked ? "ไม่พบในทะเบียน" : "ยังไม่ได้นำเข้าทะเบียน"],
       ["ยาลดน้ำตาลครั้งล่าสุด", r.extra.last_drug ? `${toDmy(r.extra.last_drug)} · ${r.extra.last_drug_name}` : "ไม่เคยได้ยา"],
@@ -304,7 +304,7 @@ async function openDrawer(r) {
         data.tests.map((t) => {
           const v = parseFloat(t.result);
           return el("tr", { class: used.has(t.vn) ? "current" : "" }, el("td", { class: "mono" }, toDmy(t.date)), el("td", { class: "mono" }, t.vn),
-            el("td", { class: "num" }, el("span", { class: `badge ${v < 6.5 ? "b-ok" : "b-warn"}` }, t.result)), el("td", {}, used.has(t.vn) ? `ขั้น ${r.extra.stage}` : "—"));
+            el("td", { class: "num" }, el("span", { class: `badge ${v < 6.5 ? "b-ok" : "b-warn"}` }, t.result)), el("td", {}, used.has(t.vn) ? (r.extra.stage ? `ขั้น ${r.extra.stage}` : "ครั้งที่ 1") : "—"));
         }))
         : el("p", { class: "muted" }, "ไม่มีผล"));
       post.push(el("h3", {}, "ยาลดน้ำตาลที่จ่าย (ล่าสุด 30 ครั้ง)"));

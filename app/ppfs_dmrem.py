@@ -51,7 +51,7 @@ def stop_day(registrations: list[dict], until: date | None = None) -> date | Non
     days = [date.fromisoformat(r["reg_date"]) for r in registrations if r.get("status") == "Y" and r.get("reg_date")]
     return max((x for x in days if until is None or x <= until), default=None)
 DRUG_BEFORE_DAYS = 90
-RATES = {1: Decimal("4000"), 2: Decimal("2000")}
+RATES = {0: Decimal("0"), 1: Decimal("4000"), 2: Decimal("2000")}
 DM_DRUGS = ("METFORMIN|GLIPIZIDE|GLICLAZIDE|GLIBENCLAMIDE|GLIMEPIRIDE|INSULIN|PIOGLITAZONE|GLIPTIN|GLIFLOZIN|ACARBOSE|"
             "REPAGLINIDE|GLUTIDE")
 
@@ -207,15 +207,19 @@ def check(data: dict, start: date, end: date, sent: dict[tuple[str, str], str] |
             since = stop
             hn_drugs = [x for x in hn_drugs if x > stop]
         tests = [t for t in tests if t[0] >= since]
-        for stage, found in (stages_registered(tests, hn_drugs, stop) if stop else stages(tests, hn_drugs)).items():
+        found_stages = stages_registered(tests, hn_drugs, stop) if stop else stages(tests, hn_drugs)
+        first = next((t for t in tests if stop and t[0] == stop), None)
+        if first:  # test 1: the registration day, shown (0 baht) so its HbA1c visit can be found and sent
+            found_stages = {0: {"visit": first[2], "tests": [first]}, **found_stages}
+        for stage, found in found_stages.items():
             visit = found["visit"]
             day = _day(visit["vstdate"])
             if not (start <= day <= end):
                 continue
             vn = text(visit["vn"])
             code = f"DMR{stage}"  # this program's own key: no ADP code is sent
-            row = Row(key=f"{vn}|{code}", vn=vn, code=code, item_name=f"ขั้น {stage}: " + (
-                "เข้าสู่เบาหวานระยะสงบ" if stage == 1 else "ยังคงเบาหวานระยะสงบ"))
+            row = Row(key=f"{vn}|{code}", vn=vn, code=code, item_name="ครั้งที่ 1: ลงทะเบียน e-Claim (หยุดยา)" if stage == 0 else
+                      f"ขั้น {stage}: " + ("เข้าสู่เบาหวานระยะสงบ" if stage == 1 else "ยังคงเบาหวานระยะสงบ"))
             row.qty, row.amount = Decimal("1"), RATES[stage]
             row.hn, row.date, row.time = hn, day.isoformat(), str(visit.get("vsttime") or "")[:8]
             row.ptname, row.cid = text(visit.get("ptname")), text(visit.get("cid"))

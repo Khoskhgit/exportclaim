@@ -98,10 +98,12 @@ def test_the_registry_service_date_is_the_first_day_off_the_drugs():
     reg = {"status": "Y", "reg_date": "2026-04-10", "expire_date": "", "visit_date": "2026-05-01"}  # วันที่ลงทะเบียน counts
     rows = check(data, date(2025, 10, 1), date(2026, 9, 30), registry={"1" * 13: [reg]})
     # The drug of 20 March is before the day in the registry, so it does not count; the stage starts on that day.
-    assert [(r.code, [t["vn"] for t in r.extra["tests"]], r.extra["stopped"]) for r in rows] == [("DMR1", ["v2", "v3"], "2026-04-10")]
+    assert [(r.code, [t["vn"] for t in r.extra["tests"]], r.extra["stopped"]) for r in rows] == [
+        ("DMR0", ["v2"], "2026-04-10"), ("DMR1", ["v2", "v3"], "2026-04-10")]  # test 1 is shown on the registration day
+    assert rows[0].amount == 0 and rows[0].vn == "v2"
     assert check(data, date(2025, 10, 1), date(2026, 9, 30), registry=None) == []  # no registry: HOSxP decides
     later = {**data, "drugs": drugs + [{"hn": "1", "vstdate": date(2026, 5, 2), "name": "METFORMIN"}]}
-    assert check(later, date(2025, 10, 1), date(2026, 9, 30), registry={"1" * 13: [reg]}) == []  # a drug after it still counts
+    assert [r.code for r in check(later, date(2025, 10, 1), date(2026, 9, 30), registry={"1" * 13: [reg]})] == ["DMR0"]  # a drug after it still counts
 
 
 def test_follow_up_counts_from_the_stop_day():
@@ -138,4 +140,4 @@ def test_a_patient_registered_again_counts_from_the_latest_registration():
     data = {"tests": [hba1c("v2", "2026-04-10", "5.3"), hba1c("v3", "2026-07-24", "5.2")],
             "drugs": [{"hn": "1", "vstdate": date(2026, 1, 9), "name": "METFORMIN"}], "e11": {"1"}}
     registry = {"1" * 13: [{**r, "expire_date": ""} for r in regs]}
-    assert [r.code for r in check(data, date(2025, 10, 1), date(2026, 9, 30), registry=registry)] == ["DMR1"]
+    assert [r.code for r in check(data, date(2025, 10, 1), date(2026, 9, 30), registry=registry)] == ["DMR0", "DMR1"]
