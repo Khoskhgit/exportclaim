@@ -438,15 +438,18 @@ class Hosxp:
 
     def lab_walkin(self, start, end, hcode: str) -> list[dict]:
         """Out-lab items (lab_items.items_is_outlab='Y') on OPD visits of UC patients whose main hospital is another
-        hospital in our province. Refer-in visits are included. lab_items is grouped by icode so an item is never doubled."""
+        hospital in our province. Refer-in visits are included. lab_items is grouped by icode so an item is never doubled.
+        The price is lab_items.service_cost (the out-lab cost); a panel icode with several lab_items rows (e.g. Hb typing)
+        takes the highest one and the nondrugitems name."""
         return self._select(
             """SELECT op.vn, op.icode, pt.cid, op.hn,
             CONCAT(IFNULL(pt.pname,''), IFNULL(pt.fname,''), ' ', IFNULL(pt.lname,'')) AS ptname,
             op.vstdate, v.hospmain, hp.name AS hospmain_name, v.pttype, py.name AS pttype_name, v.pdx,
-            IFNULL(li.lab_name, MID(nd.name, 3)) AS lab_name, op.qty, nd.unitcost, op.sum_price
+            IF(li.n=1 AND li.lab_name IS NOT NULL, li.lab_name, MID(nd.name, 3)) AS lab_name, op.qty,
+            li.service_cost AS unitcost, IFNULL(op.qty, 0)*IFNULL(li.service_cost, 0) AS sum_price
             FROM opitemrece op
-            JOIN (SELECT icode, MAX(lab_items_name) AS lab_name FROM lab_items
-                  WHERE items_is_outlab='Y' GROUP BY icode) li ON li.icode=op.icode
+            JOIN (SELECT icode, MAX(lab_items_name) AS lab_name, MAX(service_cost) AS service_cost, COUNT(*) AS n
+                  FROM lab_items WHERE items_is_outlab='Y' GROUP BY icode) li ON li.icode=op.icode
             JOIN vn_stat v ON v.vn=op.vn
             JOIN hospcode hp ON hp.hospcode=v.hospmain
             JOIN pttype py ON py.pttype=v.pttype
