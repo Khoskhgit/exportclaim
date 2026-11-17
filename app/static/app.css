@@ -242,52 +242,49 @@ dialog h2{font-size:18px}
 dl.sum{display:grid;grid-template-columns:auto 1fr;gap:6px 16px;margin:14px 0 0;padding:12px 14px;background:var(--panel-2);border-radius:var(--radius);border:1px solid var(--line)}
 dl.sum dt{color:var(--muted)}dl.sum dd{margin:0;font-weight:600;font-variant-numeric:tabular-nums}
 
-/* --------------------------------------------------------------- login */
-.login-page{display:grid;place-items:center;min-height:100vh;padding:24px;padding-bottom:24px;background:radial-gradient(1100px 620px at 0% -10%,#cfeee2 0,transparent 60%),radial-gradient(900px 560px at 105% 110%,#dce8f7 0,transparent 55%),var(--bg)}
-.login-shell{width:min(940px,100%);margin:0;padding:0;max-width:none;display:grid;grid-template-columns:1.05fr 1fr;background:var(--panel);border-radius:22px;box-shadow:0 24px 70px #0f3a2e2e,0 2px 6px #0f3a2e14;overflow:hidden}
-.login-hero{position:relative;display:flex;flex-direction:column;gap:22px;padding:40px 38px;color:#eafaf3;background:linear-gradient(150deg,#0b5c49 0%,#0d6b55 45%,#14957a 100%);overflow:hidden}
-.login-hero::before,.login-hero::after{content:"";position:absolute;border-radius:50%;background:#ffffff12;pointer-events:none}
-.login-hero::before{width:340px;height:340px;right:-120px;top:-110px}
-.login-hero::after{width:240px;height:240px;left:-90px;bottom:-100px;background:#ffffff0d}
-.login-hero>*{position:relative}
-.login-hero-brand{display:flex;align-items:center;gap:14px}
-.login-mark{width:56px;height:56px;border-radius:16px;display:grid;place-items:center;background:#ffffff26;border:1px solid #ffffff40;color:#fff;box-shadow:inset 0 1px 0 #ffffff33;flex:none}
-.login-hero h1{font-size:24px;color:#fff;letter-spacing:.2px}
-.login-hero-brand p{margin:2px 0 0;font-size:14px;color:#cdeee2}
-.login-tagline{margin:6px 0 0;font-size:28px;line-height:1.35;font-weight:700;color:#fff}
-.login-features{list-style:none;margin:0;padding:0;display:grid;gap:10px;font-size:14.5px}
-.login-features li{display:flex;align-items:center;gap:10px}
-.login-features span{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;background:#ffffff2e;font-size:12px;font-weight:700;flex:none}
-.login-hero-foot{margin:auto 0 0;font-size:12.5px;color:#bfe6d8}
-.login-card{display:grid;gap:16px;align-content:center;padding:44px 40px}
-.login-card-head h2{font-size:24px;color:var(--ink)}
-.login-card-head p{margin:4px 0 0;color:var(--muted);font-size:14px}
-.login-form{display:grid;gap:14px}
-.login-field{display:grid;gap:6px;font-size:13.5px;font-weight:600;color:var(--muted)}
-.login-input{position:relative;display:flex;align-items:center}
-.login-input>svg{position:absolute;left:13px;color:var(--faint);pointer-events:none}
-.login-input input{width:100%;min-height:48px;padding:10px 14px 10px 42px;border-radius:12px;border:1px solid var(--line);background:var(--panel-2);font:inherit;font-weight:400;color:var(--ink);transition:border-color .15s,box-shadow .15s,background .15s}
-.login-input input:focus{outline:none;border-color:var(--accent);background:#fff;box-shadow:0 0 0 4px #0d6b5522}
-.login-input input[name=password]{padding-right:72px}
-.login-eye{position:absolute;right:6px;min-height:36px;padding:0 12px;border:0;border-radius:9px;background:transparent;color:var(--accent);font:inherit;font-size:13px;font-weight:600;cursor:pointer}
-.login-eye:hover{background:var(--accent-soft)}
-.login-caps{margin:-6px 0 0;font-size:12.5px;color:var(--warn)}
-.login-submit{min-height:50px;border-radius:12px;font-size:16px;box-shadow:0 8px 20px #0d6b5533}
-.login-notice{margin:0}
-.login-divider{display:flex;align-items:center;gap:10px;color:var(--faint);font-size:12px}
-.login-divider::before,.login-divider::after{content:"";flex:1;border-top:1px solid var(--line)}
-.moph-button{display:flex;justify-content:center;align-items:center;gap:10px;min-height:50px;border-radius:12px;border:1px solid #1b5e9e;background:#1b5e9e;color:#fff;text-decoration:none;font:inherit;font-weight:600;cursor:pointer;transition:background .15s,box-shadow .15s}
-.moph-button:hover{background:#164e84;box-shadow:0 8px 20px #1b5e9e33}
-.moph-button:disabled{background:#fff;color:var(--faint);border-color:var(--line);cursor:not-allowed;box-shadow:none}
-.login-foot{font-size:12px;color:var(--faint);text-align:center;margin:-4px 0 0}
-@media(max-width:780px){
-  .login-page{padding:14px;place-items:start center}
-  .login-shell{grid-template-columns:1fr;border-radius:18px}
-  .login-hero{padding:26px 22px;gap:14px}
-  .login-tagline{font-size:21px}
-  .login-features,.login-hero-foot{display:none}
-  .login-card{padding:26px 22px}
+/* --------------------------------------------------------------- login: a ring of bars that sweeps while waiting */
+.login-page{min-height:100vh;margin:0;padding:24px 16px;background:radial-gradient(900px 600px at 50% 40%,#2c3650 0,#232a3a 55%,#1d2331 100%);color:#e8eef8;display:grid;place-items:center}
+.ring-login{width:100%;max-width:none;margin:0;padding:0;display:grid;justify-items:center;gap:14px;background:none}
+.ring-stage{--size:min(560px,94vw);position:relative;width:var(--size);height:var(--size);display:grid;place-items:center}
+.ring{position:absolute;inset:0}
+.ring-bar{position:absolute;left:50%;top:50%;width:calc(var(--size)*.018);height:calc(var(--size)*.1);margin:calc(var(--size)*-.05) 0 0 calc(var(--size)*-.009);border-radius:99px;background:#3b4a68;transform:rotate(var(--a)) translateY(calc(var(--size)*-.43));--speed:3s;animation:ring-sweep var(--speed) linear infinite;animation-delay:calc(var(--speed) * var(--f) * -1)}
+@keyframes ring-sweep{0%{background:#7ee8ff;box-shadow:0 0 12px #7ee8ffaa}22%{background:#4fb3cf;box-shadow:none}45%,100%{background:#3b4a68;box-shadow:none}}
+.ring.busy .ring-bar{--speed:.9s}
+.ring.ok .ring-bar{animation:none;background:#7ee8ff;box-shadow:0 0 10px #7ee8ff88;transition:background .2s}
+.ring.fail .ring-bar{animation:ring-fail .7s ease-out 1;animation-delay:0s}
+@keyframes ring-fail{0%,40%{background:#ff7a8a;box-shadow:0 0 10px #ff7a8a88}100%{background:#3b4a68}}
+.ring-card{position:relative;width:calc(var(--size)*.56);display:grid;gap:12px;justify-items:center;text-align:center}
+.ring-brand{display:flex;align-items:center;gap:10px}
+.ring-mark{width:36px;height:36px;border-radius:11px;display:grid;place-items:center;color:#7ee8ff;background:#7ee8ff1a;border:1px solid #7ee8ff40;flex:none}
+.ring-brand h1{font-size:clamp(20px,4.6vw,28px);font-weight:700;color:#7ee8ff;letter-spacing:.3px}
+.ring-sub{margin:-6px 0 4px;font-size:13px;color:#9fb0c8}
+.ring-form{width:100%;display:grid;gap:12px}
+.ring-form input{width:100%;min-height:46px;padding:10px 20px;border-radius:999px;border:1.5px solid #4a5874;background:#ffffff08;color:#fff;font:inherit;font-size:15px;transition:border-color .15s,box-shadow .15s,background .15s}
+.ring-form input::placeholder{color:#c4cfdf}
+.ring-form input:hover{border-color:#6a7a99}
+.ring-form input:focus{outline:none;border-color:#7ee8ff;background:#7ee8ff0d;box-shadow:0 0 0 4px #7ee8ff22}
+.ring-pass{position:relative;display:block}
+.ring-pass input{padding-right:70px}
+.ring-eye{position:absolute;right:6px;top:50%;transform:translateY(-50%);min-height:34px;padding:0 12px;border:0;border-radius:999px;background:transparent;color:#7ee8ff;font:inherit;font-size:13px;font-weight:600;cursor:pointer}
+.ring-eye:hover:not(:disabled){background:#7ee8ff1f;color:#7ee8ff;border:0}
+.ring-caps{margin:-4px 0 0;font-size:12.5px;color:#ffd27a}
+.ring-submit{min-height:48px;border:0;border-radius:999px;background:#7ee8ff;color:#1d2331;font:inherit;font-size:16px;font-weight:700;cursor:pointer;box-shadow:0 8px 24px #7ee8ff33;transition:background .15s,transform .1s,box-shadow .15s}
+.ring-submit:hover:not(:disabled){background:#a3f0ff;color:#1d2331;border:0;box-shadow:0 10px 28px #7ee8ff55}
+.ring-submit:active:not(:disabled){transform:translateY(1px)}
+.ring-submit:disabled{opacity:.75;cursor:progress}
+.ring-link{color:#7ee8ff;font-weight:700;font-size:14.5px;text-decoration:none;padding:4px 10px;border-radius:999px}
+.ring-link:hover{background:#7ee8ff1a}
+.ring-link.disabled{color:#7a879c;font-weight:500;font-size:13px}
+.ring-notice{width:min(420px,94vw);margin:0}
+.ring-foot{margin:0;font-size:12px;color:#8494ad;text-align:center}
+@media(max-width:520px){
+  .ring-stage{--size:min(560px,108vw)}
+  .ring-card{width:calc(var(--size)*.62)}
+  .ring-form input{min-height:42px;padding:8px 16px}
+  .ring-submit{min-height:44px}
+  .ring-login{overflow:hidden}
 }
+@media(prefers-reduced-motion:reduce){.ring-bar{--speed:9s}.ring.busy .ring-bar{--speed:3s}}
 
 /* ---------------------------------------------------------- responsive */
 @media(max-width:1400px){

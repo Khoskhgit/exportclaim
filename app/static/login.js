@@ -1,6 +1,27 @@
 "use strict";
 const form = document.getElementById("login-form");
 const errorBox = document.getElementById("login-error");
+const ring = document.getElementById("ring");
+
+// The ring: 48 bars round the form. A light sweeps round it, faster while the login is being checked
+// (.busy), all lit when it succeeds (.ok) and a red flash when it fails (.fail).
+const BARS = 48;
+for (let i = 0; i < BARS; i += 1) {
+  const bar = document.createElement("span");
+  bar.className = "ring-bar";
+  bar.style.setProperty("--a", `${(360 / BARS) * i}deg`);
+  // Each bar starts part-way through the sweep (a fraction of one turn: 3 s idle, 0.9 s while waiting, in app.css),
+  // so the light runs round in order at any speed.
+  bar.style.setProperty("--f", String(1 - i / BARS));
+  ring.append(bar);
+}
+function ringState(state) {
+  ring.classList.remove("busy", "ok", "fail");
+  if (state) {
+    void ring.offsetWidth; // restart the animation when the same state comes again
+    ring.classList.add(state);
+  }
+}
 
 form.addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -8,6 +29,8 @@ form.addEventListener("submit", async (e) => {
   const button = form.querySelector(".login-submit");
   button.disabled = true;
   button.textContent = "กำลังตรวจสอบ…";
+  ringState("busy");
+  let ok = false;
   try {
     const response = await fetch("/auth/login", {
       method: "POST", headers: { "Content-Type": "application/json" },
@@ -15,15 +38,22 @@ form.addEventListener("submit", async (e) => {
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(data.detail || `เข้าสู่ระบบไม่สำเร็จ (${response.status})`);
-    window.location.assign(data.next || "/");
+    ok = true;
+    ringState("ok");
+    button.textContent = "สำเร็จ กำลังเข้าสู่ระบบ…";
+    setTimeout(() => window.location.assign(data.next || "/"), 450);
   } catch (err) {
+    ringState("fail");
+    setTimeout(() => ringState(null), 750);
     errorBox.querySelector(".notice-text").textContent = err.message;
     errorBox.hidden = false;
     form.password.value = "";
     form.password.focus();
   } finally {
-    button.disabled = false;
-    button.textContent = "เข้าสู่ระบบ";
+    if (!ok) {
+      button.disabled = false;
+      button.textContent = "เข้าสู่ระบบ";
+    }
   }
 });
 
