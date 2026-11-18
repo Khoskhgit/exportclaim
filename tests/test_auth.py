@@ -48,7 +48,7 @@ def fake_moph(profile):
 
 
 def make(tmp_path, profile=PROFILE, **overrides):
-    values = dict(export_dir=tmp_path / "exports", login_required=True, login_groups=("IPD",),
+    values = dict(export_dir=tmp_path / "exports", login_required=True, hosxp_login=True, login_groups=("IPD",),
                   moph_health_id_client="h", moph_health_id_secret="hs", moph_provider_id_client="p",
                   moph_provider_id_secret="ps", moph_redirect_uri="http://testserver/auth/moph/callback")
     config = replace(settings(), **{**values, **overrides})
@@ -239,3 +239,11 @@ def test_each_login_keeps_its_own_fdh_account(tmp_path, monkeypatch):
     assert other.get("/api/nhso18/fdh/status").status_code == 401
     cleared = client.post("/api/nhso18/fdh/account", json={"clear": True}).json()
     assert (cleared["source"], cleared["fdh_user"]) == ("env", "central") and store.fdh_account("hosxp:nurse") is None
+
+
+def test_hosxp_login_is_closed_by_default(tmp_path):
+    client = make(tmp_path, hosxp_login=False)
+    res = login(client)
+    assert res.status_code == 403 and "MOPH ID" in res.json()["detail"]
+    page = client.get("/login").text
+    assert 'id="login-form"' not in page and "/auth/moph/start" in page

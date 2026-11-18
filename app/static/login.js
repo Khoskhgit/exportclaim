@@ -23,7 +23,11 @@ function ringState(state) {
   }
 }
 
-form.addEventListener("submit", async (e) => {
+// MOPH ID only (HOSxP login closed): the button goes to MOPH, and the ring speeds up while it does.
+const moph = document.getElementById("moph-login");
+if (moph) moph.addEventListener("click", () => { ringState("busy"); moph.classList.add("busy"); });
+
+if (form) form.addEventListener("submit", async (e) => {
   e.preventDefault();
   errorBox.hidden = true;
   const button = form.querySelector(".login-submit");
@@ -59,7 +63,7 @@ form.addEventListener("submit", async (e) => {
 
 // Show or hide the password, and warn when Caps Lock is on.
 const toggle = document.getElementById("toggle-password");
-toggle.addEventListener("click", () => {
+if (toggle) toggle.addEventListener("click", () => {
   const show = form.password.type === "password";
   form.password.type = show ? "text" : "password";
   toggle.textContent = show ? "ซ่อน" : "แสดง";
@@ -68,7 +72,9 @@ toggle.addEventListener("click", () => {
   form.password.focus();
 });
 const caps = document.getElementById("caps-warning");
-["keydown", "keyup"].forEach((type) => form.password.addEventListener(type, (e) => {
-  if (e.getModifierState) caps.hidden = !e.getModifierState("CapsLock");
-}));
-form.password.addEventListener("blur", () => { caps.hidden = true; });
+if (form && caps) {
+  ["keydown", "keyup"].forEach((type) => form.password.addEventListener(type, (e) => {
+    if (e.getModifierState) caps.hidden = !e.getModifierState("CapsLock");
+  }));
+  form.password.addEventListener("blur", () => { caps.hidden = true; });
+}

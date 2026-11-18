@@ -18,6 +18,7 @@
       </div>
       <p class="ring-sub">{{ hname or "ตรวจและส่งข้อมูลเบิกชดเชย" }}</p>
 
+      {% if hosxp_login %}
       <form id="login-form" class="ring-form">
         <label class="sr-only" for="username">ชื่อผู้ใช้ HOSxP</label>
         <input id="username" name="username" autocomplete="username" required autofocus placeholder="ชื่อผู้ใช้ HOSxP">
@@ -35,12 +36,22 @@
       {% else %}
       <span class="ring-link disabled" title="ยังไม่ได้ตั้งค่า MOPH ID ใน .env">MOPH ID (ยังไม่ได้ตั้งค่า)</span>
       {% endif %}
+      {% else %}
+      {% if moph_ready %}
+      <a id="moph-login" class="ring-submit ring-moph" href="/auth/moph/start">
+        <svg aria-hidden="true" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="14" rx="2.5"/><circle cx="9" cy="11" r="2.2"/><path d="M5.8 16.2c.7-1.5 1.8-2.2 3.2-2.2s2.5.7 3.2 2.2M14.5 10h3.5M14.5 13.5h3.5"/></svg>
+        เข้าสู่ระบบด้วย MOPH ID</a>
+      <p class="ring-sub">Health ID / Provider ID ของบุคลากรโรงพยาบาลนี้</p>
+      {% else %}
+      <p class="ring-caps">ยังไม่ได้ตั้งค่า MOPH ID ให้ผู้ดูแลใส่ client ID และ secret key ใน .env</p>
+      {% endif %}
+      {% endif %}
     </section>
   </div>
 
   {% if error %}<div class="notice error ring-notice" role="alert"><span class="notice-icon" aria-hidden="true">!</span><div class="notice-text">{{ error }}</div></div>{% endif %}
   <div id="login-error" class="notice error ring-notice" role="alert" hidden><span class="notice-icon" aria-hidden="true">!</span><div class="notice-text"></div></div>
-  <p class="ring-foot">{% if moph_ready %}MOPH ID สำหรับบุคลากรที่สังกัดโรงพยาบาลนี้ (Provider ID) · {% endif %}อ่านข้อมูลจาก HOSxP อย่างเดียว</p>
+  <p class="ring-foot">{% if moph_ready and hosxp_login %}MOPH ID สำหรับบุคลากรที่สังกัดโรงพยาบาลนี้ (Provider ID) · {% endif %}อ่านข้อมูลจาก HOSxP อย่างเดียว</p>
 </main>
 <script src="/static/login.js?v={{ v }}"></script>
 </body>

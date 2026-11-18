@@ -65,6 +65,8 @@ class Settings:
     data_dir: Path = BASE_DIR / "data"
     # Login
     login_required: bool = True
+    # HOSxP user/password login; off by default since 2026-11-18 (the user asked for MOPH ID only). LOGIN_HOSXP=1 opens it.
+    hosxp_login: bool = False
     session_hours: int = 8
     login_groups: tuple[str, ...] = ()
     moph_health_id_client: str = ""
@@ -165,6 +167,7 @@ def load_settings(env_file: Path | None = None) -> Settings:
         host=(get("HOST") or "127.0.0.1").strip(),
         extra_hosts=_csv(get("ALLOWED_HOSTS")),
         login_required=_bool(get("LOGIN_REQUIRED"), True),
+        hosxp_login=_bool(get("LOGIN_HOSXP"), False),
         session_hours=int(get("SESSION_HOURS", "8") or 8),
         login_groups=_csv(get("LOGIN_GROUPS")),
         # HEALTHID_* / PROVIDERID_* / HOSPITAL_CODE are the names on the MOPH key sheets.

@@ -7,11 +7,11 @@
 | ส่งออก AIPN (ผู้ป่วยใน) | ใช้ได้ | สร้าง XML ตรงกับโปรแกรมเดิมทุกไบต์ 6 จาก 8 ไฟล์ (อีก 2 ไฟล์ต่างเพราะข้อมูล HOSxP ถูกแก้หลังส่ง) แก้ราคาและ CareAs ได้ |
 | ส่ง FDH จากหน้า 18 แฟ้ม | ทดสอบเชื่อมต่อได้ | ขอ Token ได้แล้ว UAT ตอบกลับได้ ยังไม่ได้ส่งข้อมูลจริงทั้ง UAT และ PROD |
 | ส่ง New e-Claim API จากหน้า 18 แฟ้ม | รอสิทธิ์ API | โปรแกรมพร้อม แต่ สปสช. ตอบว่าบัญชีนี้ยังไม่ได้เข้าร่วมโครงการส่งข้อมูลผ่าน API ต้องสมัครที่ apieclaim@nhso.go.th |
-| login บัญชี HOSxP | ใช้ได้ | อ่าน `opduser` อย่างเดียว ล็อก 15 นาทีเมื่อผิด 5 ครั้ง |
+| login บัญชี HOSxP | ปิดไว้ (2026-11-18) | ผู้ใช้ให้เหลือ MOPH ID อย่างเดียว `/auth/login` ตอบ 403 เปิดกลับได้ด้วย `LOGIN_HOSXP=true` ใน .env (อ่าน `opduser` อย่างเดียว ล็อก 15 นาทีเมื่อผิด 5 ครั้ง) |
 | login MOPH ID | ใช้ได้ | Health ID + Provider ID เข้าได้เฉพาะบุคลากร รพ.คลองหาด (10866) ส่ง `User-Agent: EMR` เพราะ Cloudflare ของ provider.id.th บล็อกชื่อ Python |
 | HTTPS | ใช้ได้ | certificate สร้างเองใน `data/tls/` (`make_cert.py`) |
 | GitHub | ขึ้นแล้ว | https://github.com/Khoskhgit/exportclaim branch `main` |
-| Test | ผ่าน 356 รายการ | `.venv/bin/python -m pytest -q` |
+| Test | ผ่าน 357 รายการ | `.venv/bin/python -m pytest -q` |
 
 ## เครื่องที่ใช้
 - **เครื่องพัฒนา (192.168.11.20):** https://localhost:5180 เปิดเฉพาะเครื่องตัวเอง

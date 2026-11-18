@@ -172,11 +172,14 @@ def register(app: FastAPI, settings: Settings, db: Any, local: Store, templates:
         if not settings.login_required or current_user(request):
             return RedirectResponse("/", status_code=303)
         return templates.TemplateResponse(request, "login.html", {
-            "moph_ready": settings.moph_ready, "error": LOGIN_ERRORS.get(error, ""), "hname": settings.hname,
+            "moph_ready": settings.moph_ready, "hosxp_login": settings.hosxp_login,
+            "error": LOGIN_ERRORS.get(error, ""), "hname": settings.hname,
         })
 
     @app.post("/auth/login")
     def login(body: dict = Body(...)):
+        if not settings.hosxp_login:  # closed: only MOPH ID signs in (LOGIN_HOSXP=1 in .env opens it again)
+            return JSONResponse({"detail": "ปิดการเข้าสู่ระบบด้วยบัญชี HOSxP แล้ว กรุณาเข้าสู่ระบบด้วย MOPH ID"}, status_code=403)
         username, password = text(body.get("username")), str(body.get("password") or "")
         if not username or not password:
             return JSONResponse({"detail": "กรุณากรอกชื่อผู้ใช้และรหัสผ่าน"}, status_code=400)
