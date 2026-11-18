@@ -11,7 +11,7 @@
 | login MOPH ID | ใช้ได้ | Health ID + Provider ID เข้าได้เฉพาะบุคลากร รพ.คลองหาด (10866) ส่ง `User-Agent: EMR` เพราะ Cloudflare ของ provider.id.th บล็อกชื่อ Python |
 | HTTPS | ใช้ได้ | certificate สร้างเองใน `data/tls/` (`make_cert.py`) |
 | GitHub | ขึ้นแล้ว | https://github.com/Khoskhgit/exportclaim branch `main` |
-| Test | ผ่าน 354 รายการ | `.venv/bin/python -m pytest -q` |
+| Test | ผ่าน 356 รายการ | `.venv/bin/python -m pytest -q` |
 
 ## เครื่องที่ใช้
 - **เครื่องพัฒนา (192.168.11.20):** https://localhost:5180 เปิดเฉพาะเครื่องตัวเอง
@@ -61,6 +61,7 @@ cd /var/khclaim/exportclaim && git pull && chown -R exportclaim:exportclaim . &&
 35. **ชื่อแอป KHH Claim Sure + หน้าตาใหม่:** เมนู dropdown KHH LINK (9 ลิงก์ รวม KTB Digital Health Platform) หน้า login พื้นเข้มวงแหวนแท่งที่หมุนเร็วขึ้นระหว่างรอตรวจรหัส แฟลชแดงเมื่อผิด ทุกหน้าใช้แถบบนเขียวไล่สีและการ์ดมุมโค้ง (override ท้าย app.css) ยังไม่ได้ทดสอบ login ด้วยบัญชีจริงหลังเปลี่ยนหน้า
 36. **REP สปสช. UC และ FDH:** หน้า REP / STM นำเข้า REP e-Claim บัตรทอง eclaim_10866_OP_….xls ได้ (บัญชี UCS; OPCS/IPCS = OFC, OPLGO = LGO) REP 691100045: 93 รายการ ผ่าน 83 ไม่ผ่าน 10 ตรงแผ่น Summary และนำเข้ารายละเอียดรายการเคลม FDH (…-ClaimDetail.xlsx เช่น STP) อัปเดตตามรหัสการเคลม หน้า 18 แฟ้มแสดง "FDH STP: เหมาจ่ายรายหัว" เมื่อ HOSxP ไม่มีสถานะ FDH ยังไม่ได้ทดสอบไฟล์ REP IP และ LGO
 37. **18 แฟ้ม UUC และ ICD-10-TM:** ทุกแถวแสดง UUC 1 ใช้สิทธิ / 2 ไม่ใช้สิทธิ ใต้สถานะ drawer มีช่องติ๊ก "ไม่ส่งรหัส ICD-10-TM" ข้างหัวข้อหัตถการ (OOP) จำราย visit ในแอป ตัดรหัสที่ยาวเกิน 5 ตัว (รวมแพทย์แผนไทย) ออกจาก OOP ทั้ง ZIP, FDH และ PPFS (VN 691102071116: 4 รหัส → 2309, 8931)
+38. **18 แฟ้ม การส่งต่อ / รับเข้า และการ์ดติด C:** แถวแสดง "ส่งต่อ → / รับเข้า ←" รหัสและชื่อ รพ. ต่อจาก UUC (จาก referin/referout หรือ ovstist/ovstost export_code 3 แบบเดียวกับ ORF/IRF) drawer มีตารางการส่งต่อและช่องติ๊ก "ไม่ส่งข้อมูลการส่งต่อ / รับเข้า" จำราย visit ในแอป ตัด ORF/IRF และช่อง Refer ใน AER ออกจาก ZIP, FDH และ PPFS และไม่ตรวจค่าใช้จ่าย Refer (S180x) (VN 691102063631: ORF 10699 → ว่าง, Error REFER_NO_CHARGE หาย) การ์ด "ติด C" นับและกรอง visit ที่ REP ที่นำเข้าไม่ผ่าน (2 พ.ย. 69: 9 คน 3,297 บาท)
 
 ## ไฟล์ที่ไม่อยู่ใน git
 `.env` (รหัสผ่านและ key), `data/` (SQLite, session, certificate), `exports/` และไฟล์ ZIP/XML ที่มีข้อมูลผู้ป่วย ต้องคัดลอกหรือสร้างใหม่บนแต่ละเครื่อง
