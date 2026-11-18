@@ -425,6 +425,7 @@ tr.picked td{background:#f1f8f5}
 .dmrem-head>div{flex:1;min-width:220px}
 .dmrem-head h3{margin:0;font-size:16px}
 .project-input{width:120px;padding:4px 8px;font-size:13px}
+.item-cell{min-width:230px;white-space:nowrap}
 .button-like{display:inline-flex;align-items:center;min-height:38px;padding:6px 14px;border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--panel);font-weight:600;cursor:pointer}
 .button-like:hover{border-color:var(--accent);color:var(--accent)}
 .follow-chips{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0}

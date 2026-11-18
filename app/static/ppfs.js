@@ -124,9 +124,17 @@ function resultBadge(r) {
   if (r.warnings.length) return el("span", { class: "badge b-warn" }, "เตือน");
   return el("span", { class: "badge b-ok" }, "ผ่าน");
 }
+// The item column: the code and the first 15 characters of the name (the whole name on hover and in the drawer).
+const ITEM_CHARS = 15;
+// Thai vowel and tone marks join the letter before them, so they do not count as characters.
+const SEGMENTER = typeof Intl !== "undefined" && Intl.Segmenter ? new Intl.Segmenter("th", { granularity: "grapheme" }) : null;
+const graphemes = (s) => (SEGMENTER ? [...SEGMENTER.segment(s)].map((g) => g.segment) : [...s]);
 function itemLabel(r) {
-  return el("span", {}, el("strong", { class: "mono" }, r.code), ` ${r.code_name}`,
-    el("span", { class: "sub" }, r.window_label ? `ช่วงวันที่ ${r.window_label}` : r.item_name));
+  const name = (r.code_name || r.item_name || "").replace(/\s+/g, " ").trim();
+  const chars = graphemes(name);
+  const short = chars.length > ITEM_CHARS ? `${chars.slice(0, ITEM_CHARS).join("")}…` : name;
+  return el("span", { title: [r.code, name].filter(Boolean).join(" ") }, el("strong", { class: "mono" }, r.code), short ? ` ${short}` : "",
+    r.window_label ? el("span", { class: "sub" }, `ช่วงวันที่ ${r.window_label}`) : null);
 }
 
 function visible() {
@@ -152,7 +160,7 @@ function render() {
       el("td", { class: "mono" }, toDmy(r.date)), el("td", { class: "mono" }, r.vn), el("td", { class: "mono" }, r.hn),
       el("td", { class: "name-cell", title: r.ptname }, r.ptname, el("span", { class: "sub" }, r.pttype)),
       ...(COLUMNS[service()] || []).map(([, , num, cell]) => el("td", { class: num ? "num" : "mono" }, cell(r))),
-      el("td", {}, itemLabel(r)),
+      el("td", { class: "item-cell" }, itemLabel(r)),
       el("td", { class: "num" }, countText(r)),
       el("td", { class: "num" }, money(r.amount)),
       el("td", { class: "problems" }, problems.length ? problems.join(" · ") : dash()));
