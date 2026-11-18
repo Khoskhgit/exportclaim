@@ -8,6 +8,8 @@ const CATEGORIES = {
   warn: ["มีคำเตือน", (r) => r.selectable && r.has_warn, "warn"],
   error: ["Error", (r) => r.has_error, "error"],
   sent: ["ส่งแล้ว", (r) => r.status, "sent"],
+  // REP that did not pass (C, or any code other than A): these need fixing and sending again.
+  rejected: ["ติด C", (r) => /^REP ไม่ผ่าน/.test(r.status || ""), "error"],
   paid: ["ชดเชยแล้ว", (r) => r.status === "ชดเชยแล้ว", "paid", (r) => r.paid_amount],
 };
 
