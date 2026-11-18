@@ -9,7 +9,7 @@ from fastapi import Body, FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
-from . import auth
+from . import auth, fdh_claims
 from .config import Settings
 from .repstm import RepStmError, parse_upload
 from .repstm_store import RepStmStore
@@ -34,6 +34,7 @@ def summary_text(parsed) -> str:
 
 def register(app: FastAPI, settings: Settings, local: Store, templates: Jinja2Templates) -> RepStmStore:
     results = RepStmStore(local)
+    claims = fdh_claims.FdhClaimStore(local)
     folder = local.path.parent / "rep_stm"
 
     @app.get("/repstm", response_class=HTMLResponse)
@@ -48,6 +49,18 @@ def register(app: FastAPI, settings: Settings, local: Store, templates: Jinja2Te
         if len(data) > MAX_UPLOAD:
             raise HTTPException(413, "ไฟล์ใหญ่เกินไป")
         name = safe_name(name)
+        if fdh_claims.is_claim_detail(name, data):  # FDH รายละเอียดรายการเคลม (ClaimDetail.xlsx)
+            try:
+                rows = fdh_claims.parse(data)
+            except fdh_claims.ClaimDetailError as exc:
+                raise HTTPException(400, f"{name}: {exc}") from None
+            saved = claims.save(rows, name)
+            funds = sorted({r["fund"] for r in rows if r["fund"]})
+            summary = (f"FDH ClaimDetail {'/'.join(funds) or '-'} {saved['rows']} รายการ "
+                       f"(ใหม่ {saved['added']}, อัปเดต {saved['updated']})")
+            results.log_upload(name, hashlib.sha256(data).hexdigest(), summary, auth.user_label(request))
+            log.info("fdh claim detail import %s rows=%s", name, saved["rows"])
+            return {"name": name, "summary": summary, "skipped": [], "again": "", "reps": [], "stms": []}
         try:
             parsed = parse_upload(name, data)
         except RepStmError as exc:
@@ -69,7 +82,7 @@ def register(app: FastAPI, settings: Settings, local: Store, templates: Jinja2Te
 
     @app.get("/api/repstm/list")
     def listing():
-        return {"reps": results.reps(), "stms": results.stms(), "uploads": results.uploads()}
+        return {"reps": results.reps(), "stms": results.stms(), "uploads": results.uploads(), "fdh": claims.summary()}
 
     @app.post("/api/repstm/rep")
     def rep_detail(body: dict = Body(...)):
@@ -90,6 +103,6 @@ def register(app: FastAPI, settings: Settings, local: Store, templates: Jinja2Te
         vn = text(body.get("vn"))
         if not vn:
             raise HTTPException(400, "ไม่ได้ระบุ VN")
-        return {**results.vn_history(vn), "code_names": results.code_names()}
+        return {**results.vn_history(vn), "code_names": results.code_names(), "fdh": claims.for_key(vn)}
 
     return results

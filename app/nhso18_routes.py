@@ -10,7 +10,7 @@ from fastapi import Body, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 
-from . import auth, eclaim_api, fdh, nhso18, nhso18_service as svc
+from . import auth, eclaim_api, fdh, fdh_claims, nhso18, nhso18_service as svc
 from .config import Settings
 from .hosxp import clean_cc as hosxp_clean_cc
 from .store import Store
@@ -39,6 +39,8 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
              approvals: Any = None, results: Any = None) -> None:
     def q(sql: str) -> list[dict]:
         return hosxp._select(sql, [])
+
+    claims = fdh_claims.FdhClaimStore(local)
 
     def with_approve_codes(rows: list[dict]) -> None:
         """OPD visits under the approve rights take the imported Krungthai Approve Code as their claim code."""
@@ -70,12 +72,17 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
         uuc_set = local.nhso18_uuc(keys)
         uuc_two = nhso18.not_claimed(q, [svc.key_of(r) for r in rows if r["kind"] != "IPD"])
         imported = results.latest(keys) if results is not None else {}
+        # The FDH claim report imported on the REP/STM page, for visits HOSxP has no FDH status for.
+        fdh_imported = claims.latest(keys)
         merge = nhso18.same_day_walkin(rows, svc.walkin_pttypes(q))
         firsts = set(merge.values())
         out = []
         for r in rows:
             k = svc.key_of(r)
             f = found[k]
+            claim = fdh_imported.get(k)
+            if claim and not text(r.get("fdh_status")):
+                r["fdh_status"] = f"FDH {claim['fund']}: {claim['status']}".replace(" : ", ": ")
             label = "ส่ง FDH แล้ว" if k in fdh_sent else "ส่ง e-Claim แล้ว" if k in eclaim_sent else ""
             st = svc.status(r, k in sent, label, imported.get(k))
             moment = r.get("date")
@@ -92,6 +99,8 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
                 "uuc": uuc_set.get(k) or ("2" if k in uuc_two else "1"),
                 "selectable": not f["errors"], "has_error": bool(f["errors"]), "has_warn": bool(f["warns"]),
                 "already_sent": bool(st), "default_selected": not f["errors"] and not st,
+                "fdh_claim": {"fund": claim["fund"], "status": claim["status"], "sent_at": claim["sent_at"],
+                              "uuc": claim["uuc"]} if claim else None,
                 "walkin_first": merge.get(k, ""), "walkin_group": merge.get(k) or (k if k in firsts else ""),
             })
         return out

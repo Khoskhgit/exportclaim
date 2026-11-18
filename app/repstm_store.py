@@ -119,6 +119,12 @@ class RepStmStore:
                     [(stm.stm_no, *asdict(b).values()) for b in stm.bills])
         return upload_id
 
+    def log_upload(self, name: str, sha256: str, summary: str, created_by: str = "") -> None:
+        """An import that is not a REP/STM (the FDH claim report) still shows in the upload history."""
+        with self._db() as db:
+            db.execute("INSERT INTO repstm_uploads (at, name, sha256, saved_as, summary, created_by) VALUES (?,?,?,?,?,?)",
+                       (datetime.now().isoformat(timespec="seconds"), name, sha256, "", summary, created_by))
+
     @staticmethod
     def _save_rep(db, rep, upload_id: int, at: str) -> None:
         old = db.execute("SELECT * FROM rep_files WHERE rep_no=?", (rep.rep_no,)).fetchone()

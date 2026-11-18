@@ -4,7 +4,7 @@ const state = { reps: [], stms: [], uploads: [] };
 const money = (v) => baht.format(Number(v || 0));
 const when = (iso) => {
   if (!iso) return "";
-  const [d, t] = String(iso).split("T");
+  const [d, t] = String(iso).split(/[T ]/);
   return t ? `${toDmy(d)} ${t.slice(0, 5)}` : toDmy(d);
 };
 const statBadge = (stat) => stat === "A"
@@ -25,6 +25,12 @@ function codeLegend(codes, names) {
     el("div", { class: "issue-title" }, el("span", { class: `badge ${code.startsWith("W") ? "b-warn" : "b-error"}` }, code), " ", names[code] || "ไม่มีคำอธิบายในไฟล์ REP"))));
 }
 
+// FDH claim status: paid or capitation in green, refused or failed in red, anything else (waiting) grey-blue.
+function fdhBadge(status) {
+  const tone = /ไม่ผ่าน|ปฏิเสธ|ไม่อนุมัติ|error|fail|reject/i.test(status || "") ? "b-error"
+    : /จ่าย|เหมาจ่าย|อนุมัติ|ผ่าน|success/i.test(status || "") ? "b-ok" : "b-sent";
+  return el("span", { class: `badge ${tone}` }, status || "—");
+}
 function info(pairs) {
   return el("dl", { class: "info-grid" }, ...pairs.map(([k, v]) => el("div", {}, el("dt", {}, k), el("dd", {}, String(v ?? "—")))));
 }
@@ -87,6 +93,10 @@ function renderLists() {
     el("td", { class: "num" }, count.format(s.count)), el("td", { class: "num" }, money(s.amount))));
   const uploadRows = state.uploads.map((u) => el("tr", {},
     el("td", {}, when(u.at)), el("td", {}, u.name), el("td", {}, u.summary), el("td", {}, u.created_by)));
+  const fdhRows = (state.fdh || []).map((f) => el("tr", {},
+    el("td", {}, f.fund || "—"), el("td", {}, fdhBadge(f.status)), el("td", { class: "num" }, count.format(f.n)),
+    el("td", {}, `${toDmy((f.first || "").slice(0, 10))} – ${toDmy((f.last || "").slice(0, 10))}`), el("td", {}, when(f.imported_at))));
+  const fdhCount = (state.fdh || []).reduce((s, f) => s + f.n, 0);
   const empty = (text) => el("div", { class: "empty" }, ...emptyState(text));
   $("lists").replaceChildren(...tabs([
     { id: "rep", label: "REP ผลตอบรับ", badge: state.reps.length, content: [state.reps.length
@@ -95,6 +105,9 @@ function renderLists() {
     { id: "stm", label: "STM ชดเชย", badge: state.stms.length, content: [state.stms.length
       ? table([["เลข STM"], ["บัญชี"], ["งวด"], ["ช่วงวันที่"], ["วันที่ออก"], ["ครบกำหนด"], ["รายการ", "num"], ["ยอดชดเชย", "num"]], stmRows)
       : empty("ยังไม่ได้นำเข้า STM")] },
+    { id: "fdh", label: "FDH รายการเคลม", badge: fdhCount, content: [fdhRows.length
+      ? table([["สิทธิ (กองทุน)"], ["สถานะรายการเคลม"], ["รายการ", "num"], ["วันเข้ารับบริการ"], ["นำเข้าล่าสุด"]], fdhRows)
+      : empty("ยังไม่ได้นำเข้ารายละเอียดรายการเคลม FDH (…-ClaimDetail.xlsx)")] },
     { id: "uploads", label: "ประวัติการนำเข้า", content: [state.uploads.length
       ? table([["เวลา"], ["ไฟล์"], ["ข้อมูลที่ได้"], ["ผู้นำเข้า"]], uploadRows)
       : empty("ยังไม่มีการนำเข้า")] },
@@ -130,6 +143,11 @@ async function openRep(repNo) {
       info([["ส่ง", r.sent], ["ผ่าน", r.passed], ["ไม่ผ่าน", r.failed]]),
       r.bills.length ? table([["บรรทัด", "num"], ["ผล"], ["VN (InvNo)"], ["วันเวลาบริการ"], ["BP"], ["ยอดเบิก", "num"], ["รหัส"]], rows) : el("p", { class: "hint" }, "นำเข้าเฉพาะไฟล์ยา (DIS) ยังไม่มีไฟล์ BIL"),
       ...dispBlock(r.disps, r.code_names),
+      el("h3", {}, `FDH รายการเคลม (${(h.fdh || []).length})`),
+      (h.fdh || []).length ? table([["รหัสการเคลม"], ["สิทธิ"], ["การใช้สิทธิ"], ["วันที่ส่งเคลม"], ["สถานะ"]], h.fdh.map((f) => el("tr", {},
+        el("td", { class: "mono" }, f.claim_id), el("td", {}, f.fund), el("td", {}, f.uuc === "2" ? "2 ไม่ใช้สิทธิ" : f.uuc ? "1 ใช้สิทธิ" : "—"),
+        el("td", {}, when(f.sent_at)), el("td", {}, fdhBadge(f.status)))))
+        : el("p", { class: "hint" }, "ไม่พบในรายละเอียดรายการเคลม FDH ที่นำเข้า"),
       el("h3", {}, "ความหมายของรหัส"), codeLegend([...r.bills.map((b) => b.codes), ...r.disps.flatMap((d) => [d.codes, ...d.drugs.map((g) => g.codes)])], r.code_names) || el("p", { class: "hint" }, "ไม่มีรหัส"),
     ]);
   } catch (err) { notice(err.message); }
@@ -173,6 +191,11 @@ async function openVn(vn) {
       ...dispBlock(h.disps, h.code_names),
       el("h3", {}, `STM (${h.stms.length})`),
       h.stms.length ? table([["เลข STM"], ["งวด"], ["วันที่ออก"], ["REP (rid)"], ["ยอดชดเชย", "num"]], stmRows) : el("p", { class: "hint" }, "ยังไม่พบใน STM ที่นำเข้า"),
+      el("h3", {}, `FDH รายการเคลม (${(h.fdh || []).length})`),
+      (h.fdh || []).length ? table([["รหัสการเคลม"], ["สิทธิ"], ["การใช้สิทธิ"], ["วันที่ส่งเคลม"], ["สถานะ"]], h.fdh.map((f) => el("tr", {},
+        el("td", { class: "mono" }, f.claim_id), el("td", {}, f.fund), el("td", {}, f.uuc === "2" ? "2 ไม่ใช้สิทธิ" : f.uuc ? "1 ใช้สิทธิ" : "—"),
+        el("td", {}, when(f.sent_at)), el("td", {}, fdhBadge(f.status)))))
+        : el("p", { class: "hint" }, "ไม่พบในรายละเอียดรายการเคลม FDH ที่นำเข้า"),
       el("h3", {}, "ความหมายของรหัส"), codeLegend([...h.reps.map((b) => b.codes), ...h.disps.flatMap((d) => [d.codes, ...d.drugs.map((g) => g.codes)])], h.code_names) || el("p", { class: "hint" }, "ไม่มีรหัส"),
     ]);
   } catch (err) { notice(err.message); }

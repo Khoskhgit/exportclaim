@@ -35,7 +35,7 @@ function renderRows() {
     const problems = [...r.errors, ...r.warns].map((i) => i.message);
     return el("tr", { class: state.current === r.key ? "current" : "", onclick: () => openDrawer(r) },
       el("td", { class: "check" }, box), el("td", {}, resultBadge(r)),
-      el("td", {}, r.status ? el("span", { class: "badge b-sent" }, r.status) : (r.approve_required && r.claimcode ? null : el("span", { class: "muted" }, "—")), ktbTag(r), walkinTag(r), uucTag(r)),
+      el("td", {}, r.status ? el("span", { class: "badge b-sent" }, r.status) : (r.approve_required && r.claimcode ? null : el("span", { class: "muted" }, "—")), ktbTag(r), walkinTag(r), uucTag(r), fdhClaimTag(r)),
       el("td", {}, r.kind), el("td", { class: "mono" }, r.key), el("td", { class: "mono" }, r.hn),
       el("td", { class: "name-cell", title: r.ptname }, r.ptname, el("span", { class: "sub" }, r.pttype)),
       el("td", { class: "mono" }, toDmy(r.date)), el("td", {}, r.maininscl), el("td", {}, r.pdx || el("span", { class: "muted" }, "—")),
@@ -62,6 +62,12 @@ function ktbTag(r) {
   if (!r.approve_required || !r.claimcode) return null;
   return el("span", { class: "ktb-tag", title: "Approve Code กรุงไทย (นำเข้าที่เมนู Approve Code)" },
     r.status ? null : el("span", { class: "ktb-label" }, "คีย์ KTB แล้ว"), el("span", { class: "ktb-code mono" }, r.claimcode));
+}
+// The FDH claim report imported on the REP/STM page: when the claim was sent.
+function fdhClaimTag(r) {
+  const c = r.fdh_claim;
+  return c ? el("span", { class: "sub", title: "จากรายละเอียดรายการเคลม FDH ที่นำเข้าในหน้า REP / STM" },
+    `เคลม FDH ${c.sent_at ? toDmy(c.sent_at.slice(0, 10)) : ""}`) : null;
 }
 // The UUC each visit goes with, under the status: 1 ใช้สิทธิ / 2 ไม่ใช้สิทธิ, and whether it was set by hand here.
 function uucTag(r) {
