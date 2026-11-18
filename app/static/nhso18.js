@@ -63,8 +63,14 @@ function ktbTag(r) {
   return el("span", { class: "ktb-tag", title: "Approve Code กรุงไทย (นำเข้าที่เมนู Approve Code)" },
     r.status ? null : el("span", { class: "ktb-label" }, "คีย์ KTB แล้ว"), el("span", { class: "ktb-code mono" }, r.claimcode));
 }
+// The UUC each visit goes with, under the status: 1 ใช้สิทธิ / 2 ไม่ใช้สิทธิ, and whether it was set by hand here.
 function uucTag(r) {
-  return r.uuc_set ? el("span", { class: "uuc-tag", title: "กำหนด UUC เองในโปรแกรมนี้ (ไม่แก้ HOSxP)" }, `UUC ${r.uuc_set} (กำหนดเอง)`) : null;
+  if (!r.uuc) return null;
+  const two = r.uuc === "2";
+  const title = r.uuc_set ? "กำหนด UUC เองในโปรแกรมนี้ (ไม่แก้ HOSxP)"
+    : two ? "อัตโนมัติ: HOSxP ตั้งไม่ขอเบิกไว้ (request_funds N)" : "อัตโนมัติ";
+  return el("span", { class: `uuc-tag${two ? " two" : ""}`, title },
+    `UUC ${r.uuc} ${two ? "ไม่ใช้สิทธิ" : "ใช้สิทธิ"}${r.uuc_set ? " (กำหนดเอง)" : ""}`);
 }
 // UUC 1 = ใช้สิทธิ / 2 = ไม่ใช้สิทธิ. "อัตโนมัติ" is 1, or 2 when HOSxP has request_funds N; the choice is kept in this app only.
 function uucControl(r, data) {
