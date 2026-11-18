@@ -177,14 +177,13 @@ async function openDrawer(r) {
       data.cc ? el("p", { class: "cc-text" }, data.cc) : el("p", { class: "muted" }, "ไม่มีข้อมูล CC"),
       el("h3", {}, "การวินิจฉัย"),
       data.dx.length ? table(["ประเภท", "รหัส", "ชื่อโรค"], data.dx.map((d) => el("tr", {}, el("td", {}, d.type), el("td", { class: "mono" }, d.code), el("td", {}, d.name)))) : el("p", { class: "muted" }, "ไม่มีข้อมูล"),
-      el("h3", {}, `หัตถการ (${ipd ? "IOP" : "OOP"})`),
+      el("div", { class: "proc-head" }, el("h3", {}, `หัตถการ (${ipd ? "IOP" : "OOP"})`), ipd ? null : tmChoice(r, data, procs)),
       procs.length ? table([ipd ? "ประเภท" : "ที่มา", "รหัส", "ชื่อหัตถการ", ipd ? "เริ่ม" : "วันที่", ...(ipd ? ["สิ้นสุด"] : []), "ผู้ทำ (ว.)"],
         procs.map((p) => el("tr", { class: !ipd && isTm(p.code) ? "tm-row" : "" }, el("td", {}, p.type), el("td", { class: "mono" }, p.code), el("td", {}, p.name || "—"),
           el("td", { class: "mono" }, p.start ? `${toDmy(p.start.slice(0, 10))}${p.start.slice(10)}` : "—"),
           ...(ipd ? [el("td", { class: "mono" }, p.end ? `${toDmy(p.end.slice(0, 10))}${p.end.slice(10)}` : "—")] : []),
           el("td", { class: "mono" }, p.dropid || "—"))))
-        : el("p", { class: "muted" }, "ไม่มีหัตถการ"),
-      ipd ? null : tmChoice(r, data, procs)];
+        : el("p", { class: "muted" }, "ไม่มีหัตถการ")];
     const summary = el("div", { class: "cost-summary" });
     const showSummary = () => summary.replaceChildren(costSummary(data.items));
     showSummary();
@@ -225,8 +224,9 @@ function tmChoice(r, data, procs) {
     } catch (err) { e.target.checked = !e.target.checked; notice(err.message); }
   } });
   setTimeout(mark);
-  return el("label", { class: "tm-choice" }, box, el("span", {}, "ไม่ส่งรหัส ICD-10-TM",
-    el("span", { class: "sub" }, `รหัส ${procs.filter((p) => isTm(p.code)).map((p) => p.code).join(", ")} จะไม่อยู่ในแฟ้ม OOP (ไม่แก้ข้อมูลใน HOSxP)`)));
+  return el("label", { class: "tm-choice",
+    title: `รหัส ${procs.filter((p) => isTm(p.code)).map((p) => p.code).join(", ")} จะไม่อยู่ในแฟ้ม OOP (ไม่แก้ข้อมูลใน HOSxP)` },
+    box, "ไม่ส่งรหัส ICD-10-TM");
 }
 function closeDrawer() { $("drawer").hidden = true; $("drawer-backdrop").hidden = true; state.current = null; renderRows(); }
 

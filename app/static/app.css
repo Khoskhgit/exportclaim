@@ -148,8 +148,10 @@ th[aria-sort=descending] .sort-mark::after{content:"▼";opacity:1;color:var(--a
 #fdh-account-dialog form{display:grid;gap:10px;min-width:min(420px,80vw)}
 .uuc-tag{display:block;margin-top:3px;font-size:11.5px;font-weight:600;color:var(--ok);white-space:nowrap}
 .uuc-tag.two{color:var(--error)}
-.tm-choice{display:flex;gap:10px;align-items:flex-start;margin:10px 0 0;padding:10px 14px;border:1px solid var(--line);border-radius:12px;background:var(--panel-2);font-size:14px;color:var(--ink);cursor:pointer}
-.tm-choice input{margin-top:3px}
+.proc-head{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:16px 0 8px}
+.proc-head h3{margin:0}
+.tm-choice{display:inline-flex;gap:8px;align-items:center;padding:4px 12px;border:1px solid var(--line);border-radius:999px;background:var(--panel-2);font-size:13px;font-weight:600;color:var(--ink);cursor:pointer}
+.tm-choice input{width:16px;height:16px}
 .ktb-tag{display:flex;flex-direction:column;margin-top:3px;line-height:1.25;white-space:nowrap}
 .ktb-tag .ktb-label{font-size:12px;font-weight:600;color:var(--ok)}
 .ktb-tag .ktb-code{font-size:11px;color:var(--muted)}
