@@ -22,8 +22,11 @@ ENCODING = "cp874"
 CRLF = "\r\n"
 MY_OFC = r"OFC|LGO|BKK|BMT|SRT|PVT"
 CHRONIC = r"DM:|HT:|CKD:|Asthma:|COPD:|IHD:|Cancer:|TB:|Chronic:"
-# An item's money is qty x unitprice, not HOSxP's sum_price (which may be rounded, or kept when qty was set to 0).
-AMOUNT = "(IFNULL(oo.qty,0)*IFNULL(oo.unitprice,0))"
+# An item's money is HOSxP's sum_price (what the bill charged, after HOSxP's rounding; the user chose it on 2026-11-18
+# over qty x unitprice). An item whose qty was set to 0 is still 0: HOSxP may keep its old sum_price.
+AMOUNT = "IF(IFNULL(oo.qty,0)=0,0,IFNULL(oo.sum_price,0))"
+# The unit price that goes with it, so QTY x RATE adds up to the amount.
+UNIT_PRICE = "IF(IFNULL(oo.qty,0)=0,IFNULL(oo.unitprice,0),ROUND(IFNULL(oo.sum_price,0)/oo.qty,2))"
 X_CODES = {"XXXXXX", "51999", "52999", "55999", "72999"}
 
 # Export4<file> tables from CreateTempFile: (column, kind, size). Kind: C char, D date, I int, N<places> decimal.
@@ -508,7 +511,7 @@ class Builder:
           inc.drg_chrgitem_id billmaud, IF(oo.paidst IN ('03'),chrgitem_code2,chrgitem_code1) chrgitem,
           oo.icode, CONCAT_WS(' ',d.name,d.strength) drugname, d.nhso_adp_type_id type, d.nhso_adp_code adp_code,
           fwf.fwf_item_code, adp.nhso_adp_code adp_master, adp.ucep, d.max_qty, d.stdprice,
-          oo.qty, oo.unitprice, {AMOUNT} sum_price, ll.tmlt_code tmltcode"""
+          oo.qty, {UNIT_PRICE} unitprice, {AMOUNT} sum_price, ll.tmlt_code tmltcode"""
         joins = f"""
           JOIN s_drugitems d ON d.icode=oo.icode
           LEFT JOIN fwf_item fwf ON fwf.fwf_item_id=d.fwf_item_id
@@ -733,7 +736,7 @@ class Builder:
         drug_ned = lit_list(self.c.income_drug_ned) if self.c.income_drug_ned else "'XXX'"
         cols = f"""
           oo.rxdate, oo.icode did, CONCAT_WS(' ',d.name,d.strength) didname, d.units unit, oo.qty, {AMOUNT} sum_price,
-          oo.unitprice drugpric, oo.paidst,
+          {UNIT_PRICE} drugpric, oo.paidst,
           CASE WHEN ex.maininscl REGEXP 'NRD|NRH|FWF' AND fwf.fwf_item_code IS NOT NULL THEN fwf.fwf_item_code ELSE d.did END didstd,
           CASE WHEN oh.opitemrece_home_type_id IS NOT NULL THEN oh.opitemrece_home_type_id
                WHEN oo.item_type='H' OR oo.income IN ({self.homemed()}) THEN
@@ -890,7 +893,8 @@ def adp_item(r: dict, nurse: set[str], supply: set[str]) -> dict:
         rate = Decimal("0")
     else:
         rate = num(r.get("unitprice"))
-    price = num(r.get("sum_price")) if ofc14 else num(r.get("qty")) * rate
+    # The item's own amount (HOSxP sum_price) unless the rate was replaced (herb standard price, UCEP rate).
+    price = num(r.get("sum_price")) if ofc14 or rate == num(r.get("unitprice")) else num(r.get("qty")) * rate
     return {
         "seq": r["seq"], "an": r.get("an"), "hn": r.get("hn"), "dateopd": r.get("dateopd"), "maininscl": inscl,
         "paidst": r.get("paidst"), "billmaud": bm, "chrgitem": r.get("chrgitem"), "drugname": r.get("drugname"),

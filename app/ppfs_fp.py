@@ -42,7 +42,7 @@ AGE = (10, 60)
 VISIT_COLS = """o.vn, o.hn, o.vstdate, o.vsttime, o.an, o.pttype, ptt.name pttype_name,
           CONCAT(IFNULL(p.pname,''),p.fname,' ',p.lname) ptname, p.cid, p.nationality, p.sex, v.age_y"""
 VISIT_JOINS = """JOIN patient p ON p.hn=o.hn LEFT JOIN pttype ptt ON ptt.pttype=o.pttype LEFT JOIN vn_stat v ON v.vn=o.vn"""
-ITEM_COLS = """d.nhso_adp_code code, oo.icode, oo.paidst, d.name item_name, oo.qty, IFNULL(oo.qty,0)*IFNULL(oo.unitprice,0) amount,
+ITEM_COLS = """d.nhso_adp_code code, oo.icode, oo.paidst, d.name item_name, oo.qty, IF(IFNULL(oo.qty,0)=0,0,IFNULL(oo.sum_price,0)) amount,
           EXISTS(SELECT 1 FROM drugitems di WHERE di.icode=oo.icode) is_drug"""
 
 
@@ -183,13 +183,13 @@ def detail(q: Select, vn: str) -> dict:
         SELECT o.vn, o.vstdate, d.nhso_adp_code code,
           SUM(IF(EXISTS(SELECT 1 FROM drugitems di WHERE di.icode=oo.icode),0,oo.qty)) fee_qty,
           SUM(IF(EXISTS(SELECT 1 FROM drugitems di WHERE di.icode=oo.icode),oo.qty,0)) drug_qty,
-          SUM(IF(EXISTS(SELECT 1 FROM drugitems di WHERE di.icode=oo.icode),0,IFNULL(oo.qty,0)*IFNULL(oo.unitprice,0))) amount
+          SUM(IF(EXISTS(SELECT 1 FROM drugitems di WHERE di.icode=oo.icode),0,IF(IFNULL(oo.qty,0)=0,0,IFNULL(oo.sum_price,0)))) amount
         FROM ovst o JOIN opitemrece oo ON oo.vn=o.vn JOIN s_drugitems d ON d.icode=oo.icode
         WHERE o.hn={lit(visit["hn"])} AND o.vstdate BETWEEN {lit(first)} AND {lit(last)} AND d.nhso_adp_code IN ({lit_list(CODES)})
         GROUP BY o.vn, d.nhso_adp_code ORDER BY o.vstdate, o.vn, d.nhso_adp_code""")
     items = q(f"""
         SELECT oo.icode, CONCAT_WS(' ',d.name,d.strength) name, d.nhso_adp_code adp, SUM(oo.qty) qty,
-          SUM(IFNULL(oo.qty,0)*IFNULL(oo.unitprice,0)) amount, EXISTS(SELECT 1 FROM drugitems di WHERE di.icode=oo.icode) is_drug
+          SUM(IF(IFNULL(oo.qty,0)=0,0,IFNULL(oo.sum_price,0))) amount, EXISTS(SELECT 1 FROM drugitems di WHERE di.icode=oo.icode) is_drug
         FROM opitemrece oo LEFT JOIN s_drugitems d ON d.icode=oo.icode WHERE oo.vn={lit(vn)}
         GROUP BY oo.icode ORDER BY d.nhso_adp_code IS NULL, oo.icode""")
     dx = q(f"SELECT diagtype, icd10, icdname(icd10) name FROM ovstdiag WHERE vn={lit(vn)} ORDER BY diagtype, icd10")

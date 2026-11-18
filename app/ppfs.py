@@ -206,7 +206,7 @@ def fetch(q: Select, start: date, end: date) -> dict:
         SELECT oo.vn, o.hn, o.vstdate, o.vsttime, o.an, o.pttype, ptt.name pttype_name,
           CONCAT(IFNULL(p.pname,''),p.fname,' ',p.lname) ptname, p.cid, p.nationality,
           d.nhso_adp_code code, oo.icode, d.name item_name, oo.qty, oo.unitprice, oo.paidst,
-          IFNULL(oo.qty,0)*IFNULL(oo.unitprice,0) amount
+          IF(IFNULL(oo.qty,0)=0,0,IFNULL(oo.sum_price,0)) amount
         FROM ovst o JOIN opitemrece oo ON oo.vn=o.vn JOIN s_drugitems d ON d.icode=oo.icode
         JOIN patient p ON p.hn=o.hn LEFT JOIN pttype ptt ON ptt.pttype=o.pttype
         WHERE o.vstdate BETWEEN {lit(start)} AND {lit(end)} AND d.nhso_adp_code IN ({lit_list([CHECK, DRUG])})""")
@@ -244,7 +244,8 @@ def visit_items(q: Select, vns: Iterable[str]) -> list[dict]:
     if not vns:
         return []
     return q(f"""
-        SELECT oo.vn, oo.icode, d.nhso_adp_code code, oo.unitprice, EXISTS(SELECT 1 FROM drugitems di WHERE di.icode=oo.icode) is_drug
+        SELECT oo.vn, oo.icode, d.nhso_adp_code code,
+          IF(IFNULL(oo.qty,0)=0,IFNULL(oo.unitprice,0),ROUND(IFNULL(oo.sum_price,0)/oo.qty,2)) unitprice, EXISTS(SELECT 1 FROM drugitems di WHERE di.icode=oo.icode) is_drug
         FROM opitemrece oo LEFT JOIN s_drugitems d ON d.icode=oo.icode
         WHERE oo.vn IN ({lit_list(vns)})""")
 
@@ -279,7 +280,7 @@ def detail(q: Select, vn: str) -> dict:
             FROM person_anc_preg_care c LEFT JOIN anc_preg_care_location l ON l.anc_preg_care_location_id=c.anc_preg_care_location_id
             WHERE c.person_anc_id={lit(birth["person_anc_id"])} ORDER BY c.care_date""")
         claims = q(f"""
-            SELECT o.vn, o.vstdate, d.nhso_adp_code code, SUM(oo.qty) qty, SUM(IFNULL(oo.qty,0)*IFNULL(oo.unitprice,0)) amount
+            SELECT o.vn, o.vstdate, d.nhso_adp_code code, SUM(oo.qty) qty, SUM(IF(IFNULL(oo.qty,0)=0,0,IFNULL(oo.sum_price,0))) amount
             FROM ovst o JOIN opitemrece oo ON oo.vn=o.vn JOIN s_drugitems d ON d.icode=oo.icode
             WHERE o.hn={lit(hn)} AND o.vstdate>={lit(start)} {f"AND o.vstdate<{lit(stop)}" if stop else ""}
               AND d.nhso_adp_code IN ({lit_list([CHECK, DRUG])})
@@ -289,7 +290,7 @@ def detail(q: Select, vn: str) -> dict:
         WHERE oo.vn={lit(vn)} AND CONCAT_WS(' ',di.name,di.generic_name) REGEXP {lit(IRON)} GROUP BY oo.icode""")
     items = q(f"""
         SELECT oo.icode, CONCAT_WS(' ',d.name,d.strength) name, d.nhso_adp_code adp, SUM(oo.qty) qty,
-          SUM(IFNULL(oo.qty,0)*IFNULL(oo.unitprice,0)) amount
+          SUM(IF(IFNULL(oo.qty,0)=0,0,IFNULL(oo.sum_price,0))) amount
         FROM opitemrece oo LEFT JOIN s_drugitems d ON d.icode=oo.icode WHERE oo.vn={lit(vn)}
         GROUP BY oo.icode ORDER BY d.nhso_adp_code IS NULL, oo.icode""")
     dx = q(f"SELECT diagtype, icd10, icdname(icd10) name FROM ovstdiag WHERE vn={lit(vn)} ORDER BY diagtype, icd10")

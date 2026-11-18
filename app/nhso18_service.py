@@ -81,7 +81,7 @@ def search(q: Select, rcm: str, start: date | None, end: date | None, rights: Se
         SELECT o.vn, NULL an, o.hn, pt.cid, CONCAT(IFNULL(pt.pname,''),IFNULL(pt.fname,''),' ',IFNULL(pt.lname,'')) ptname,
           o.vstdate date, o.vsttime time, o.pttype, ptt.name pttype_name, seekhipdatas(o.pttype,0) maininscl,
           pttypeeclaim(o.pttype) pttype_eclaim, diagnosis('opd',o.vn,1) pdx, v.income money_hosxp,
-          (SELECT SUM(IFNULL(qty,0)*IFNULL(unitprice,0)) FROM opitemrece WHERE vn=o.vn) money_total,
+          (SELECT SUM(IF(IFNULL(qty,0)=0,0,IFNULL(sum_price,0))) FROM opitemrece WHERE vn=o.vn) money_total,
           (SELECT vp.claim_code FROM visit_pttype vp WHERE vp.vn=o.vn AND vp.pttype=o.pttype LIMIT 1) claimcode,
           {rep('vn', 'o.vn')} rep_rep, {paid('vn', 'o.vn')} rep_invoice, {paid_amt('vn', 'o.vn')} rep_paid,
           re.fdh_claim_status_message fdh_status, re.fdh_act_amt fdh_amount,
@@ -104,7 +104,7 @@ def search(q: Select, rcm: str, start: date | None, end: date | None, rights: Se
         SELECT NULL vn, i.an, i.hn, pt.cid, CONCAT(IFNULL(pt.pname,''),IFNULL(pt.fname,''),' ',IFNULL(pt.lname,'')) ptname,
           i.dchdate date, i.dchtime time, i.pttype, ptt.name pttype_name, seekhipdatas(i.pttype,0) maininscl,
           pttypeeclaim(i.pttype) pttype_eclaim, diagnosis('ipd',i.an,1) pdx, a.income money_hosxp,
-          (SELECT SUM(IFNULL(qty,0)*IFNULL(unitprice,0)) FROM opitemrece WHERE an=i.an) money_total,
+          (SELECT SUM(IF(IFNULL(qty,0)=0,0,IFNULL(sum_price,0))) FROM opitemrece WHERE an=i.an) money_total,
           (SELECT ip.claim_code FROM ipt_pttype ip WHERE ip.an=i.an AND ip.pttype=i.pttype LIMIT 1) claimcode,
           {rep('an', 'i.an')} rep_rep, {paid('an', 'i.an')} rep_invoice, {paid_amt('an', 'i.an')} rep_paid,
           re.fdh_claim_status_message fdh_status, re.fdh_act_amt fdh_amount, NULL discharge, NULL has_an

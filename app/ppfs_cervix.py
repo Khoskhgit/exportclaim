@@ -96,7 +96,7 @@ def fetch(q: Select, start: date, end: date) -> dict:
         return {"items": [], "history": [], "results": {}, "dx": set(), "icodes": icodes}
     items = q(f"""
         SELECT {VISIT_COLS}, oo.icode, oo.paidst, CONCAT_WS(' ',d.name,d.strength) item_name, d.nhso_adp_code adp,
-          oo.qty, IFNULL(oo.qty,0)*IFNULL(oo.unitprice,0) amount
+          oo.qty, IF(IFNULL(oo.qty,0)=0,0,IFNULL(oo.sum_price,0)) amount
         FROM ovst o JOIN opitemrece oo ON oo.vn=o.vn JOIN s_drugitems d ON d.icode=oo.icode {VISIT_JOINS}
         WHERE o.vstdate BETWEEN {lit(start)} AND {lit(end)} AND IFNULL(o.an,'')='' AND {UC}
           AND oo.icode IN ({lit_list(icodes)})""")
@@ -199,14 +199,14 @@ def detail(q: Select, vn: str) -> dict:
     icodes = test_icodes(q)
     tests = q(f"""
         SELECT o.vn, o.vstdate, oo.icode, CONCAT_WS(' ',d.name,d.strength) name, SUM(oo.qty) qty,
-          SUM(IFNULL(oo.qty,0)*IFNULL(oo.unitprice,0)) amount
+          SUM(IF(IFNULL(oo.qty,0)=0,0,IFNULL(oo.sum_price,0))) amount
         FROM ovst o JOIN opitemrece oo ON oo.vn=o.vn JOIN s_drugitems d ON d.icode=oo.icode
         WHERE o.hn={lit(visit["hn"])} AND oo.icode IN ({lit_list(icodes)})
         GROUP BY o.vn, oo.icode ORDER BY o.vstdate DESC, o.vn""") if icodes else []
     results = _results(q, sorted({text(t["vn"]) for t in tests}))
     items = q(f"""
         SELECT oo.icode, CONCAT_WS(' ',d.name,d.strength) name, d.nhso_adp_code adp, SUM(oo.qty) qty,
-          SUM(IFNULL(oo.qty,0)*IFNULL(oo.unitprice,0)) amount
+          SUM(IF(IFNULL(oo.qty,0)=0,0,IFNULL(oo.sum_price,0))) amount
         FROM opitemrece oo LEFT JOIN s_drugitems d ON d.icode=oo.icode WHERE oo.vn={lit(vn)}
         GROUP BY oo.icode ORDER BY d.nhso_adp_code IS NULL, oo.icode""")
     dx = q(f"SELECT diagtype, icd10, icdname(icd10) name FROM ovstdiag WHERE vn={lit(vn)} ORDER BY diagtype, icd10")

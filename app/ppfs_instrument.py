@@ -184,7 +184,7 @@ UC = "ptt.hipdata_code IN ('UCS','WEL')"
 def fetch(q: Select, start: date, end: date, rcm: str, web: list[dict]) -> dict:
     items = q(f"""
         SELECT {VISIT_COLS}, oo.icode, oo.paidst, d.nhso_adp_code code, CONCAT_WS(' ',d.name,d.strength) item_name,
-          oo.qty, IFNULL(oo.qty,0)*IFNULL(oo.unitprice,0) amount
+          oo.qty, IF(IFNULL(oo.qty,0)=0,0,IFNULL(oo.sum_price,0)) amount
         FROM ovst o JOIN opitemrece oo ON oo.vn=o.vn JOIN s_drugitems d ON d.icode=oo.icode {VISIT_JOINS}
         WHERE o.vstdate BETWEEN {lit(start)} AND {lit(end)} AND IFNULL(o.an,'')='' AND {UC} AND {ITEM_FILTER}""")
     # Visits of the imported web rows that HOSxP bills nothing for: shown so the device can be keyed (or left out).
@@ -301,7 +301,7 @@ def detail(q: Select, vn: str) -> dict:
     since = date(day.year - 2, day.month, min(day.day, 28)) if day else date(1900, 1, 1)
     history = q(f"""
         SELECT o.vn, o.vstdate, d.nhso_adp_code code, CONCAT_WS(' ',d.name,d.strength) name, SUM(oo.qty) qty,
-          SUM(IFNULL(oo.qty,0)*IFNULL(oo.unitprice,0)) amount
+          SUM(IF(IFNULL(oo.qty,0)=0,0,IFNULL(oo.sum_price,0))) amount
         FROM ovst o JOIN opitemrece oo ON oo.vn=o.vn JOIN s_drugitems d ON d.icode=oo.icode
         WHERE o.hn={lit(visit["hn"])} AND o.vstdate BETWEEN {lit(since)} AND {lit(day)} AND {ITEM_FILTER}
         GROUP BY o.vn, d.nhso_adp_code, oo.icode ORDER BY o.vstdate DESC, o.vn""")
@@ -310,7 +310,7 @@ def detail(q: Select, vn: str) -> dict:
         WHERE pe.cid={lit(visit["cid"])} ORDER BY pd.register_date""") if text(visit.get("cid")) else []
     items = q(f"""
         SELECT oo.icode, CONCAT_WS(' ',d.name,d.strength) name, d.nhso_adp_code adp, SUM(oo.qty) qty,
-          SUM(IFNULL(oo.qty,0)*IFNULL(oo.unitprice,0)) amount
+          SUM(IF(IFNULL(oo.qty,0)=0,0,IFNULL(oo.sum_price,0))) amount
         FROM opitemrece oo LEFT JOIN s_drugitems d ON d.icode=oo.icode WHERE oo.vn={lit(vn)}
         GROUP BY oo.icode ORDER BY d.nhso_adp_code IS NULL, oo.icode""")
     dx = q(f"SELECT diagtype, icd10, icdname(icd10) name FROM ovstdiag WHERE vn={lit(vn)} ORDER BY diagtype, icd10")

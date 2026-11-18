@@ -44,7 +44,7 @@ def _band_of(icode: str, band_list: list[Band]) -> int:
 def fetch(q: Select, start: date, end: date, band_list: list[Band]) -> dict:
     icodes = all_icodes(band_list)
     items = q(f"""
-        SELECT {VISIT_COLS}, oo.icode, oo.paidst, d.name item_name, oo.qty, IFNULL(oo.qty,0)*IFNULL(oo.unitprice,0) amount
+        SELECT {VISIT_COLS}, oo.icode, oo.paidst, d.name item_name, oo.qty, IF(IFNULL(oo.qty,0)=0,0,IFNULL(oo.sum_price,0)) amount
         FROM ovst o JOIN opitemrece oo ON oo.vn=o.vn JOIN s_drugitems d ON d.icode=oo.icode {VISIT_JOINS}
         WHERE o.vstdate BETWEEN {lit(start)} AND {lit(end)} AND oo.icode IN ({lit_list(icodes)})""")
     hns = sorted({text(r["hn"]) for r in items})
@@ -131,7 +131,7 @@ def detail(q: Select, vn: str, band_list: list[Band]) -> dict:
     if visit is None:
         return {}
     claims = q(f"""
-        SELECT o.vn, o.vstdate, v.age_y, v.age_m, oo.icode, SUM(oo.qty) qty, SUM(IFNULL(oo.qty,0)*IFNULL(oo.unitprice,0)) amount
+        SELECT o.vn, o.vstdate, v.age_y, v.age_m, oo.icode, SUM(oo.qty) qty, SUM(IF(IFNULL(oo.qty,0)=0,0,IFNULL(oo.sum_price,0))) amount
         FROM ovst o JOIN opitemrece oo ON oo.vn=o.vn LEFT JOIN vn_stat v ON v.vn=o.vn
         WHERE o.hn={lit(visit["hn"])} AND oo.icode IN ({lit_list(all_icodes(band_list))})
         GROUP BY o.vn, oo.icode ORDER BY o.vstdate, o.vn""")
@@ -140,7 +140,7 @@ def detail(q: Select, vn: str, band_list: list[Band]) -> dict:
         c["band"], c["adp"] = band.label, band.adp
     items = q(f"""
         SELECT oo.icode, CONCAT_WS(' ',d.name,d.strength) name, d.nhso_adp_code adp, SUM(oo.qty) qty,
-          SUM(IFNULL(oo.qty,0)*IFNULL(oo.unitprice,0)) amount, EXISTS(SELECT 1 FROM drugitems di WHERE di.icode=oo.icode) is_drug
+          SUM(IF(IFNULL(oo.qty,0)=0,0,IFNULL(oo.sum_price,0))) amount, EXISTS(SELECT 1 FROM drugitems di WHERE di.icode=oo.icode) is_drug
         FROM opitemrece oo LEFT JOIN s_drugitems d ON d.icode=oo.icode WHERE oo.vn={lit(vn)}
         GROUP BY oo.icode ORDER BY d.nhso_adp_code IS NULL, oo.icode""")
     dx = q(f"SELECT diagtype, icd10, icdname(icd10) name FROM ovstdiag WHERE vn={lit(vn)} ORDER BY diagtype, icd10")
