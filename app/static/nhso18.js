@@ -27,8 +27,19 @@ function visible() {
 }
 function renderChips() { renderCards($("summary"), CATEGORIES, state.rows, state.filter, (r) => r.money, (key) => { state.filter = key; render(); }); }
 
+// The header box: ticked when every row shown now (this filter and search) that can be sent is picked.
+function syncCheckAll(list) {
+  const box = $("check-all");
+  if (!box) return;
+  const can = list.filter((r) => r.selectable);
+  const on = can.filter((r) => state.selected.has(r.key)).length;
+  box.disabled = !can.length;
+  box.checked = can.length > 0 && on === can.length;
+  box.indeterminate = on > 0 && on < can.length;
+}
 function renderRows() {
   const list = visible();
+  syncCheckAll(list);
   showSort($("thead"), state.sort);
   $("rows").replaceChildren(...list.map((r) => {
     const box = el("input", { type: "checkbox", checked: state.selected.has(r.key), disabled: !r.selectable,
@@ -552,3 +563,10 @@ $("drawer-close").onclick = closeDrawer;
 $("drawer-backdrop").onclick = closeDrawer;
 document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("drawer").hidden && !$("confirm").open) closeDrawer(); });
 start();
+// "เฉพาะหน้านี้": ticking keeps only the rows shown now (others are unticked); unticking clears the rows shown.
+$("check-all")?.addEventListener("change", (e) => {
+  const shown = visible().filter((r) => r.selectable);
+  if (e.target.checked) state.selected.clear();
+  shown.forEach((r) => pick(r, e.target.checked));
+  renderRows(); renderTotals();
+});
