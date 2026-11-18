@@ -35,7 +35,7 @@ function renderRows() {
     const problems = [...r.errors, ...r.warns].map((i) => i.message);
     return el("tr", { class: state.current === r.key ? "current" : "", onclick: () => openDrawer(r) },
       el("td", { class: "check" }, box), el("td", {}, resultBadge(r)),
-      el("td", {}, r.status ? el("span", { class: "badge b-sent" }, r.status) : (r.approve_required && r.claimcode ? null : el("span", { class: "muted" }, "—")), ktbTag(r), walkinTag(r), uucTag(r), fdhClaimTag(r)),
+      el("td", {}, r.status ? el("span", { class: "badge b-sent" }, r.status) : (r.approve_required && r.claimcode ? null : el("span", { class: "muted" }, "—")), ktbTag(r), walkinTag(r), uucTag(r), referTag(r), fdhClaimTag(r)),
       el("td", {}, r.kind), el("td", { class: "mono" }, r.key), el("td", { class: "mono" }, r.hn),
       el("td", { class: "name-cell", title: r.ptname }, r.ptname, el("span", { class: "sub" }, r.pttype)),
       el("td", { class: "mono" }, toDmy(r.date)), el("td", {}, r.maininscl), el("td", {}, r.pdx || el("span", { class: "muted" }, "—")),
@@ -62,6 +62,35 @@ function ktbTag(r) {
   if (!r.approve_required || !r.claimcode) return null;
   return el("span", { class: "ktb-tag", title: "Approve Code กรุงไทย (นำเข้าที่เมนู Approve Code)" },
     r.status ? null : el("span", { class: "ktb-label" }, "คีย์ KTB แล้ว"), el("span", { class: "ktb-code mono" }, r.claimcode));
+}
+// Refer in / out of the visit (what ORF/IRF and AER carry), after the UUC; crossed out when the user chose not to send it.
+const referText = (x) => `${x.dir === "out" ? "ส่งต่อ →" : "รับเข้า ←"} ${x.hcode || "?"}${x.name ? ` ${x.name}` : ""}`;
+function referTag(r) {
+  if (!r.refers || !r.refers.length) return null;
+  return el("span", { class: `refer-tag${r.no_refer ? " off" : ""}`, title: r.no_refer ? "ไม่ส่งข้อมูลการส่งต่อ / รับเข้า (กำหนดเองในโปรแกรมนี้)" : "ข้อมูลการส่งต่อ / รับเข้า ที่จะส่ง" },
+    r.refers.map(referText).join(" · "), r.no_refer ? " (ไม่ส่ง)" : "");
+}
+// The drawer: the refer records and the choice to send the visit without them (ORF/IRF and the AER refer fields).
+function referControl(r) {
+  const box = el("div", { class: "uuc-box" });
+  const draw = () => box.replaceChildren(
+    el("div", { class: "uuc-head" }, el("strong", {}, "การส่งต่อ / รับเข้า")),
+    table(["", "หน่วยบริการ", "วันที่", "เลขที่"], r.refers.map((x) => el("tr", { class: r.no_refer ? "excluded" : "" },
+      el("td", {}, x.dir === "out" ? "ส่งต่อ" : "รับเข้า"), el("td", {}, `${x.hcode || "—"} ${x.name || ""}`.trim()),
+      el("td", { class: "mono" }, x.date ? toDmy(x.date) : "—"), el("td", { class: "mono" }, x.no || "—")))),
+    el("label", { class: "tm-choice" }, el("input", { type: "checkbox", checked: r.no_refer, onchange: async (e) => {
+      try {
+        await api("/api/nhso18/no-refer", { key: r.key, on: e.target.checked });
+        // Check this one row again on the server: the S180x refer charge only matters when the refer is sent.
+        const fresh = (await api("/api/nhso18/search", r.kind === "IPD" ? { an: r.key, ipd: true } : { vn: r.key })).rows.find((x) => x.key === r.key);
+        if (fresh) Object.assign(r, fresh); else r.no_refer = e.target.checked;
+        if (!r.selectable) state.selected.delete(r.key);
+        render(); openDrawer(r);  // redraw the drawer so ผลตรวจ follows the choice
+      } catch (err) { e.target.checked = !e.target.checked; notice(err.message); }
+    } }), "ไม่ส่งข้อมูลการส่งต่อ / รับเข้า"),
+    el("p", { class: "muted-note" }, "ติ๊กแล้วจะไม่ส่งแฟ้ม ORF/IRF และช่อง Refer ใน AER ของ visit นี้ และไม่ตรวจค่าใช้จ่ายการ Refer (S180x) ไม่แก้ข้อมูลใน HOSxP"));
+  draw();
+  return box;
 }
 // The FDH claim report imported on the REP/STM page: when the claim was sent.
 function fdhClaimTag(r) {
@@ -162,6 +191,7 @@ async function openDrawer(r) {
       ["PDx", r.pdx], ["ค่าใช้จ่าย", `${baht.format(Number(r.money))} บาท`], ["สถานะ", r.status || "ยังไม่ส่ง"], ["ชดเชย FDH", r.fdh_amount ? `${baht.format(Number(r.fdh_amount))} บาท` : "—"]]
       .map(([k, v]) => el("div", {}, el("dt", {}, k), el("dd", {}, v || "—"))))];
     check.push(uucControl(r, data));
+    if (r.refers && r.refers.length) check.push(referControl(r));
     const issues = [...r.errors.map((i) => ({ ...i, level: "error" })), ...r.warns.map((i) => ({ ...i, level: "warn" }))];
     if (issues.length) {
       check.push(el("h3", {}, "ผลตรวจ"));

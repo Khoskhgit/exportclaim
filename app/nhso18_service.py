@@ -120,6 +120,41 @@ def key_of(row: dict) -> str:
     return text(row.get("an")) or text(row.get("vn"))
 
 
+def refer_info(q: Select, rows: list[dict]) -> dict[str, list[dict]]:
+    """VN (or AN) -> its refer-in / refer-out records, the same ones ORF/IRF and AER are built from:
+    {"dir": "in"|"out", "hcode", "name", "date", "no"}."""
+    vns = [r["vn"] for r in rows if r["kind"] == "OPD"]
+    ans = [r["an"] for r in rows if r["kind"] == "IPD"]
+    out: dict[str, list[dict]] = {}
+    name = "(SELECT h.name FROM hospcode h WHERE h.hospcode={col} LIMIT 1)"
+    parts = []
+    if vns:
+        ids = lit_list(vns)
+        parts += [
+            f"""SELECT o.vn k, 'in' dir, IFNULL(r.refer_hospcode,o.rfrilct) hcode, IFNULL(r.refer_date,o.vstdate) day, r.docno no
+                FROM ovst o LEFT JOIN referin r ON r.vn=o.vn LEFT JOIN ovstist ist ON ist.ovstist=o.ovstist
+                WHERE o.vn IN ({ids}) AND (ist.export_code=3 OR r.vn IS NOT NULL)""",
+            f"""SELECT o.vn k, 'out' dir, IFNULL(r.refer_hospcode,o.rfrolct) hcode, IFNULL(r.refer_date,o.vstdate) day, r.refer_number no
+                FROM ovst o LEFT JOIN referout r ON r.vn=o.vn LEFT JOIN ovstost ost ON ost.ovstost=o.ovstost
+                WHERE o.vn IN ({ids}) AND (ost.export_code=3 OR r.vn IS NOT NULL)"""]
+    if ans:
+        ids = lit_list(ans)
+        parts += [
+            f"""SELECT i.an k, 'in' dir, IFNULL(r.refer_hospcode,i.rfrilct) hcode, IFNULL(r.refer_date,i.regdate) day, r.docno no
+                FROM ipt i LEFT JOIN referin r ON r.vn=i.vn LEFT JOIN ovstist ist ON ist.ovstist=i.ivstist
+                WHERE i.an IN ({ids}) AND (ist.export_code=3 OR r.vn IS NOT NULL)""",
+            f"""SELECT i.an k, 'out' dir, IFNULL(r.refer_hospcode,i.rfrolct) hcode, IFNULL(r.refer_date,i.dchdate) day, r.refer_number no
+                FROM ipt i LEFT JOIN referout r ON r.vn=i.an LEFT JOIN dchtype t ON t.dchtype=i.dchtype
+                WHERE i.an IN ({ids}) AND (t.nhso_dchtype=4 OR r.vn IS NOT NULL)"""]
+    for sql in parts:
+        for r in q(f"SELECT t.*, {name.format(col='t.hcode')} name FROM ({sql}) t"):
+            day = r.get("day")
+            out.setdefault(text(r["k"]), []).append({
+                "dir": r["dir"], "hcode": text(r.get("hcode")), "name": text(r.get("name")),
+                "date": day.isoformat()[:10] if hasattr(day, "isoformat") else text(day), "no": text(r.get("no"))})
+    return out
+
+
 def checks(q: Select, rcm: str, rows: list[dict]) -> dict[str, dict]:
     """Errors and warnings of Data2Report, computed in a few batch queries."""
     rcm = f"`{rcm}`"

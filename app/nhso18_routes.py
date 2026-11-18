@@ -70,6 +70,8 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
         eclaim_sent = local.eclaim_sent(keys)
         excluded = local.nhso18_excluded(keys)
         uuc_set = local.nhso18_uuc(keys)
+        refers = svc.refer_info(q, rows)
+        no_refer = local.nhso18_no_refer(keys)
         uuc_two = nhso18.not_claimed(q, [svc.key_of(r) for r in rows if r["kind"] != "IPD"])
         imported = results.latest(keys) if results is not None else {}
         # The FDH claim report imported on the REP/STM page, for visits HOSxP has no FDH status for.
@@ -80,6 +82,8 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
         for r in rows:
             k = svc.key_of(r)
             f = found[k]
+            if k in no_refer:  # refer data is not sent, so its charge (S180x) is not needed either
+                f = {**f, "errors": [e for e in f["errors"] if not e["code"].startswith("REFER_")]}
             claim = fdh_imported.get(k)
             if claim and not text(r.get("fdh_status")):
                 r["fdh_status"] = f"FDH {claim['fund']}: {claim['status']}".replace(" : ", ": ")
@@ -97,6 +101,7 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
                 "paid_amount": svc.paid_amount(r, st, imported.get(k)),
                 "excluded_count": sum(1 for s, _ in excluded if s == k), "uuc_set": uuc_set.get(k, ""),
                 "uuc": uuc_set.get(k) or ("2" if k in uuc_two else "1"),
+                "refers": refers.get(k, []), "no_refer": k in no_refer,
                 "selectable": not f["errors"], "has_error": bool(f["errors"]), "has_warn": bool(f["warns"]),
                 "already_sent": bool(st), "default_selected": not f["errors"] and not st,
                 "fdh_claim": {"fund": claim["fund"], "status": claim["status"], "sent_at": claim["sent_at"],
@@ -151,6 +156,7 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
             "procedures": procedures(key, kind),
             "uuc_auto": auto_uuc(key, kind), "uuc_set": local.nhso18_uuc([key]).get(key, ""),
             "no_tm": key in local.nhso18_no_tm([key]),
+            "no_refer": key in local.nhso18_no_refer([key]),
             "items": [{"icode": text(i["icode"]), "name": text(i["name"]), "billmaud": text(i["billmaud"]),
                        "billmaud_name": text(i.get("billmaud_name")), "adp": text(i["adp"]),
                        "qty": number(i["qty"]), "amount": svc.money(i["amount"]),
@@ -193,6 +199,17 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
         config, groups = svc.load_setup(q, settings.hcode)
         found = nhso18.opd_contexts(q, [key], groups, config.zone)
         return found[0].uuc if found else ""
+
+    @app.post("/api/nhso18/no-refer")
+    def set_no_refer(request: Request, body: dict = Body(...)):
+        """Send this visit without its refer-in / refer-out data, or with it again. HOSxP is not changed."""
+        key = text(body.get("key"))
+        if not key:
+            raise HTTPException(400, "ไม่ได้ระบุรายการ")
+        on = bool(body.get("on"))
+        local.set_nhso18_no_refer(key, on, auth.user_label(request))
+        log.info("nhso18 no_refer key=%s on=%s", key, on)
+        return {"no_refer": on}
 
     @app.post("/api/nhso18/no-tm")
     def set_no_tm(request: Request, body: dict = Body(...)):
@@ -252,7 +269,8 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
         nhso18.set_uuc(visits, local.nhso18_uuc(vns + ans))
         excluded = local.nhso18_excluded(vns + ans)
         data = nhso18.Builder(q, config, settings.rcm_db, ECLAIM_DB, excluded,
-                              local.nhso18_no_tm([v.vn for v in visits])).run(visits)
+                              local.nhso18_no_tm([v.vn for v in visits]),
+                              local.nhso18_no_refer([v.vn for v in visits])).run(visits)
         nhso18.set_permitno(data, {r["key"]: r["claimcode"] for r in reviewed if r["approve_required"]})
         return vns, ans, nhso18.merge_walkin(data, merge), len(merge)
 

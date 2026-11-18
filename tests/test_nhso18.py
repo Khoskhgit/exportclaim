@@ -196,3 +196,24 @@ def test_no_tm_choice_is_kept_per_visit(tmp_path):
     store.set_nhso18_no_tm("v1", False)
     assert store.nhso18_no_tm(["v1"]) == set()
     assert is_tm("2330010") and not is_tm("8931") and not is_tm("2309")
+
+
+def test_no_refer_leaves_refer_data_out():
+    from app.nhso18 import drop_refer
+    orf = [{"seq": "v1", "refer": "10699"}, {"seq": "v2", "refer": "10700"}]
+    assert drop_refer("ORF", orf, {"v1"}) == [{"seq": "v2", "refer": "10700"}]
+    assert drop_refer("IRF", [{"an": "a1"}, {"an": "a2"}], {"a1"}) == [{"an": "a2"}]
+    aer = [{"seq": "v1", "ucae": "", "authae": None, "refmaino": "10699", "oreftype": "1100", "refer_no": "Out:1"},
+           {"seq": "v2", "ucae": "R", "authae": None, "refmaino": "10699", "oreftype": "1100", "refer_no": "Out:2"}]
+    kept = drop_refer("AER", aer, {"v1", "v2"})
+    assert [r["seq"] for r in kept] == ["v2"] and kept[0]["refmaino"] == "" and kept[0]["ucae"] == "R"
+    assert drop_refer("ORF", orf, set()) is orf
+
+
+def test_no_refer_choice_is_kept_per_visit(tmp_path):
+    from app.store import Store
+    store = Store(tmp_path / "s.sqlite3")
+    store.set_nhso18_no_refer("v1", True, "tester")
+    assert store.nhso18_no_refer(["v1", "v2"]) == {"v1"}
+    store.set_nhso18_no_refer("v1", False)
+    assert store.nhso18_no_refer(["v1"]) == set()

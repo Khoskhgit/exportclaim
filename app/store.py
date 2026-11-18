@@ -65,6 +65,9 @@ CREATE TABLE IF NOT EXISTS nhso18_items (
 CREATE TABLE IF NOT EXISTS nhso18_uuc (
   seq TEXT PRIMARY KEY, uuc TEXT NOT NULL, set_by TEXT NOT NULL DEFAULT '', set_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS nhso18_no_refer (
+  seq TEXT PRIMARY KEY, set_by TEXT NOT NULL DEFAULT '', set_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS nhso18_no_tm (
   seq TEXT PRIMARY KEY, set_by TEXT NOT NULL DEFAULT '', set_at TEXT NOT NULL
 );
@@ -374,6 +377,19 @@ class Store:
             db.execute("DELETE FROM nhso18_no_tm WHERE seq=?", (seq,))
             if on:
                 db.execute("INSERT INTO nhso18_no_tm (seq, set_by, set_at) VALUES (?,?,?)",
+                           (seq, set_by, (now or datetime.now()).isoformat(timespec="seconds")))
+
+    def nhso18_no_refer(self, seqs: Iterable[str]) -> set[str]:
+        """Visits sent without their refer-in / refer-out data (ORF/IRF and the AER refer fields)."""
+        wanted = set(seqs)
+        with self._db() as db:
+            return {r["seq"] for r in db.execute("SELECT seq FROM nhso18_no_refer") if r["seq"] in wanted}
+
+    def set_nhso18_no_refer(self, seq: str, on: bool, set_by: str = "", now: datetime | None = None) -> None:
+        with self._db() as db:
+            db.execute("DELETE FROM nhso18_no_refer WHERE seq=?", (seq,))
+            if on:
+                db.execute("INSERT INTO nhso18_no_refer (seq, set_by, set_at) VALUES (?,?,?)",
                            (seq, set_by, (now or datetime.now()).isoformat(timespec="seconds")))
 
     def nhso18_sent(self, seqs: Iterable[str]) -> set[str]:

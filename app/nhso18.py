@@ -186,6 +186,29 @@ def patient_title(row: dict) -> str:
 
 
 # ---------------------------------------------------------------- builder
+REFER_FIELDS = ("refmaini", "ireftype", "refmaino", "oreftype", "refer_no")
+
+
+def drop_refer(name: str, raw: list[dict], no_refer: set[str]) -> list[dict]:
+    """Leave the refer data of these visits out: their ORF/IRF rows, and the refer fields of their AER row (the row
+    itself goes when nothing else is left in it)."""
+    if not no_refer:
+        return raw
+    seq = lambda r: text(r.get("an")) if name == "IRF" else text(r.get("seq"))
+    if name in ("ORF", "IRF"):
+        return [r for r in raw if seq(r) not in no_refer]
+    if name != "AER":
+        return raw
+    out = []
+    for r in raw:
+        if seq(r) in no_refer:
+            r = {**r, **{f: "" for f in REFER_FIELDS}}
+            if not text(r.get("ucae")) and not text(r.get("authae")):
+                continue
+        out.append(r)
+    return out
+
+
 def is_tm(code) -> bool:
     """An ICD-10-TM procedure code (7 digits, e.g. 2330010); ICD-9-CM codes have at most 5 characters."""
     return len(text(code)) > 5
@@ -195,11 +218,13 @@ class Builder:
     """Build the rows of each file. ``select(sql)`` runs one read-only query and returns dict rows."""
 
     def __init__(self, select: Callable[[str], list[dict]], config: Config, rcm: str, eclaim: str,
-                 excluded: Iterable[tuple[str, str]] = (), no_tm: Iterable[str] = ()):
+                 excluded: Iterable[tuple[str, str]] = (), no_tm: Iterable[str] = (), no_refer: Iterable[str] = ()):
         self.q = select
         self.c = config
         # Visits (VN) the user chose to send without their ICD-10-TM procedure codes (OOP).
         self.no_tm = set(no_tm)
+        # Visits (VN or AN) the user chose to send without their refer-in / refer-out data.
+        self.no_refer = set(no_refer)
         # Items the user left out in this program (VN or AN, icode); HOSxP's opitemrece_noexport still applies.
         self.excluded = sorted({f"{seq}|{icode}" for seq, icode in excluded})
         self.rcm = f"`{rcm}`"
@@ -211,7 +236,7 @@ class Builder:
         self.order = {v.vn: i for i, v in enumerate(self.visits)}
         rows = {}
         for name in FILES:
-            raw = getattr(self, f"f_{name.lower()}")()
+            raw = drop_refer(name, getattr(self, f"f_{name.lower()}")(), self.no_refer)
             rows[name] = finish(name, [self.common(name, r) for r in raw])
         return rows
 
