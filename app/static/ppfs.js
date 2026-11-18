@@ -35,6 +35,7 @@ const COLUMNS = {
     ["ADP (nhso_adp_code)", "", false, (r) => (!r.extra.adp_found ? el("span", { class: "badge b-error" }, "ไม่พบ")
       : r.extra.adp_type !== "2" ? el("span", { class: "badge b-error" }, `ประเภท ${r.extra.adp_type}`)
       : el("span", {}, el("span", { class: "badge b-ok" }, "Y"), r.extra.adp_ucs ? el("span", { class: "sub" }, `UCS ${money(r.extra.adp_ucs)}`) : null))],
+    ["Project code", "", false, (r) => projectInput(r)],
     ["เว็บ / เงินพึงได้", "", false, (r) => (r.extra.web ? el("span", {}, el("span", { class: "badge b-sent" }, "Y"),
       el("span", { class: "sub" }, [r.extra.income ? `${money(r.extra.income)} บาท` : "", r.extra.web_reg ? `บันทึก ${toDmy(r.extra.web_reg)}` : ""].filter(Boolean).join(" · "))) : dash())],
     ["e-Claim", "", false, (r) => r.extra.eclaim ? el("span", {}, r.extra.eclaim, r.extra.eclaim_paid ? el("span", { class: "sub" }, `${money(r.extra.eclaim_paid)} บาท`) : null) : dash()],
@@ -269,6 +270,7 @@ async function openDrawer(r) {
     ] : kind === "instrument" ? [
       ["AuthenCode", r.extra.authen || "ไม่มี"], ["สิทธิผู้พิการ", r.extra.disabled_right ? "ใช่" : "ไม่ใช่"],
       ["ทะเบียนคนพิการ", r.extra.deformed ? `${r.extra.deformed_no || "มี"}${r.extra.deformed_date ? ` · ลงทะเบียน ${toDmy(r.extra.deformed_date)}` : ""}` : "ไม่พบ"],
+      ["Project code", r.extra.project ? `${r.extra.project} (เลือกในแถว)` : "ตาม visit ใน HOSxP"],
       ["nhso_adp_code", r.extra.adp_found ? `${r.code} ประเภท ${r.extra.adp_type}${r.extra.adp_ucs ? ` · UCS ${money(r.extra.adp_ucs)} บาท` : ""}${r.extra.adp_name ? ` · ${r.extra.adp_name}` : ""}` : "ไม่พบรหัสนี้"],
       ["เว็บบันทึกอุปกรณ์", r.extra.web ? `บันทึกแล้ว${r.extra.web_reg ? ` ${toDmy(r.extra.web_reg)}` : ""}${r.extra.web_status ? ` · ${r.extra.web_status}` : ""}` : "ยังไม่พบ"],
       ["เงินพึงได้ (เว็บ)", r.extra.income ? `${money(r.extra.income)} บาท` : "—"],
@@ -677,24 +679,29 @@ async function loadInstrumentWeb() {
       : "ยังไม่ได้นำเข้า (ยังตรวจกับ rcmdb.equipment_service ได้)";
   } catch (err) { notice(err.message); }
 }
-// The Project code sent with every Instrument visit; saved on the server, empty = the visit's own.
-function showProject(code) {
-  $("instrument-project").value = code;
-  $("instrument-project-note").textContent = code ? `ส่งทุก visit ด้วย Project code ${code}` : "ไม่ได้เลือก ใช้ Project code ตาม visit ใน HOSxP";
+// The Project code of a visit, picked in its row and saved in the app; empty = the visit's own in HOSxP.
+function projectInput(r) {
+  const save = (e) => { const code = e.target.value.trim(); if (code !== (r.extra.project || "")) saveProject(r.vn, code, e.target); };
+  const input = el("input", { class: "project-input", value: r.extra.project || "", maxLength: 15,
+    placeholder: "ตาม HOSxP", autocomplete: "off", "aria-label": `Project code ของ VN ${r.vn}`,
+    onclick: (e) => e.stopPropagation(), onchange: save,
+    onkeydown: (e) => { e.stopPropagation(); if (e.key === "Enter") { e.preventDefault(); e.target.blur(); } } });
+  input.setAttribute("list", "instrument-project-list");  // a read-only property, so not through el()
+  return input;
 }
 async function loadProject() {
   try {
     const p = await api("/api/ppfs/instrument/project");
     $("instrument-project-list").replaceChildren(...p.options.map((o) => el("option", { value: o.code }, o.name)));
-    showProject(p.code);
   } catch (err) { notice(err.message); }
 }
-async function saveProject(code) {
+async function saveProject(vn, code, input) {
   try {
-    const p = await api("/api/ppfs/instrument/project", { code: code.trim() });
-    showProject(p.code);
-    notice(p.code ? `บันทึก Project code ${p.code} แล้ว` : "ล้าง Project code แล้ว", "ok");
-  } catch (err) { notice(err.message); }
+    const p = await api("/api/ppfs/instrument/project", { vn, code });
+    state.rows.filter((x) => x.vn === vn).forEach((x) => { x.extra.project = p.code; });
+    render();
+    notice(p.code ? `VN ${vn} ส่งด้วย Project code ${p.code}` : `VN ${vn} ใช้ Project code ตาม HOSxP`, "ok");
+  } catch (err) { notice(err.message); if (input) input.value = state.rows.find((x) => x.vn === vn)?.extra.project || ""; }
 }
 async function importInstrumentWeb(file) {
   try {
@@ -758,9 +765,6 @@ $("select-ready").onclick = () => { visible().filter((r) => selectable(r) && !r.
 $("select-none").onclick = () => { state.selected.clear(); render(); };
 $("export").onclick = exportZip;
 $("cervix-csv").onclick = cervixCsv;
-$("instrument-project-save").onclick = () => saveProject($("instrument-project").value);
-$("instrument-project-clear").onclick = () => saveProject("");
-$("instrument-project").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); saveProject(e.target.value); } });
 $("fdh-send").onclick = () => runFdh(false);
 $("fdh-prescreen").onclick = () => runFdh(true);
 $("fdh-test").onclick = async () => {

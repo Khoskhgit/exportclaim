@@ -26,7 +26,6 @@ from .validate import text
 
 log = logging.getLogger("ssop.ppfs")
 ECLAIM_DB = "eclaimdb"
-PROJECT_KEY = "instrument_project"
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS ppfs_exports (
@@ -41,7 +40,9 @@ CREATE TABLE IF NOT EXISTS ppfs_items (
   service TEXT NOT NULL, vn TEXT NOT NULL, icode TEXT NOT NULL, include INTEGER NOT NULL, updated_at TEXT NOT NULL,
   PRIMARY KEY (service, vn, icode)
 );
-CREATE TABLE IF NOT EXISTS ppfs_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS ppfs_projects (
+  service TEXT NOT NULL, vn TEXT NOT NULL, code TEXT NOT NULL, updated_at TEXT NOT NULL, PRIMARY KEY (service, vn)
+);
 """
 
 
@@ -90,15 +91,24 @@ class PpfsStore:
             db.execute("INSERT OR REPLACE INTO ppfs_items (service, vn, icode, include, updated_at) VALUES (?,?,?,?,?)",
                        (service, vn, icode, int(include), datetime.now().isoformat(timespec="seconds")))
 
-    def setting(self, key: str) -> str:
+    def projects(self, service: str, vns: list[str]) -> dict[str, str]:
+        """The Project code picked for each visit (missing = the visit's own)."""
+        out: dict[str, str] = {}
         with self._db() as db:
-            row = db.execute("SELECT value FROM ppfs_settings WHERE key=?", (key,)).fetchone()
-        return row["value"] if row else ""
+            for start in range(0, len(vns), 500):
+                part = vns[start:start + 500]
+                for r in db.execute(f"SELECT vn, code FROM ppfs_projects WHERE service=? AND vn IN ({','.join('?' * len(part))})",
+                                    [service, *part]):
+                    out[r["vn"]] = r["code"]
+        return out
 
-    def set_setting(self, key: str, value: str) -> None:
+    def set_project(self, service: str, vn: str, code: str) -> None:
         with self._db() as db:
-            db.execute("INSERT OR REPLACE INTO ppfs_settings (key, value, updated_at) VALUES (?,?,?)",
-                       (key, value, datetime.now().isoformat(timespec="seconds")))
+            if code:
+                db.execute("INSERT OR REPLACE INTO ppfs_projects (service, vn, code, updated_at) VALUES (?,?,?,?)",
+                           (service, vn, code, datetime.now().isoformat(timespec="seconds")))
+            else:
+                db.execute("DELETE FROM ppfs_projects WHERE service=? AND vn=?", (service, vn))
 
     def history(self, limit: int = 50) -> list[dict]:
         with self._db() as db:
@@ -182,7 +192,11 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
         if service.key == "instrument":
             data = ppfs_instrument.fetch(q, start, end, settings.rcm_db, web_store.between(start, end))
             vns = sorted({text(r["vn"]) for r in data["items"] + data["web_visits"]})
-            return ppfs_instrument.check(data, store.sent(vns))
+            rows = ppfs_instrument.check(data, store.sent(vns))
+            projects = store.projects(service.key, vns)
+            for r in rows:
+                r.extra["project"] = projects.get(r.vn, "")
+            return rows
         if service.key == "dmrem":
             summary = registry.summary()
             imported = summary["n"] > 0
@@ -552,8 +566,7 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
 
     @app.get("/api/ppfs/instrument/project")
     def instrument_project():
-        """The saved Project code (empty = the visit's own) and codes to pick from: those HOSxP used in the past
-        2 years and e-Claim's l_projectcode."""
+        """Project codes to pick from in the rows: those HOSxP used in the past 2 years and e-Claim's l_projectcode."""
         options: dict[str, str] = {}
         try:
             for r in q("""
@@ -568,8 +581,7 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
                 options.setdefault(text(r["code"]), text(r["name"]))
         except Exception:  # noqa: BLE001
             log.warning("ppfs project codes from l_projectcode failed", exc_info=True)
-        return {"code": store.setting(PROJECT_KEY),
-                "options": [{"code": c, "name": n} for c, n in options.items() if re.fullmatch(ppfs_instrument.PROJECT_PATTERN, c)]}
+        return {"options": [{"code": c, "name": n} for c, n in options.items() if re.fullmatch(ppfs_instrument.PROJECT_PATTERN, c)]}
 
     @app.post("/api/ppfs/instrument/project")
     def instrument_project_save(request: Request, body: dict = Body(...)):
@@ -577,9 +589,12 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
             code = ppfs_instrument.valid_project(text(body.get("code")))
         except ValueError as exc:
             raise HTTPException(400, str(exc)) from None
-        store.set_setting(PROJECT_KEY, code)
-        log.info("ppfs instrument project code=%r by %s", code, auth.user_label(request))
-        return {"code": code}
+        vn = text(body.get("vn"))
+        if not vn:
+            raise HTTPException(400, "ข้อมูลไม่ครบ")
+        store.set_project("instrument", vn, code)
+        log.info("ppfs instrument project vn=%s code=%r by %s", vn, code, auth.user_label(request))
+        return {"vn": vn, "code": code}
 
     @app.post("/api/ppfs/item")
     def item_choice(body: dict = Body(...)):
@@ -643,11 +658,11 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
         visits = nhso18.opd_contexts(q, vns, groups, config.zone)
         if not visits:
             raise HTTPException(400, "ไม่พบ visit ที่เลือก")
-        project = store.setting(PROJECT_KEY) if service.key == "instrument" else ""
-        if project:  # the Project code chosen on the page replaces the visit's own (an ADP row of TYPE 5)
-            for v in visits:
-                v.projectcode = project
-                claimed.setdefault(v.vn, set()).add(project)
+        projects = store.projects(service.key, vns) if service.key == "instrument" else {}
+        for v in visits:  # the Project code picked in the row replaces the visit's own (an ADP row of TYPE 5)
+            if projects.get(v.vn):
+                v.projectcode = projects[v.vn]
+                claimed.setdefault(v.vn, set()).add(v.projectcode)
         data = nhso18.Builder(q, config, settings.rcm_db, ECLAIM_DB, excluded, local.nhso18_no_tm(vns),
                               local.nhso18_no_refer(vns)).run(visits)
         if service.key == "cervix":  # the lab code (38608 / 38302) -> the KTB code chosen from the result

@@ -87,14 +87,22 @@ def test_a_unit_price_over_the_ucs_price_is_a_warning():
     assert codes(row) == ([], [])
 
 
-def test_project_code_is_saved(tmp_path):
+def test_project_code_is_saved_per_visit(tmp_path):
     client = TestClient(create_app(settings(), hosxp=FakeHosxp(), store=Store(tmp_path / "s.sqlite3")))
-    assert client.get("/api/ppfs/instrument/project").json()["code"] == ""
-    assert client.post("/api/ppfs/instrument/project", json={"code": " DISABILITY "}).json()["code"] == "DISABILITY"
-    assert client.get("/api/ppfs/instrument/project").json()["code"] == "DISABILITY"
-    assert client.post("/api/ppfs/instrument/project", json={"code": "ผิด;"}).status_code == 400
-    assert client.post("/api/ppfs/instrument/project", json={"code": ""}).json()["code"] == ""
-    assert client.get("/api/ppfs/instrument/project").json()["code"] == ""
+    assert "options" in client.get("/api/ppfs/instrument/project").json()
+    assert client.post("/api/ppfs/instrument/project", json={"vn": "v1", "code": " DISABILITY "}).json()["code"] == "DISABILITY"
+    assert client.post("/api/ppfs/instrument/project", json={"vn": "v1", "code": "ผิด;"}).status_code == 400
+    assert client.post("/api/ppfs/instrument/project", json={"code": "X"}).status_code == 400
+
+
+def test_project_store(tmp_path):
+    from app.ppfs_routes import PpfsStore
+    store = PpfsStore(Store(tmp_path / "s.sqlite3"))
+    store.set_project("instrument", "v1", "DISABILITY")
+    store.set_project("instrument", "v2", "OTHER")
+    store.set_project("instrument", "v2", "")
+    assert store.projects("instrument", ["v1", "v2"]) == {"v1": "DISABILITY"}
+    assert store.projects("cervix", ["v1"]) == {}
 
 
 def test_disability_is_shown_but_not_checked():
