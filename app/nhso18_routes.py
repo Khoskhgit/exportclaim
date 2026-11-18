@@ -74,6 +74,7 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
         no_refer = local.nhso18_no_refer(keys)
         uuc_two = nhso18.not_claimed(q, [svc.key_of(r) for r in rows if r["kind"] != "IPD"])
         imported = results.latest(keys) if results is not None else {}
+        code_names = results.code_names() if results is not None else {}
         # The FDH claim report imported on the REP/STM page, for visits HOSxP has no FDH status for.
         fdh_imported = claims.latest(keys)
         merge = nhso18.same_day_walkin(rows, svc.walkin_pttypes(q))
@@ -102,6 +103,7 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
                 "excluded_count": sum(1 for s, _ in excluded if s == k), "uuc_set": uuc_set.get(k, ""),
                 "uuc": uuc_set.get(k) or ("2" if k in uuc_two else "1"),
                 "refers": refers.get(k, []), "no_refer": k in no_refer,
+                "rep_fail": rep_fail(imported.get(k), code_names),
                 "selectable": not f["errors"], "has_error": bool(f["errors"]), "has_warn": bool(f["warns"]),
                 "already_sent": bool(st), "default_selected": not f["errors"] and not st,
                 "fdh_claim": {"fund": claim["fund"], "status": claim["status"], "sent_at": claim["sent_at"],
@@ -109,6 +111,14 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
                 "walkin_first": merge.get(k, ""), "walkin_group": merge.get(k) or (k if k in firsts else ""),
             })
         return out
+
+    def rep_fail(result: dict | None, names: dict[str, str]) -> dict | None:
+        """The newest imported REP of a visit when it did not pass: its number and error codes (ติด C)."""
+        if not result or not result.get("rep_stat") or result["rep_stat"] == "A" or result.get("stm_no"):
+            return None
+        codes = [c.strip() for c in text(result.get("rep_codes")).split(",") if c.strip()]
+        return {"rep_no": text(result.get("rep_no")), "stat": result["rep_stat"],
+                "codes": [{"code": c, "name": names.get(c, "")} for c in codes]}
 
     @app.get("/nhso18", response_class=HTMLResponse)
     def page(request: Request):

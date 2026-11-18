@@ -34,7 +34,8 @@ function renderRows() {
     const box = el("input", { type: "checkbox", checked: state.selected.has(r.key), disabled: !r.selectable,
       title: r.selectable ? "เลือกส่ง" : "รายการนี้ส่งไม่ได้", "aria-label": `เลือก ${r.key}`, onclick: (e) => e.stopPropagation(),
       onchange: (e) => { pick(r, e.target.checked); renderRows(); renderTotals(); } });
-    const problems = [...r.errors, ...r.warns].map((i) => i.message);
+    const problems = [...(r.rep_fail ? [`ติด ${r.rep_fail.stat}: ${r.rep_fail.codes.map((c) => c.code).join(", ") || "ไม่มีรหัส"}`] : []),
+      ...[...r.errors, ...r.warns].map((i) => i.message)];
     return el("tr", { class: state.current === r.key ? "current" : "", onclick: () => openDrawer(r) },
       el("td", { class: "check" }, box), el("td", {}, resultBadge(r)),
       el("td", {}, r.status ? el("span", { class: "badge b-sent" }, r.status) : (r.approve_required && r.claimcode ? null : el("span", { class: "muted" }, "—")), ktbTag(r), walkinTag(r), uucTag(r), referTag(r), fdhClaimTag(r)),
@@ -64,6 +65,13 @@ function ktbTag(r) {
   if (!r.approve_required || !r.claimcode) return null;
   return el("span", { class: "ktb-tag", title: "Approve Code กรุงไทย (นำเข้าที่เมนู Approve Code)" },
     r.status ? null : el("span", { class: "ktb-label" }, "คีย์ KTB แล้ว"), el("span", { class: "ktb-code mono" }, r.claimcode));
+}
+// The codes of the imported REP the visit did not pass (ติด C), to fix and send again.
+function repFailBox(f) {
+  return el("div", { class: "issues-box" }, el("h3", {}, `REP ไม่ผ่าน (${f.stat}) · REP ${f.rep_no}`),
+    f.codes.length ? el("ul", { class: "issues" }, ...f.codes.map((c) => el("li", { class: "issue error" },
+      el("div", { class: "issue-title" }, el("span", { class: "badge b-error" }, c.code), " ", c.name || "ดูความหมายของรหัสในโปรแกรม e-Claim / FDH"))))
+      : el("p", { class: "muted" }, "REP ไม่ได้ระบุรหัส"));
 }
 // Refer in / out of the visit (what ORF/IRF and AER carry), after the UUC; crossed out when the user chose not to send it.
 const referText = (x) => `${x.dir === "out" ? "ส่งต่อ →" : "รับเข้า ←"} ${x.hcode || "?"}${x.name ? ` ${x.name}` : ""}`;
@@ -192,6 +200,7 @@ async function openDrawer(r) {
         : [["ClaimCode", r.claimcode || "(ไม่มี)"]]),
       ["PDx", r.pdx], ["ค่าใช้จ่าย", `${baht.format(Number(r.money))} บาท`], ["สถานะ", r.status || "ยังไม่ส่ง"], ["ชดเชย FDH", r.fdh_amount ? `${baht.format(Number(r.fdh_amount))} บาท` : "—"]]
       .map(([k, v]) => el("div", {}, el("dt", {}, k), el("dd", {}, v || "—"))))];
+    if (r.rep_fail) check.push(repFailBox(r.rep_fail));
     check.push(uucControl(r, data));
     if (r.refers && r.refers.length) check.push(referControl(r));
     const issues = [...r.errors.map((i) => ({ ...i, level: "error" })), ...r.warns.map((i) => ({ ...i, level: "warn" }))];
