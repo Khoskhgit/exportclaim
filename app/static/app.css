@@ -149,6 +149,7 @@ th[aria-sort=descending] .sort-mark::after{content:"▼";opacity:1;color:var(--a
 .uuc-tag{display:block;margin-top:3px;font-size:11.5px;font-weight:600;color:var(--ok);white-space:nowrap}
 .uuc-tag.two{color:var(--error)}
 .refer-tag{display:block;margin-top:2px;font-size:11.5px;font-weight:600;color:var(--special);white-space:nowrap;max-width:220px;overflow:hidden;text-overflow:ellipsis}
+.admit-an{color:var(--special);font-weight:600}
 .refer-tag.off{color:var(--faint);text-decoration:line-through}
 .proc-head{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:16px 0 8px}
 .proc-head h3{margin:0}

@@ -103,6 +103,7 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
                 "excluded_count": sum(1 for s, _ in excluded if s == k), "uuc_set": uuc_set.get(k, ""),
                 "uuc": uuc_set.get(k) or ("2" if k in uuc_two else "1"),
                 "refers": refers.get(k, []), "no_refer": k in no_refer,
+                "admit_an": text(r.get("admit_an")) if r["kind"] == "OPD" else "",
                 "rep_fail": rep_fail(imported.get(k), code_names),
                 "selectable": not f["errors"], "has_error": bool(f["errors"]), "has_warn": bool(f["warns"]),
                 "already_sent": bool(st), "default_selected": not f["errors"] and not st,

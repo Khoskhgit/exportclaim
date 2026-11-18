@@ -85,7 +85,8 @@ def search(q: Select, rcm: str, start: date | None, end: date | None, rights: Se
           (SELECT vp.claim_code FROM visit_pttype vp WHERE vp.vn=o.vn AND vp.pttype=o.pttype LIMIT 1) claimcode,
           {rep('vn', 'o.vn')} rep_rep, {paid('vn', 'o.vn')} rep_invoice, {paid_amt('vn', 'o.vn')} rep_paid,
           re.fdh_claim_status_message fdh_status, re.fdh_act_amt fdh_amount,
-          seekexport(o.ovstost,'ovstost',NULL) discharge, o.an has_an
+          seekexport(o.ovstost,'ovstost',NULL) discharge, o.an has_an,
+          IFNULL(NULLIF(o.an,''),(SELECT i.an FROM ipt i WHERE i.vn=o.vn ORDER BY i.an LIMIT 1)) admit_an
         FROM ovst o
         LEFT JOIN patient pt ON pt.hn=o.hn LEFT JOIN vn_stat v ON v.vn=o.vn LEFT JOIN pttype ptt ON ptt.pttype=o.pttype
         LEFT JOIN fdh_claim_status re ON re.vn=o.vn
