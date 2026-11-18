@@ -280,7 +280,10 @@ dl.sum dt{color:var(--muted)}dl.sum dd{margin:0;font-weight:600;font-variant-num
 .ring-submit:hover:not(:disabled){background:#a3f0ff;color:#1d2331;border:0;box-shadow:0 10px 28px #7ee8ff55}
 .ring-submit:active:not(:disabled){transform:translateY(1px)}
 .ring-submit:disabled{opacity:.75;cursor:progress}
-.ring-moph{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;text-decoration:none;margin-top:6px}
+.ring-moph{display:flex;align-items:center;justify-content:center;gap:12px;width:100%;min-height:58px;margin-top:6px;padding:8px 22px;border-radius:999px;background:#fff;color:#0b5c49;font-size:16px;font-weight:700;text-decoration:none;box-shadow:0 10px 28px #7ee8ff33,0 0 0 3px #7ee8ff40;transition:transform .12s,box-shadow .15s}
+.ring-moph:hover{transform:translateY(-1px);box-shadow:0 14px 32px #7ee8ff55,0 0 0 4px #7ee8ff66}
+.ring-moph img{height:34px;width:auto;display:block}
+.ring-moph span{white-space:nowrap}
 .ring-moph.busy{opacity:.8;pointer-events:none}
 .ring-link{color:#7ee8ff;font-weight:700;font-size:14.5px;text-decoration:none;padding:4px 10px;border-radius:999px}
 .ring-link:hover{background:#7ee8ff1a}
@@ -292,6 +295,8 @@ dl.sum dt{color:var(--muted)}dl.sum dd{margin:0;font-weight:600;font-variant-num
   .ring-card{width:calc(var(--size)*.62)}
   .ring-form input{min-height:42px;padding:8px 16px}
   .ring-submit{min-height:44px}
+  .ring-moph{gap:8px;padding:8px 14px;min-height:52px;font-size:14.5px}
+  .ring-moph img{height:28px}
   .ring-login{overflow:hidden}
 }
 @media(prefers-reduced-motion:reduce){.ring-bar{--speed:9s}.ring.busy .ring-bar{--speed:3s}}

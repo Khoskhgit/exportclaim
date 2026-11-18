@@ -30,7 +30,7 @@ log = logging.getLogger("ssop.auth")
 COOKIE = "ssop_session"
 STATE_COOKIE = "ssop_moph_state"
 CALLBACK_PATHS = ("/auth/moph/callback", "/auth/healthid/callback")
-PUBLIC_PATHS = {"/login", "/auth/login", "/auth/moph/start", *CALLBACK_PATHS, "/static/app.css", "/static/login.js"}
+PUBLIC_PATHS = {"/login", "/auth/login", "/auth/moph/start", *CALLBACK_PATHS, "/static/app.css", "/static/login.js", "/static/moph-id.png"}
 MAX_FAILURES = 5
 # Paths under HEALTHID_BASE_URL (https://moph.id.th) and PROVIDERID_API_URL (https://provider.id.th).
 MOPH_AUTHORIZE = "https://moph.id.th/oauth/redirect"
