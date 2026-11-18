@@ -146,7 +146,8 @@ async function openDrawer(v) {
             } })),
           el("td", {}, item.group),
           el("td", {}, item.name, override, item.tmlt_problem ? el("div", { class: "flag-note" }, `Map TMLT: ${item.tmlt_problem}`) : "",
-            item.default_usage ? el("div", { class: "muted-note" }, `ไม่มีวิธีใช้ใน HOSxP จะส่งเป็น "${item.default_usage}"`) : ""),
+            item.default_usage ? el("div", { class: "muted-note" }, `ไม่มีวิธีใช้ใน HOSxP จะส่งเป็น "${item.default_usage}"`) : "",
+            item.hosxp_unitprice ? el("div", { class: "muted-note" }, `ราคา HOSxP ${baht.format(Number(item.hosxp_unitprice))} ปัดเป็นยอด ${baht.format(Number(item.sum_price))} ส่ง ${baht.format(Number(item.unitprice))}/หน่วย`) : ""),
           el("td", { class: "num" }, item.qty), el("td", { class: "num" }, baht.format(Number(item.sum_price))));
         return row;
       }))];

@@ -665,7 +665,7 @@ class Builder:
                "49602": "RTX108", "49101": "RTX201", "49202": "RTX202", "49201": "RTX203", "49203": "RTX204", "49306": "RTX205",
                "49402": "RTX207", "49208": "RTX209", "49302": "RTX210", "49303": "RTX211"}
         for r in self.q(f"""
-            SELECT o.vn seq, o.hn, o.vstdate dateopd, d.nhso_adp_code adp, oo.qty, oo.unitprice rate, ex.maininscl
+            SELECT o.vn seq, o.hn, o.vstdate dateopd, d.nhso_adp_code adp, oo.qty, {UNIT_PRICE} rate, ex.maininscl
             FROM {self.ex} ex JOIN ovst o ON o.vn=ex.vn JOIN opitemrece oo ON oo.vn=o.vn JOIN s_drugitems d ON d.icode=oo.icode
             WHERE d.nhso_adp_code REGEXP '^49' AND d.nhso_adp_type_id=16 AND {self.noexport('oo', 'vn', False)}"""):
             put({**r, "billmaud": "8", "type": "7", "code": rtx.get(text(r["adp"])), "qty": int(num(r["qty"]))})

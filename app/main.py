@@ -23,7 +23,7 @@ from .config import Settings, load_settings
 from .export import ExportError, build_export, normalise_station, is_excluded, item_name, send_amounts, usage_fields
 from .hosxp import Hosxp, HosxpError
 from .store import Store
-from .validate import dec, begin_datetime, end_datetime, explain_result_codes, review_visit, text, tmlt_problem
+from .validate import dec, unit_price, begin_datetime, end_datetime, explain_result_codes, review_visit, text, tmlt_problem
 
 log = logging.getLogger("ssop")
 HERE = Path(__file__).resolve().parent
@@ -208,7 +208,9 @@ def create_app(settings: Settings | None = None, hosxp: Any = None, store: Store
             {
                 "icode": text(i.get("icode")), "name": item_name(i), "group": text(i.get("cscd_group")),
                 "adp": text(i.get("nhso_adp_code")), "qty": str(dec(i.get("qty"))),
-                "unitprice": str(dec(i.get("unitprice"))), "sum_price": str(dec(i.get("sum_price"))),
+                # The unit price sent (sum_price / qty); HOSxP's own price only when it differs (rounded).
+                "unitprice": str(unit_price(i)), "sum_price": str(dec(i.get("sum_price"))),
+                "hosxp_unitprice": str(dec(i.get("unitprice"))) if dec(i.get("unitprice")) != unit_price(i) else "",
                 "paidst": text(i.get("paidst")), "excluded": is_excluded(i, excluded),
                 "hosxp_excluded": i["hosxp_excluded"], "tmlt_problem": tmlt_problem(i),
                 "default_usage": usage_fields(i, settings)[1] if (

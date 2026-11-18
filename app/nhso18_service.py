@@ -139,7 +139,7 @@ def checks(q: Select, rcm: str, rows: list[dict]) -> dict[str, dict]:
     has_catalog = bool(q(f"SELECT 1 FROM information_schema.tables WHERE table_schema='{rcm.strip('`')}' AND table_name='eclaim_drugcatalog'"))
     items_sql = lambda key, where: (f"SELECT oo.{key} k, CONCAT_WS(' ',oo.icode,d.name) item FROM opitemrece oo "
                                     f"JOIN drugitems d ON d.icode=oo.icode LEFT JOIN {rcm}.eclaim_drugcatalog dd ON dd.hospdrugcode=oo.icode "
-                                    f"WHERE oo.{key} IN ({{ids}}) AND oo.qty*oo.unitprice<>0 AND {where}")
+                                    f"WHERE oo.{key} IN ({{ids}}) AND IFNULL(oo.qty,0)<>0 AND IFNULL(oo.sum_price,0)<>0 AND {where}")
     drug_missing = flag(items_sql("vn", "IFNULL(dd.hospdrugcode,'')=''"), items_sql("an", "IFNULL(dd.hospdrugcode,'')=''")) if has_catalog else {}
     # HOSxP drugitems.tpu_code_list (TMT) against the e-Claim catalog's TMTID. Herbal drugs are listed in the
     # catalog under their TTMT code, so a TTMT (drugitems.ttmt_code) that matches the catalog is correct too.
@@ -147,7 +147,7 @@ def checks(q: Select, rcm: str, rows: list[dict]) -> dict[str, dict]:
                            f"IFNULL(NULLIF(d.tpu_code_list,''),'-'), ' | TTMT ', IFNULL(NULLIF(d.ttmt_code,''),'-'), "
                            f"' | e-Claim ', IFNULL(NULLIF(dd.tmtid,''),'-')) item FROM opitemrece oo "
                            f"JOIN drugitems d ON d.icode=oo.icode LEFT JOIN {rcm}.eclaim_drugcatalog dd ON dd.hospdrugcode=oo.icode "
-                           f"WHERE oo.{key} IN ({{ids}}) AND oo.qty*oo.unitprice<>0 "
+                           f"WHERE oo.{key} IN ({{ids}}) AND IFNULL(oo.qty,0)<>0 AND IFNULL(oo.sum_price,0)<>0 "
                            f"AND IFNULL(d.tpu_code_list,'')<>IFNULL(dd.tmtid,'') "
                            f"AND NOT (IFNULL(d.ttmt_code,'')<>'' AND d.ttmt_code=dd.tmtid)")
     tmt_wrong = flag(tmt_sql("vn"), tmt_sql("an")) if has_catalog else {}
@@ -160,7 +160,7 @@ def checks(q: Select, rcm: str, rows: list[dict]) -> dict[str, dict]:
                            f"LEFT JOIN income inc ON inc.income=oo.income LEFT JOIN s_drugitems d ON d.icode=oo.icode "
                            f"WHERE oo.{key} IN ({{ids}}) AND inc.income IS NULL")
     inc_missing = flag(inc_sql("vn"), inc_sql("an"))
-    # Items are sent as qty x unitprice: one with qty 0 is sent as 0 although HOSxP charged its sum_price.
+    # Items are sent with their sum_price, but one with qty 0 is sent as 0 although HOSxP charged its sum_price.
     qty_sql = lambda key: (f"SELECT oo.{key} k, CONCAT_WS(' ',oo.icode,d.name) item FROM opitemrece oo "
                            f"LEFT JOIN s_drugitems d ON d.icode=oo.icode "
                            f"WHERE oo.{key} IN ({{ids}}) AND IFNULL(oo.qty,0)=0 AND oo.sum_price<>0")
