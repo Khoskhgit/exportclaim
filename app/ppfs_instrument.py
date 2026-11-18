@@ -6,7 +6,9 @@ Ported from the old program's "รายชื่อสิทธิผู้พ�
               (person_deformed) are only shown, never checked (the user dropped the warning, 2026-11-17)
    devices    opitemrece + s_drugitems with nhso_adp_type_id=2 and an ADP code starting 25, 81, 82, 85, 87, 88, 89 or
               equal to 6006 (the old regexp '^25|6006|^8[1|2|5|7|8|9]', without the '|' it also matched)
-   ADP list   the old program's list of device codes (the "ADP" flag); a code outside it is a warning
+   ADP code   checked against HOSxP's nhso_adp_code (the user's choice, 2026-11-18, instead of the old program's fixed
+              list): a code missing there, not of type 2, closed or out of its dates is an error; a unit price above
+              the table's UCS price is a warning
    web        the device recorded in the NHSO device web: rcmdb.equipment_service, or the Export-Equipment*.CSV
               imported on the PPFS page ("ตรวจสอบ"); it may be claimed twice, so it is a warning, and the CSV's
               เงินพึงได้ (Income) is compared with what HOSxP bills
@@ -31,13 +33,8 @@ from .validate import text
 KEY = "instrument"
 CODE_PATTERN = "^(25|81|82|85|87|88|89)|^6006$"
 DISABLED_PTTYPE = "พิการ"
-ADP_LIST = frozenset("""
-2505 2506 2507 2508 2509 6006
-8101 8102 8103 8104 8105 8106 8107 8108 8109 8110 8111 8112 8113 8114 8115 8116 8117 8118 8119 8120 8121 8122
-8201 8202 8203 8204 8205 8206 8209 8218 8219 8220 8221 8222 8223 8224 8225 8226 8227 8228 8229 8230 8231 8232 8233
-8234 8235 8236 8508 8524 8526 8527 8528
-8706 8707 8708 8709 8710 8711 8801 8802 8803 8804 8805 8809 8810 8901 8902 8903 8904 9001
-""".split())
+INSTRUMENT_TYPE = 2
+PROJECT_PATTERN = r"[A-Za-z0-9_\-]{1,15}"
 ITEM_FILTER = f"d.nhso_adp_type_id=2 AND d.nhso_adp_code REGEXP {lit(CODE_PATTERN)}"
 
 
@@ -222,7 +219,52 @@ def fetch(q: Select, start: date, end: date, rcm: str, web: list[dict]) -> dict:
         for r in q(f"SELECT vn, GROUP_CONCAT(DISTINCT rep) rep FROM `{rcm}`.repdata "
                    f"WHERE vn IN ({lit_list(vns)}) AND IFNULL(errorcode,'')='' GROUP BY vn"):
             eclaim.setdefault(text(r["vn"]), {"rep": text(r["rep"]), "paid": ""})
-    return {"items": items, "web_visits": web_visits, "web": web, "deformed": deformed, "equipment": equipment, "eclaim": eclaim}
+    return {"items": items, "web_visits": web_visits, "web": web, "deformed": deformed, "equipment": equipment, "eclaim": eclaim,
+            "adp": adp_codes(q, [text(r["code"]) for r in items] + [w["code"] for w in web])}
+
+
+def adp_codes(q: Select, codes: Iterable[str]) -> dict[str, dict]:
+    """The codes' rows in HOSxP's nhso_adp_code (the ADP master)."""
+    codes = sorted({c for c in codes if c})
+    if not codes:
+        return {}
+    return {text(r["code"]): r for r in q(f"""
+        SELECT nhso_adp_code code, nhso_adp_type_id type_id, nhso_adp_code_name name, UCS ucs, StartDate start_date,
+          ExpireDate expire_date, active_status FROM nhso_adp_code WHERE nhso_adp_code IN ({lit_list(codes)})""")}
+
+
+def adp_problems(row: Row, adp: dict | None, billed: bool) -> None:
+    """Check the row's code against nhso_adp_code and keep what the table says in row.extra."""
+    code = row.code
+    row.extra.update({"adp_found": adp is not None, "adp_name": text(adp.get("name")) if adp else "",
+                      "adp_type": text(adp.get("type_id")) if adp else "", "adp_ucs": ""})
+    if adp is None:
+        row.add(ERROR, "NOT_IN_ADP", f"ไม่พบรหัส {code} ในตาราง nhso_adp_code ของ HOSxP")
+        return
+    if text(adp.get("type_id")) != str(INSTRUMENT_TYPE):
+        row.add(ERROR, "ADP_TYPE", f"รหัส {code} ใน nhso_adp_code เป็นประเภท {text(adp.get('type_id')) or '-'} ไม่ใช่ 2 (Instrument)")
+        return
+    if text(adp.get("active_status")).upper() == "N":
+        row.add(ERROR, "ADP_CLOSED", f"รหัส {code} ถูกปิดใช้ในตาราง nhso_adp_code")
+    day, start, expire = _day(row.date), _day(adp.get("start_date")), _day(adp.get("expire_date"))
+    if day and start and day < start:
+        row.add(ERROR, "ADP_DATE", f"รหัส {code} เริ่มใช้ {start.isoformat()} หลังวันรับบริการ")
+    if day and expire and day > expire:
+        row.add(ERROR, "ADP_DATE", f"รหัส {code} หมดอายุ {expire.isoformat()} ก่อนวันรับบริการ")
+    ucs = _money(adp.get("ucs"))
+    row.extra["adp_ucs"] = f"{ucs:.2f}" if ucs > 0 else ""
+    if billed and ucs > 0:
+        unit = (row.amount / row.qty).quantize(Decimal("0.01"))
+        if unit > ucs:
+            row.add(WARN, "OVER_UCS", f"ราคาต่อชิ้น {unit} บาท สูงกว่าราคา UCS ใน nhso_adp_code {ucs} บาท")
+
+
+def valid_project(code: str) -> str:
+    """'' or a Project code fit for the ADP file (letters, digits, - and _)."""
+    code = text(code).strip()
+    if code and not re.fullmatch(PROJECT_PATTERN, code):
+        raise ValueError("Project code ใช้ได้เฉพาะตัวอักษรอังกฤษ ตัวเลข - และ _ ไม่เกิน 15 ตัว")
+    return code
 
 
 def _web_for(web: list[dict], cid: str, hn: str, day: str) -> list[dict]:
@@ -262,7 +304,7 @@ def check(data: dict, sent: dict[tuple[str, str], str] | None = None) -> list[Ro
         income = sum((Decimal(w["income"] or 0) for w in web), Decimal(0))
         eclaim = data["eclaim"].get(vn, {})
         row.extra = {
-            "authen": text(r.get("authen")), "in_list": code in ADP_LIST, "disabled_right": disabled_right,
+            "authen": text(r.get("authen")), "disabled_right": disabled_right,
             "deformed": bool(deformed), "deformed_no": text(deformed.get("deformed_no")) if deformed else "",
             "deformed_date": str(deformed.get("register_date") or "")[:10] if deformed else "",
             "web": bool(web or equipment), "income": f"{income:.2f}" if web else "",
@@ -275,8 +317,7 @@ def check(data: dict, sent: dict[tuple[str, str], str] | None = None) -> list[Ro
         if not billed:
             row.add(ERROR, "NO_ITEM", f"มีในเว็บบันทึกอุปกรณ์ แต่ไม่พบรายการ {code} ใน HOSxP (คีย์ค่าอุปกรณ์ก่อนส่ง)")
         self_paid_error(row)
-        if code not in ADP_LIST:
-            row.add(WARN, "NOT_IN_LIST", f"รหัส {code} ไม่อยู่ในรายการ ADP อุปกรณ์คนพิการ")
+        adp_problems(row, data.get("adp", {}).get(code), billed)
         if not row.extra["authen"]:
             row.add(WARN, "NO_AUTHEN", "ไม่มี AuthenCode (Claim Code) ของ visit นี้")
         if billed and row.extra["web"]:

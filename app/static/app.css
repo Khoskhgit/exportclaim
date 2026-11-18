@@ -424,6 +424,9 @@ tr.picked td{background:#f1f8f5}
 .dmrem-head{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
 .dmrem-head>div{flex:1;min-width:220px}
 .dmrem-head h3{margin:0;font-size:16px}
+.project-pick{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px}
+.project-pick label{font-weight:600}
+.project-pick input{width:200px;max-width:100%}
 .button-like{display:inline-flex;align-items:center;min-height:38px;padding:6px 14px;border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--panel);font-weight:600;cursor:pointer}
 .button-like:hover{border-color:var(--accent);color:var(--accent)}
 .follow-chips{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0}

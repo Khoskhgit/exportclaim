@@ -32,7 +32,9 @@ const COLUMNS = {
     ["AuthenCode", "authen", false, (r) => r.extra.authen || el("span", { class: "badge b-warn" }, "ไม่มี")],
     ["คนพิการ", "", false, (r) => (r.extra.disabled_right ? el("span", { class: "badge b-ok" }, "สิทธิผู้พิการ")
       : r.extra.deformed ? el("span", {}, el("span", { class: "badge b-ok" }, "ทะเบียน"), el("span", { class: "sub" }, r.extra.deformed_no)) : el("span", { class: "badge b-warn" }, "ไม่พบ"))],
-    ["ADP", "", false, (r) => flag(r.extra.in_list, "Y", "นอกรายการ")],
+    ["ADP (nhso_adp_code)", "", false, (r) => (!r.extra.adp_found ? el("span", { class: "badge b-error" }, "ไม่พบ")
+      : r.extra.adp_type !== "2" ? el("span", { class: "badge b-error" }, `ประเภท ${r.extra.adp_type}`)
+      : el("span", {}, el("span", { class: "badge b-ok" }, "Y"), r.extra.adp_ucs ? el("span", { class: "sub" }, `UCS ${money(r.extra.adp_ucs)}`) : null))],
     ["เว็บ / เงินพึงได้", "", false, (r) => (r.extra.web ? el("span", {}, el("span", { class: "badge b-sent" }, "Y"),
       el("span", { class: "sub" }, [r.extra.income ? `${money(r.extra.income)} บาท` : "", r.extra.web_reg ? `บันทึก ${toDmy(r.extra.web_reg)}` : ""].filter(Boolean).join(" · "))) : dash())],
     ["e-Claim", "", false, (r) => r.extra.eclaim ? el("span", {}, r.extra.eclaim, r.extra.eclaim_paid ? el("span", { class: "sub" }, `${money(r.extra.eclaim_paid)} บาท`) : null) : dash()],
@@ -267,7 +269,7 @@ async function openDrawer(r) {
     ] : kind === "instrument" ? [
       ["AuthenCode", r.extra.authen || "ไม่มี"], ["สิทธิผู้พิการ", r.extra.disabled_right ? "ใช่" : "ไม่ใช่"],
       ["ทะเบียนคนพิการ", r.extra.deformed ? `${r.extra.deformed_no || "มี"}${r.extra.deformed_date ? ` · ลงทะเบียน ${toDmy(r.extra.deformed_date)}` : ""}` : "ไม่พบ"],
-      ["รหัสในรายการ ADP", r.extra.in_list ? "ใช่" : "ไม่อยู่ในรายการ"],
+      ["nhso_adp_code", r.extra.adp_found ? `${r.code} ประเภท ${r.extra.adp_type}${r.extra.adp_ucs ? ` · UCS ${money(r.extra.adp_ucs)} บาท` : ""}${r.extra.adp_name ? ` · ${r.extra.adp_name}` : ""}` : "ไม่พบรหัสนี้"],
       ["เว็บบันทึกอุปกรณ์", r.extra.web ? `บันทึกแล้ว${r.extra.web_reg ? ` ${toDmy(r.extra.web_reg)}` : ""}${r.extra.web_status ? ` · ${r.extra.web_status}` : ""}` : "ยังไม่พบ"],
       ["เงินพึงได้ (เว็บ)", r.extra.income ? `${money(r.extra.income)} บาท` : "—"],
       ["REP e-Claim", r.extra.eclaim ? `${r.extra.eclaim}${r.extra.eclaim_paid ? ` · ชดเชย ${money(r.extra.eclaim_paid)} บาท` : ""}` : "ไม่มี"],
@@ -545,7 +547,7 @@ const FOLLOW = {
 function dmremPanel() {
   $("cervix-panel").hidden = service() !== "cervix";
   $("instrument-panel").hidden = service() !== "instrument";
-  if (service() === "instrument") loadInstrumentWeb();
+  if (service() === "instrument") { loadInstrumentWeb(); loadProject(); }
   $("dmrem-panel").hidden = service() !== "dmrem";
   if (service() === "dmrem") loadRegistry();
 }
@@ -675,6 +677,25 @@ async function loadInstrumentWeb() {
       : "ยังไม่ได้นำเข้า (ยังตรวจกับ rcmdb.equipment_service ได้)";
   } catch (err) { notice(err.message); }
 }
+// The Project code sent with every Instrument visit; saved on the server, empty = the visit's own.
+function showProject(code) {
+  $("instrument-project").value = code;
+  $("instrument-project-note").textContent = code ? `ส่งทุก visit ด้วย Project code ${code}` : "ไม่ได้เลือก ใช้ Project code ตาม visit ใน HOSxP";
+}
+async function loadProject() {
+  try {
+    const p = await api("/api/ppfs/instrument/project");
+    $("instrument-project-list").replaceChildren(...p.options.map((o) => el("option", { value: o.code }, o.name)));
+    showProject(p.code);
+  } catch (err) { notice(err.message); }
+}
+async function saveProject(code) {
+  try {
+    const p = await api("/api/ppfs/instrument/project", { code: code.trim() });
+    showProject(p.code);
+    notice(p.code ? `บันทึก Project code ${p.code} แล้ว` : "ล้าง Project code แล้ว", "ok");
+  } catch (err) { notice(err.message); }
+}
 async function importInstrumentWeb(file) {
   try {
     const response = await fetch(`/api/ppfs/instrument/web?name=${encodeURIComponent(file.name)}`, { method: "POST", body: file });
@@ -737,6 +758,9 @@ $("select-ready").onclick = () => { visible().filter((r) => selectable(r) && !r.
 $("select-none").onclick = () => { state.selected.clear(); render(); };
 $("export").onclick = exportZip;
 $("cervix-csv").onclick = cervixCsv;
+$("instrument-project-save").onclick = () => saveProject($("instrument-project").value);
+$("instrument-project-clear").onclick = () => saveProject("");
+$("instrument-project").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); saveProject(e.target.value); } });
 $("fdh-send").onclick = () => runFdh(false);
 $("fdh-prescreen").onclick = () => runFdh(true);
 $("fdh-test").onclick = async () => {

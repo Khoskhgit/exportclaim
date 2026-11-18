@@ -26,9 +26,17 @@ def item(vn="v1", day="2026-03-05", code="8902", qty=1, amount=4400, pttype_name
             "icode": "3000001", "paidst": paidst, "code": code, "item_name": "ขาเทียม", "qty": qty, "amount": amount}
 
 
-def data(items=(), web=(), web_visits=(), deformed=None, equipment=None, eclaim=None):
+def adp(code, type_id=2, ucs=4400, start=None, expire="0000-00-00", active=None):
+    return {"code": code, "type_id": type_id, "name": f"(2-Instrument)-{code}", "ucs": ucs, "start_date": start,
+            "expire_date": expire, "active_status": active}
+
+
+ADP = {c: adp(c, ucs=u) for c, u in (("8902", 4400), ("8705", 250), ("8101", 0))}
+
+
+def data(items=(), web=(), web_visits=(), deformed=None, equipment=None, eclaim=None, adp_rows=None):
     return {"items": list(items), "web": list(web), "web_visits": list(web_visits), "deformed": deformed or {},
-            "equipment": equipment or {}, "eclaim": eclaim or {}}
+            "equipment": equipment or {}, "eclaim": eclaim or {}, "adp": ADP if adp_rows is None else adp_rows}
 
 
 def codes(row):
@@ -47,13 +55,46 @@ def test_codes_follow_the_old_pattern_without_the_pipe():
 
 def test_a_registered_device_in_the_list():
     (row,) = check(data([item()], deformed={"000001": {"deformed_no": "D1", "register_date": date(2020, 1, 1)}}))
-    assert (row.key, row.count, row.amount, row.extra["in_list"], row.extra["deformed_no"]) == ("v1|8902", 1, Decimal("4400.00"), True, "D1")
+    assert (row.key, row.count, row.amount, row.extra["adp_found"], row.extra["adp_ucs"], row.extra["deformed_no"]) == (
+        "v1|8902", 1, Decimal("4400.00"), True, "4400.00", "D1")
     assert codes(row) == ([], [])
 
 
 def test_warnings_do_not_block():
-    (row,) = check(data([item(code="8705", authen="")], eclaim={"v1": {"rep": "OPUCS1", "paid": "250"}}))
-    assert codes(row) == ([], ["NOT_IN_LIST", "NO_AUTHEN", "ECLAIM"])
+    (row,) = check(data([item(code="8705", amount=250, authen="")], eclaim={"v1": {"rep": "OPUCS1", "paid": "250"}}))
+    assert codes(row) == ([], ["NO_AUTHEN", "ECLAIM"])
+
+
+def test_the_code_is_checked_against_nhso_adp_code():
+    (row,) = check(data([item()], adp_rows={}))
+    assert codes(row)[0] == ["NOT_IN_ADP"] and not row.extra["adp_found"]
+    (row,) = check(data([item()], adp_rows={"8902": adp("8902", type_id=19)}))
+    assert codes(row)[0] == ["ADP_TYPE"]
+    (row,) = check(data([item()], adp_rows={"8902": adp("8902", active="N")}))
+    assert codes(row)[0] == ["ADP_CLOSED"]
+    (row,) = check(data([item()], adp_rows={"8902": adp("8902", expire=date(2026, 3, 1))}))
+    assert codes(row)[0] == ["ADP_DATE"]
+    (row,) = check(data([item()], adp_rows={"8902": adp("8902", start="2026-04-01")}))
+    assert codes(row)[0] == ["ADP_DATE"]
+
+
+def test_a_unit_price_over_the_ucs_price_is_a_warning():
+    (row,) = check(data([item(qty=2, amount=9000)]))
+    assert codes(row) == ([], ["OVER_UCS"])
+    (row,) = check(data([item(qty=2, amount=8800)]))
+    assert codes(row) == ([], [])
+    (row,) = check(data([item(code="8101", amount=99999)]))  # no UCS price in the table: nothing to compare
+    assert codes(row) == ([], [])
+
+
+def test_project_code_is_saved(tmp_path):
+    client = TestClient(create_app(settings(), hosxp=FakeHosxp(), store=Store(tmp_path / "s.sqlite3")))
+    assert client.get("/api/ppfs/instrument/project").json()["code"] == ""
+    assert client.post("/api/ppfs/instrument/project", json={"code": " DISABILITY "}).json()["code"] == "DISABILITY"
+    assert client.get("/api/ppfs/instrument/project").json()["code"] == "DISABILITY"
+    assert client.post("/api/ppfs/instrument/project", json={"code": "ผิด;"}).status_code == 400
+    assert client.post("/api/ppfs/instrument/project", json={"code": ""}).json()["code"] == ""
+    assert client.get("/api/ppfs/instrument/project").json()["code"] == ""
 
 
 def test_disability_is_shown_but_not_checked():

@@ -44,6 +44,14 @@
       <div><h3>ตรวจสอบกับเว็บบันทึกอุปกรณ์คนพิการ</h3><p id="instrument-summary" class="muted-note">ยังไม่ได้นำเข้า</p></div>
       <label class="button-like"><input id="instrument-file" type="file" accept=".csv,.CSV" class="sr-only">ตรวจสอบ (นำเข้า Export-Equipment.CSV)</label>
     </div>
+    <div class="project-pick">
+      <label for="instrument-project">Project code</label>
+      <input id="instrument-project" list="instrument-project-list" placeholder="ว่าง = ตาม visit ใน HOSxP" autocomplete="off" maxlength="15">
+      <datalist id="instrument-project-list"></datalist>
+      <button type="button" id="instrument-project-save">บันทึก</button>
+      <button type="button" id="instrument-project-clear" class="ghost">ล้าง</button>
+      <span id="instrument-project-note" class="muted-note"></span>
+    </div>
     <p class="muted-note">ไฟล์ Export-Equipment*.CSV ที่ส่งออกจากโปรแกรมบันทึกอุปกรณ์คนพิการ ใช้เทียบเงินพึงได้และเตือนรายการที่บันทึกในเว็บแล้ว นำเข้าซ้ำได้ ไม่เก็บชื่อผู้ป่วย นำเข้าแล้วกดค้นหาอีกครั้ง</p>
   </section>
 

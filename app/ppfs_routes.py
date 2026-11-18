@@ -6,6 +6,7 @@ items alone) and the DRU, LAB and AER files are empty, so a visit's other charge
 from __future__ import annotations
 
 import logging
+import re
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
@@ -25,6 +26,7 @@ from .validate import text
 
 log = logging.getLogger("ssop.ppfs")
 ECLAIM_DB = "eclaimdb"
+PROJECT_KEY = "instrument_project"
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS ppfs_exports (
@@ -39,6 +41,7 @@ CREATE TABLE IF NOT EXISTS ppfs_items (
   service TEXT NOT NULL, vn TEXT NOT NULL, icode TEXT NOT NULL, include INTEGER NOT NULL, updated_at TEXT NOT NULL,
   PRIMARY KEY (service, vn, icode)
 );
+CREATE TABLE IF NOT EXISTS ppfs_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT NOT NULL);
 """
 
 
@@ -86,6 +89,16 @@ class PpfsStore:
         with self._db() as db:
             db.execute("INSERT OR REPLACE INTO ppfs_items (service, vn, icode, include, updated_at) VALUES (?,?,?,?,?)",
                        (service, vn, icode, int(include), datetime.now().isoformat(timespec="seconds")))
+
+    def setting(self, key: str) -> str:
+        with self._db() as db:
+            row = db.execute("SELECT value FROM ppfs_settings WHERE key=?", (key,)).fetchone()
+        return row["value"] if row else ""
+
+    def set_setting(self, key: str, value: str) -> None:
+        with self._db() as db:
+            db.execute("INSERT OR REPLACE INTO ppfs_settings (key, value, updated_at) VALUES (?,?,?)",
+                       (key, value, datetime.now().isoformat(timespec="seconds")))
 
     def history(self, limit: int = 50) -> list[dict]:
         with self._db() as db:
@@ -537,6 +550,37 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
         log.info("instrument web import %s rows=%s", name, len(rows))
         return {**result, "summary": web_store.summary()}
 
+    @app.get("/api/ppfs/instrument/project")
+    def instrument_project():
+        """The saved Project code (empty = the visit's own) and codes to pick from: those HOSxP used in the past
+        2 years and e-Claim's l_projectcode."""
+        options: dict[str, str] = {}
+        try:
+            for r in q("""
+                SELECT vp.project_code code, COUNT(*) n FROM ovst o JOIN visit_pttype vp ON vp.vn=o.vn
+                WHERE o.vstdate>=DATE_SUB(CURDATE(), INTERVAL 2 YEAR) AND IFNULL(vp.project_code,'')<>''
+                GROUP BY vp.project_code ORDER BY n DESC LIMIT 100"""):
+                options.setdefault(text(r["code"]), f"ใช้ใน HOSxP {r['n']} ครั้ง")
+        except Exception:  # noqa: BLE001 - the list is only a help; typing a code still works
+            log.warning("ppfs project codes from visit_pttype failed", exc_info=True)
+        try:
+            for r in q(f"SELECT CODE code, NAME name, MAX(GYEAR) gyear FROM `{ECLAIM_DB}`.l_projectcode GROUP BY CODE, NAME ORDER BY CODE"):
+                options.setdefault(text(r["code"]), text(r["name"]))
+        except Exception:  # noqa: BLE001
+            log.warning("ppfs project codes from l_projectcode failed", exc_info=True)
+        return {"code": store.setting(PROJECT_KEY),
+                "options": [{"code": c, "name": n} for c, n in options.items() if re.fullmatch(ppfs_instrument.PROJECT_PATTERN, c)]}
+
+    @app.post("/api/ppfs/instrument/project")
+    def instrument_project_save(request: Request, body: dict = Body(...)):
+        try:
+            code = ppfs_instrument.valid_project(text(body.get("code")))
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from None
+        store.set_setting(PROJECT_KEY, code)
+        log.info("ppfs instrument project code=%r by %s", code, auth.user_label(request))
+        return {"code": code}
+
     @app.post("/api/ppfs/item")
     def item_choice(body: dict = Body(...)):
         service = _service(body.get("service"))
@@ -599,6 +643,11 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
         visits = nhso18.opd_contexts(q, vns, groups, config.zone)
         if not visits:
             raise HTTPException(400, "ไม่พบ visit ที่เลือก")
+        project = store.setting(PROJECT_KEY) if service.key == "instrument" else ""
+        if project:  # the Project code chosen on the page replaces the visit's own (an ADP row of TYPE 5)
+            for v in visits:
+                v.projectcode = project
+                claimed.setdefault(v.vn, set()).add(project)
         data = nhso18.Builder(q, config, settings.rcm_db, ECLAIM_DB, excluded, local.nhso18_no_tm(vns),
                               local.nhso18_no_refer(vns)).run(visits)
         if service.key == "cervix":  # the lab code (38608 / 38302) -> the KTB code chosen from the result
