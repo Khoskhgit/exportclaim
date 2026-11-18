@@ -143,11 +143,6 @@ async function openRep(repNo) {
       info([["ส่ง", r.sent], ["ผ่าน", r.passed], ["ไม่ผ่าน", r.failed]]),
       r.bills.length ? table([["บรรทัด", "num"], ["ผล"], ["VN (InvNo)"], ["วันเวลาบริการ"], ["BP"], ["ยอดเบิก", "num"], ["รหัส"]], rows) : el("p", { class: "hint" }, "นำเข้าเฉพาะไฟล์ยา (DIS) ยังไม่มีไฟล์ BIL"),
       ...dispBlock(r.disps, r.code_names),
-      el("h3", {}, `FDH รายการเคลม (${(h.fdh || []).length})`),
-      (h.fdh || []).length ? table([["รหัสการเคลม"], ["สิทธิ"], ["การใช้สิทธิ"], ["วันที่ส่งเคลม"], ["สถานะ"]], h.fdh.map((f) => el("tr", {},
-        el("td", { class: "mono" }, f.claim_id), el("td", {}, f.fund), el("td", {}, f.uuc === "2" ? "2 ไม่ใช้สิทธิ" : f.uuc ? "1 ใช้สิทธิ" : "—"),
-        el("td", {}, when(f.sent_at)), el("td", {}, fdhBadge(f.status)))))
-        : el("p", { class: "hint" }, "ไม่พบในรายละเอียดรายการเคลม FDH ที่นำเข้า"),
       el("h3", {}, "ความหมายของรหัส"), codeLegend([...r.bills.map((b) => b.codes), ...r.disps.flatMap((d) => [d.codes, ...d.drugs.map((g) => g.codes)])], r.code_names) || el("p", { class: "hint" }, "ไม่มีรหัส"),
     ]);
   } catch (err) { notice(err.message); }
