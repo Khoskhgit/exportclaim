@@ -255,3 +255,10 @@ def test_ofc_ipcs_rep_uses_the_an():
     data = ofc_rep_xls([("690900008", 1, "14/07/2026 14:29:00", 3980.47, "-", 5118.0, "", "690001401")])
     rep = repstm.parse_upload("eclaim_10866_IPCS_25690904_084523325.xls", data).reps["690900008"]
     assert [(b.invno, b.stat, b.claimamt) for b in rep.bills] == [("690001401", "A", "5118.00")]
+
+
+def test_eclaim_rep_account_from_the_document_name():
+    from app.repstm import rep_account
+    assert rep_account("eclaim_10866_OPCS_25691101_1") == "OFC" and rep_account("eclaim_10866_IPCS_25691101_1") == "OFC"
+    assert rep_account("eclaim_10866_OP_25691116_153533322") == "UCS" and rep_account("eclaim_10866_IP_25691116_1") == "UCS"
+    assert rep_account("eclaim_10866_OPLGO_25691116_1") == "LGO" and rep_account("") == "OFC"

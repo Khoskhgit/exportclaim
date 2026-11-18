@@ -10,6 +10,7 @@ STM comes as a ZIP of UTF-8 XML (plus .htm/.xsl copies for viewing):
 CSMBS (ข้าราชการ, จาก สปสช. e-Claim) REP and STM come as .xls (BIFF, needs xlrd), stored with account "OFC":
   eclaim_{hcode}_{OPCS|IPCS}_{date}_{no}.xls  sheet "Detail": one row per visit with REP, SEQ NO (= VN; AN for
                                        IPCS) and Error Code
+  The UC (บัตรทอง) REP eclaim_{hcode}_{OP|IP}_{date}_{no}.xls has the same sheet ("REP No.") and is stored as "UCS".
   STM_{hcode}_OP{yyyymm}_{nn}.xls  sheet "พึงรับ": a block per REP NO, one row per visit with SEQ NO (= VN) and
                                    พึงรับทั้งหมด (the amount to be paid); it is stored as STM account "OFC".
 The patient's name and national ID in these files are not kept: VN and HN link back to HOSxP.
@@ -339,22 +340,41 @@ def _labelled(sheet, label: str, rows: int = 8) -> str:
     return ""
 
 
+def rep_account(doc: str) -> str:
+    """The fund of an e-Claim REP from its document name: eclaim_{hcode}_OPCS_… / IPCS (ข้าราชการ) is "OFC",
+    OPLGO / IPLGO "LGO", and OP / IP (บัตรทอง UC) "UCS"."""
+    found = re.search(r"eclaim_\d+_(?:OP|IP)([A-Z]*)_", doc or "", re.I)
+    kind = (found.group(1) if found else "CS").upper()
+    return {"CS": "OFC", "": "UCS"}.get(kind, kind)
+
+
 def parse_rep_ofc(data: bytes, name: str = "", book=None) -> list[Rep]:
     """The CSMBS (ข้าราชการ) e-Claim REP .xls (eclaim_{hcode}_OPCS_....xls), sheet "Detail": one row per visit with
     the REP number, TRAN_ID, SEQ NO (the VN; inpatient IPCS rows have only the AN, which is used instead), the net
     payout and an Error Code ('-' when it passed)."""
     book = book or _open_xls(data, name)
     sheet = book.sheet_by_name("Detail")
-    head = next((r for r in range(min(sheet.nrows, 12)) if _cell(sheet, r, 0) == "REP"), None)
+    head = next((r for r in range(min(sheet.nrows, 12)) if _cell(sheet, r, 0).startswith("REP")), None)
     if head is None:
         raise RepStmError(f"{name}: ไม่พบหัวตาราง REP ในแผ่นงาน Detail")
-    cols = {_cell(sheet, head, c): c for c in range(sheet.ncols) if _cell(sheet, head, c)}
+    # The UC file says "REP No." and puts notes under some labels ("เรียกเก็บ\n(1)"); the first column of a label wins.
+    cols: dict[str, int] = {}
+    for c in range(sheet.ncols):
+        label = _cell(sheet, head, c).split("\n")[0].strip()
+        if label:
+            cols.setdefault("REP" if label.startswith("REP") else label, c)
+    # UC: the claim is "รวมยอดเรียกเก็บ (1.3)" in the sub-header under the first เรียกเก็บ columns.
+    for row in range(head + 1, min(head + 4, sheet.nrows)):
+        for c in range(sheet.ncols):
+            if _cell(sheet, row, c).startswith("รวมยอดเรียกเก็บ"):
+                cols["เรียกเก็บ"] = c
     need = ("REP", "ลำดับที่", "TRAN_ID", "วันเข้ารักษา", "ชดเชยสุทธิ", "Error Code", "เรียกเก็บ", "SEQ NO")
     if any(label not in cols for label in need):
         raise RepStmError(f"{name}: คอลัมน์ในแผ่นงาน Detail ไม่ครบ ({', '.join(l for l in need if l not in cols)})")
     session = _labelled(sheet, "เลขที่เอกสาร").split()[0] if _labelled(sheet, "เลขที่เอกสาร") else ""
     hcode = (_labelled(sheet, "โรงพยาบาล").split() or [""])[0]
     issued = be_datetime(_labelled(sheet, "ออกรายงานวันที่").replace("เวลา", ""))
+    account = rep_account(session or name)
     reps: dict[str, Rep] = {}
     for row in range(head + 1, sheet.nrows):
         rep_no, line, vn = _cell(sheet, row, cols["REP"]), _cell(sheet, row, cols["ลำดับที่"]), _cell(sheet, row, cols["SEQ NO"])
@@ -362,7 +382,7 @@ def parse_rep_ofc(data: bytes, name: str = "", book=None) -> list[Rep]:
             vn = _cell(sheet, row, cols["AN"])  # inpatient (IPCS) rows carry the AN instead of SEQ NO
         if not (rep_no.isdigit() and line.isdigit() and vn.isdigit()):
             continue  # the second header line, blank and note lines
-        rep = reps.setdefault(rep_no, Rep(rep_no=rep_no, hcode=hcode, account="OFC", session=session,
+        rep = reps.setdefault(rep_no, Rep(rep_no=rep_no, hcode=hcode, account=account, session=session,
                                           issued_at=issued, has_bil=True))
         codes = _codes(_cell(sheet, row, cols["Error Code"]).replace("-", ""))
         claimed = _money(_cell(sheet, row, cols["เรียกเก็บ"]))
