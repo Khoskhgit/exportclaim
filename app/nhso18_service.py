@@ -7,7 +7,7 @@ from decimal import Decimal
 from typing import Callable, Iterable, Sequence
 
 from . import nhso18
-from .nhso18 import PttypeGroups, Visit, lit, lit_list, num
+from .nhso18 import INCOME, PttypeGroups, Visit, lit, lit_list, num
 from .validate import text
 
 Select = Callable[[str], list[dict]]
@@ -188,14 +188,18 @@ def checks(q: Select, rcm: str, rows: list[dict]) -> dict[str, dict]:
                            f"AND NOT (IFNULL(d.ttmt_code,'')<>'' AND d.ttmt_code=dd.tmtid)")
     tmt_wrong = flag(tmt_sql("vn"), tmt_sql("an")) if has_catalog else {}
     adp_sql = lambda key: (f"SELECT oo.{key} k, CONCAT_WS(' ',oo.icode,d.name) item FROM opitemrece oo "
-                           f"LEFT JOIN income inc ON inc.income=oo.income LEFT JOIN s_drugitems d ON d.icode=oo.icode "
+                           f"LEFT JOIN income inc ON inc.income={INCOME} LEFT JOIN s_drugitems d ON d.icode=oo.icode "
                            f"WHERE oo.{key} IN ({{ids}}) AND inc.drg_chrgitem_id IN (1,2,5,6,7,8,9,10,11,12,13,14,15,19) "
                            f"AND IFNULL(d.nhso_adp_code,'')=''")
     adp_missing = flag(adp_sql("vn"), adp_sql("an"))
     inc_sql = lambda key: (f"SELECT oo.{key} k, CONCAT_WS(' ',oo.icode,d.name) item FROM opitemrece oo "
-                           f"LEFT JOIN income inc ON inc.income=oo.income LEFT JOIN s_drugitems d ON d.icode=oo.icode "
+                           f"LEFT JOIN income inc ON inc.income={INCOME} LEFT JOIN s_drugitems d ON d.icode=oo.icode "
                            f"WHERE oo.{key} IN ({{ids}}) AND inc.income IS NULL")
     inc_missing = flag(inc_sql("vn"), inc_sql("an"))
+    # HOSxP saved the bill line with no income: the item's own income is sent instead (INCOME), but the line is wrong.
+    empty_sql = lambda key: (f"SELECT oo.{key} k, CONCAT_WS(' ',oo.icode,d.name,CONCAT('> หมวด ',{INCOME})) item FROM opitemrece oo "
+                             f"LEFT JOIN s_drugitems d ON d.icode=oo.icode WHERE oo.{key} IN ({{ids}}) AND IFNULL(oo.income,'')=''")
+    income_empty = flag(empty_sql("vn"), empty_sql("an"))
     # Items are sent with their sum_price, but one with qty 0 is sent as 0 although HOSxP charged its sum_price.
     qty_sql = lambda key: (f"SELECT oo.{key} k, CONCAT_WS(' ',oo.icode,d.name) item FROM opitemrece oo "
                            f"LEFT JOIN s_drugitems d ON d.icode=oo.icode "
@@ -249,6 +253,8 @@ def checks(q: Select, rcm: str, rows: list[dict]) -> dict[str, dict]:
             add(e, "ADP_MISSING", "ยัง Map ADP ไม่ครบถ้วน", adp_missing[k])
         if k in inc_missing:
             add(e, "BILLMAUD_WRONG", "Billmaud ผิดพลาด (ไม่พบหมวดค่าใช้จ่าย)", inc_missing[k])
+        if k in income_empty:
+            add(w, "INCOME_EMPTY", "HOSxP ไม่ได้บันทึกหมวดค่าใช้จ่าย (opitemrece.income ว่าง) ใช้หมวดจากทะเบียนรายการแทน", income_empty[k])
         if text(screen.get(k)):
             add(e, "SCREEN_WRONG", screen[k])
         if k in other_hn:

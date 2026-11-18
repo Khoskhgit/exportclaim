@@ -154,7 +154,7 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
           d.nhso_adp_code adp,
           SUM(oo.qty) qty, SUM(IF(IFNULL(oo.qty,0)=0,0,IFNULL(oo.sum_price,0))) amount,
           MAX(EXISTS(SELECT 1 FROM opitemrece_noexport no WHERE no.seq=oo.{col} AND no.icode=oo.icode)) hosxp_noexport
-        FROM opitemrece oo LEFT JOIN s_drugitems d ON d.icode=oo.icode LEFT JOIN income inc ON inc.income=oo.income
+        FROM opitemrece oo LEFT JOIN s_drugitems d ON d.icode=oo.icode LEFT JOIN income inc ON inc.income={nhso18.INCOME}
         LEFT JOIN drg_chrgitem drg ON drg.drg_chrgitem_id=inc.drg_chrgitem_id
         WHERE oo.{col}={nhso18.lit(key)}
         GROUP BY oo.icode ORDER BY inc.drg_chrgitem_id, oo.icode""")

@@ -27,6 +27,9 @@ CHRONIC = r"DM:|HT:|CKD:|Asthma:|COPD:|IHD:|Cancer:|TB:|Chronic:"
 AMOUNT = "IF(IFNULL(oo.qty,0)=0,0,IFNULL(oo.sum_price,0))"
 # The unit price that goes with it, so QTY x RATE adds up to the amount.
 UNIT_PRICE = "IF(IFNULL(oo.qty,0)=0,IFNULL(oo.unitprice,0),ROUND(IFNULL(oo.sum_price,0)/oo.qty,2))"
+# An item's charge category (income). HOSxP sometimes saves a bill line with an empty income; the item's own income
+# (s_drugitems.income) is used then, as the user chose on 2026-11-18. The empty line is still a warning (INCOME_EMPTY).
+INCOME = "IFNULL(NULLIF(oo.income,''),(SELECT si.income FROM s_drugitems si WHERE si.icode=oo.icode LIMIT 1))"
 X_CODES = {"XXXXXX", "51999", "52999", "55999", "72999"}
 
 # Export4<file> tables from CreateTempFile: (column, kind, size). Kind: C char, D date, I int, N<places> decimal.
@@ -482,7 +485,7 @@ class Builder:
         return rows
 
     def f_cha(self) -> list[dict]:
-        home = f"IF(oo.item_type='H',{lit(self.c.homemed) if self.c.homemed else 'oo.income'},oo.income)"
+        home = f"IF(oo.item_type='H',{lit(self.c.homemed) if self.c.homemed else INCOME},{INCOME})"
         rows = self.q(f"""
         SELECT seq, cid, hn, an, date, chrgitem, SUM(sum_price) amount FROM (
           SELECT o.vn seq, pt.cid, o.hn, NULL an, o.vstdate date,
@@ -549,7 +552,7 @@ class Builder:
         joins = f"""
           JOIN s_drugitems d ON d.icode=oo.icode
           LEFT JOIN fwf_item fwf ON fwf.fwf_item_id=d.fwf_item_id
-          LEFT JOIN income inc ON inc.income=oo.income
+          LEFT JOIN income inc ON inc.income={INCOME}
           LEFT JOIN drg_chrgitem drg ON drg.drg_chrgitem_id=inc.drg_chrgitem_id
           LEFT JOIN nhso_adp_code adp ON adp.nhso_adp_code=d.nhso_adp_code AND zero(adp.drg_chrgitem_id)=zero(d.drg_chrgitem_id)
           LEFT JOIN {self.rcm}.labitem ll ON ll.icode=oo.icode AND (chi=1 OR eclaim=1)"""
@@ -773,14 +776,14 @@ class Builder:
           {UNIT_PRICE} drugpric, oo.paidst,
           CASE WHEN ex.maininscl REGEXP 'NRD|NRH|FWF' AND fwf.fwf_item_code IS NOT NULL THEN fwf.fwf_item_code ELSE d.did END didstd,
           CASE WHEN oh.opitemrece_home_type_id IS NOT NULL THEN oh.opitemrece_home_type_id
-               WHEN oo.item_type='H' OR oo.income IN ({self.homemed()}) THEN
+               WHEN oo.item_type='H' OR {INCOME} IN ({self.homemed()}) THEN
                  CASE WHEN d.drugcategory REGEXP '{CHRONIC}' THEN '4' ELSE '2' END
                ELSE '1' END use_status,
           {'oo.pa_no' if has_pa else 'NULL'} pa_no"""
         opd = self.q(f"""
         SELECT o.vn seq, NULL an, o.hn, pt.cid, sp.provis_code clinic, {cols},
           CASE WHEN IFNULL(ned.presc_reason,'')<>'' THEN ned.presc_reason
-               WHEN oo.income IN ({drug_ned}) OR d.drugaccount='-' OR IFNULL(d.drugaccount,'')='' THEN 'EC' END drugremark
+               WHEN {INCOME} IN ({drug_ned}) OR d.drugaccount='-' OR IFNULL(d.drugaccount,'')='' THEN 'EC' END drugremark
         FROM {self.ex} ex JOIN ovst o ON o.vn=ex.vn LEFT JOIN patient pt ON pt.hn=o.hn LEFT JOIN spclty sp ON sp.spclty=o.spclty
         JOIN opitemrece oo ON oo.vn=o.vn JOIN drugitems d ON d.icode=oo.icode
         LEFT JOIN fwf_item fwf ON fwf.fwf_item_id=d.fwf_item_id
@@ -790,7 +793,7 @@ class Builder:
         ipd = self.q(f"""
         SELECT i.an seq, i.an, i.hn, pt.cid, sp.provis_code clinic, {cols},
           CASE WHEN IFNULL(ned.presc_reason_1,'')<>'' THEN ned.presc_reason_1
-               WHEN oo.income IN ({drug_ned}) OR d.drugaccount='-' OR IFNULL(d.drugaccount,'')='' THEN 'EC' END drugremark
+               WHEN {INCOME} IN ({drug_ned}) OR d.drugaccount='-' OR IFNULL(d.drugaccount,'')='' THEN 'EC' END drugremark
         FROM {self.ex} ex JOIN ipt i ON i.an=ex.vn LEFT JOIN patient pt ON pt.hn=i.hn LEFT JOIN spclty sp ON sp.spclty=i.spclty
         JOIN opitemrece oo ON oo.an=i.an JOIN drugitems d ON d.icode=oo.icode
         LEFT JOIN fwf_item fwf ON fwf.fwf_item_id=d.fwf_item_id
@@ -853,7 +856,7 @@ class Builder:
           SELECT oo.hn, {code} code, CONCAT_WS(' ',d.name,d.strength) name, oo.qty, {AMOUNT} price, {{an}} an,
             {{seq}} seq, ex.maininscl inscl, oo.hos_guid
           FROM {self.ex} ex JOIN opitemrece oo ON oo.{{key}}=ex.vn JOIN s_drugitems d ON d.icode=oo.icode
-          LEFT JOIN income inc ON inc.income=oo.income
+          LEFT JOIN income inc ON inc.income={INCOME}
           WHERE {AMOUNT}<>0 AND {self.noexport('oo', 'vn', False)}"""
         raw = self.q(part.format(an="NULL", seq="oo.vn", key="vn") + " ORDER BY oo.vn, oo.hos_guid")
         raw += self.q(part.format(an="oo.an", seq="oo.an", key="an") + " ORDER BY oo.an, oo.hos_guid")
