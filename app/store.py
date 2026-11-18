@@ -65,6 +65,9 @@ CREATE TABLE IF NOT EXISTS nhso18_items (
 CREATE TABLE IF NOT EXISTS nhso18_uuc (
   seq TEXT PRIMARY KEY, uuc TEXT NOT NULL, set_by TEXT NOT NULL DEFAULT '', set_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS nhso18_no_tm (
+  seq TEXT PRIMARY KEY, set_by TEXT NOT NULL DEFAULT '', set_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS fdh_accounts (
   login TEXT PRIMARY KEY, fdh_user TEXT NOT NULL, password_hash TEXT NOT NULL, updated_at TEXT NOT NULL
 );
@@ -359,6 +362,19 @@ class Store:
             if uuc:
                 db.execute("INSERT INTO nhso18_uuc (seq, uuc, set_by, set_at) VALUES (?,?,?,?)",
                            (seq, uuc, set_by, (now or datetime.now()).isoformat(timespec="seconds")))
+
+    def nhso18_no_tm(self, seqs: Iterable[str]) -> set[str]:
+        """Visits whose ICD-10-TM procedure codes are left out of OOP (chosen in the 18-file drawer)."""
+        wanted = set(seqs)
+        with self._db() as db:
+            return {r["seq"] for r in db.execute("SELECT seq FROM nhso18_no_tm") if r["seq"] in wanted}
+
+    def set_nhso18_no_tm(self, seq: str, on: bool, set_by: str = "", now: datetime | None = None) -> None:
+        with self._db() as db:
+            db.execute("DELETE FROM nhso18_no_tm WHERE seq=?", (seq,))
+            if on:
+                db.execute("INSERT INTO nhso18_no_tm (seq, set_by, set_at) VALUES (?,?,?)",
+                           (seq, set_by, (now or datetime.now()).isoformat(timespec="seconds")))
 
     def nhso18_sent(self, seqs: Iterable[str]) -> set[str]:
         wanted = set(seqs)

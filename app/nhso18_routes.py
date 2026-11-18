@@ -150,6 +150,7 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
             "cc": cc,
             "procedures": procedures(key, kind),
             "uuc_auto": auto_uuc(key, kind), "uuc_set": local.nhso18_uuc([key]).get(key, ""),
+            "no_tm": key in local.nhso18_no_tm([key]),
             "items": [{"icode": text(i["icode"]), "name": text(i["name"]), "billmaud": text(i["billmaud"]),
                        "billmaud_name": text(i.get("billmaud_name")), "adp": text(i["adp"]),
                        "qty": number(i["qty"]), "amount": svc.money(i["amount"]),
@@ -192,6 +193,17 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
         config, groups = svc.load_setup(q, settings.hcode)
         found = nhso18.opd_contexts(q, [key], groups, config.zone)
         return found[0].uuc if found else ""
+
+    @app.post("/api/nhso18/no-tm")
+    def set_no_tm(request: Request, body: dict = Body(...)):
+        """Send this visit without its ICD-10-TM procedure codes (OOP), or with them again. HOSxP is not changed."""
+        key = text(body.get("key"))
+        if not key:
+            raise HTTPException(400, "ไม่ได้ระบุรายการ")
+        on = bool(body.get("on"))
+        local.set_nhso18_no_tm(key, on, auth.user_label(request))
+        log.info("nhso18 no_tm key=%s on=%s", key, on)
+        return {"no_tm": on}
 
     @app.post("/api/nhso18/uuc")
     def set_uuc(request: Request, body: dict = Body(...)):
@@ -239,7 +251,8 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
             raise HTTPException(400, "ไม่พบรายการที่เลือก")
         nhso18.set_uuc(visits, local.nhso18_uuc(vns + ans))
         excluded = local.nhso18_excluded(vns + ans)
-        data = nhso18.Builder(q, config, settings.rcm_db, ECLAIM_DB, excluded).run(visits)
+        data = nhso18.Builder(q, config, settings.rcm_db, ECLAIM_DB, excluded,
+                              local.nhso18_no_tm([v.vn for v in visits])).run(visits)
         nhso18.set_permitno(data, {r["key"]: r["claimcode"] for r in reviewed if r["approve_required"]})
         return vns, ans, nhso18.merge_walkin(data, merge), len(merge)
 

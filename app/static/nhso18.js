@@ -179,11 +179,12 @@ async function openDrawer(r) {
       data.dx.length ? table(["ประเภท", "รหัส", "ชื่อโรค"], data.dx.map((d) => el("tr", {}, el("td", {}, d.type), el("td", { class: "mono" }, d.code), el("td", {}, d.name)))) : el("p", { class: "muted" }, "ไม่มีข้อมูล"),
       el("h3", {}, `หัตถการ (${ipd ? "IOP" : "OOP"})`),
       procs.length ? table([ipd ? "ประเภท" : "ที่มา", "รหัส", "ชื่อหัตถการ", ipd ? "เริ่ม" : "วันที่", ...(ipd ? ["สิ้นสุด"] : []), "ผู้ทำ (ว.)"],
-        procs.map((p) => el("tr", {}, el("td", {}, p.type), el("td", { class: "mono" }, p.code), el("td", {}, p.name || "—"),
+        procs.map((p) => el("tr", { class: !ipd && isTm(p.code) ? "tm-row" : "" }, el("td", {}, p.type), el("td", { class: "mono" }, p.code), el("td", {}, p.name || "—"),
           el("td", { class: "mono" }, p.start ? `${toDmy(p.start.slice(0, 10))}${p.start.slice(10)}` : "—"),
           ...(ipd ? [el("td", { class: "mono" }, p.end ? `${toDmy(p.end.slice(0, 10))}${p.end.slice(10)}` : "—")] : []),
           el("td", { class: "mono" }, p.dropid || "—"))))
-        : el("p", { class: "muted" }, "ไม่มีหัตถการ")];
+        : el("p", { class: "muted" }, "ไม่มีหัตถการ"),
+      ipd ? null : tmChoice(r, data, procs)];
     const summary = el("div", { class: "cost-summary" });
     const showSummary = () => summary.replaceChildren(costSummary(data.items));
     showSummary();
@@ -210,6 +211,22 @@ async function openDrawer(r) {
       { id: "cost", label: "ค่าใช้จ่าย", badge: data.items.length, content: costs },
     ]));
   } catch (err) { body.replaceChildren(el("p", {}, err.message)); }
+}
+// OPD only: send the visit without its ICD-10-TM procedure codes (7 digits) in OOP. Kept in this app, HOSxP unchanged.
+const isTm = (code) => String(code || "").split("+")[0].length > 5;
+function tmChoice(r, data, procs) {
+  if (!procs.some((p) => isTm(p.code))) return null;
+  const mark = () => document.querySelectorAll("#drawer .tm-row").forEach((row) => row.classList.toggle("excluded", data.no_tm));
+  const box = el("input", { type: "checkbox", checked: Boolean(data.no_tm), onchange: async (e) => {
+    try {
+      data.no_tm = (await api("/api/nhso18/no-tm", { key: r.key, on: e.target.checked })).no_tm;
+      mark();
+      notice(data.no_tm ? "ไม่ส่งรหัส ICD-10-TM ของ visit นี้" : "ส่งรหัส ICD-10-TM ของ visit นี้ตามเดิม", "ok");
+    } catch (err) { e.target.checked = !e.target.checked; notice(err.message); }
+  } });
+  setTimeout(mark);
+  return el("label", { class: "tm-choice" }, box, el("span", {}, "ไม่ส่งรหัส ICD-10-TM",
+    el("span", { class: "sub" }, `รหัส ${procs.filter((p) => isTm(p.code)).map((p) => p.code).join(", ")} จะไม่อยู่ในแฟ้ม OOP (ไม่แก้ข้อมูลใน HOSxP)`)));
 }
 function closeDrawer() { $("drawer").hidden = true; $("drawer-backdrop").hidden = true; state.current = null; renderRows(); }
 

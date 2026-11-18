@@ -599,7 +599,7 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
         visits = nhso18.opd_contexts(q, vns, groups, config.zone)
         if not visits:
             raise HTTPException(400, "ไม่พบ visit ที่เลือก")
-        data = nhso18.Builder(q, config, settings.rcm_db, ECLAIM_DB, excluded).run(visits)
+        data = nhso18.Builder(q, config, settings.rcm_db, ECLAIM_DB, excluded, local.nhso18_no_tm(vns)).run(visits)
         if service.key == "cervix":  # the lab code (38608 / 38302) -> the KTB code chosen from the result
             ppfs_cervix.rewrite_adp(data, claimed, {r.key: r.extra.get("hosxp_adp", "") for r in picked})
         if service.key in ("ironchild", "anemiachild"):

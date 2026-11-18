@@ -186,13 +186,20 @@ def patient_title(row: dict) -> str:
 
 
 # ---------------------------------------------------------------- builder
+def is_tm(code) -> bool:
+    """An ICD-10-TM procedure code (7 digits, e.g. 2330010); ICD-9-CM codes have at most 5 characters."""
+    return len(text(code)) > 5
+
+
 class Builder:
     """Build the rows of each file. ``select(sql)`` runs one read-only query and returns dict rows."""
 
     def __init__(self, select: Callable[[str], list[dict]], config: Config, rcm: str, eclaim: str,
-                 excluded: Iterable[tuple[str, str]] = ()):
+                 excluded: Iterable[tuple[str, str]] = (), no_tm: Iterable[str] = ()):
         self.q = select
         self.c = config
+        # Visits (VN) the user chose to send without their ICD-10-TM procedure codes (OOP).
+        self.no_tm = set(no_tm)
         # Items the user left out in this program (VN or AN, icode); HOSxP's opitemrece_noexport still applies.
         self.excluded = sorted({f"{seq}|{icode}" for seq, icode in excluded})
         self.rcm = f"`{rcm}`"
@@ -363,6 +370,8 @@ class Builder:
                     raise
         if not self.c.use_tm:
             rows = [r for r in rows if len(text(r.get("oper"))) <= 5]
+        if self.no_tm:  # an ICD-10-TM code is the 7-digit one; ICD-9-CM has at most 5 characters
+            rows = [r for r in rows if not (text(r.get("seq")) in self.no_tm and is_tm(r.get("oper")))]
 
         def oper_num(r):
             m = re.match(r"\s*([+-]?\d+)", text(r.get("oper")))

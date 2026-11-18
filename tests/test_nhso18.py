@@ -185,3 +185,14 @@ def test_paid_amount_prefers_stm_then_fdh():
     assert svc.paid_amount({"rep_paid": 100.0, "fdh_amount": 900}, "ชดเชยแล้ว", {}) == "100.00"
     assert svc.paid_amount({}, "ชดเชยแล้ว", None) == ""
     assert svc.paid_amount({"fdh_amount": 900}, "ส่งแล้ว", {"stm_paid": "1200"}) == ""
+
+
+def test_no_tm_choice_is_kept_per_visit(tmp_path):
+    from app.nhso18 import is_tm
+    from app.store import Store
+    store = Store(tmp_path / "s.sqlite3")
+    store.set_nhso18_no_tm("v1", True, "tester")
+    assert store.nhso18_no_tm(["v1", "v2"]) == {"v1"}
+    store.set_nhso18_no_tm("v1", False)
+    assert store.nhso18_no_tm(["v1"]) == set()
+    assert is_tm("2330010") and not is_tm("8931") and not is_tm("2309")
