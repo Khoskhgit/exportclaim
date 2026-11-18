@@ -15,7 +15,8 @@ from pathlib import Path
 from typing import Iterable
 
 from .config import Settings
-from .validate import PATIENT_PAID, begin_datetime, clinic_code, clinic_valid, clock, dec, end_datetime, pay_plan, text
+from .validate import (PATIENT_PAID, begin_datetime, clinic_code, clinic_valid, clock, dec, end_datetime, pay_plan, text,
+                       unit_price)
 
 CRLF = "\r\n"
 ENCODING = "cp874"
@@ -186,15 +187,15 @@ def bill_lines(visit: dict, items: list[dict], settings: Settings, flag: str, ex
             continue
         adp = text(item.get("nhso_adp_code"))
         reimbursable = text(item.get("paidst")) not in PATIENT_PAID
-        charge = dec(item.get("qty")) * dec(item.get("unitprice"))
+        charge, unit = dec(item.get("sum_price")), unit_price(item)
         svref = ("HS:" if adp in {"DRUGP", "991001"} else "") + text(visit.get("vn"))
         rows.append((
             inv, text(item.get("cscd_group")), text(item.get("icode")),
             line(
                 inv, f"{begin:%Y-%m-%d}", item.get("cscd_group"), item.get("icode"),
                 clean(std_code(item), "STDCODE"), item_name(item), number(item.get("qty")),
-                money(item.get("unitprice")), money(charge),
-                money(item.get("unitprice") if reimbursable else 0),
+                money(unit), money(charge),
+                money(unit if reimbursable else 0),
                 money(charge if reimbursable else 0), svref, "OP1",
             ),
         ))
@@ -233,8 +234,8 @@ def disp_lines(visit: dict, items: list[dict], settings: Settings, excluded: set
                 item.get("sks_dfs_code"), item_name(item),
                 text(item.get("units")) or text(item.get("nd_unit")) or "-",
                 sig_code, sig_text, number(item.get("qty")),
-                money(item.get("unitprice")), money(item.get("sum_price")),
-                money(item.get("unitprice") if reimbursable else 0),
+                money(unit_price(item)), money(item.get("sum_price")),
+                money(unit_price(item) if reimbursable else 0),
                 money(item.get("sum_price") if reimbursable else 0),
                 "", claim_cont(item), "OP1", "", "",
             ),

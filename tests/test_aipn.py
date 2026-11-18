@@ -361,3 +361,9 @@ def test_price_api(client):
 def test_price_api_rejects_bad_values(client, value):
     r = client.post("/api/aipn/price", json={"an": AN, "item": "3001372:", "unitprice": value})
     assert r.status_code == 400
+
+
+def test_a_rounded_item_is_sent_as_its_sum_price():
+    """HOSxP billed 8.00 for 1 x 8.25: the row sends and claims 8.00 at a unit price of 8.00."""
+    (row,) = aipn.bill_rows([it(qty=Decimal("1"), unitprice=Decimal("8.25"), sum_price=Decimal("8"))], [])
+    assert (row.qty, row.unitprice, row.amount, row.claimup, row.claimamt) == (1, Decimal("8.00"), 8, Decimal("8.00"), 8)

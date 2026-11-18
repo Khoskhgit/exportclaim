@@ -250,7 +250,9 @@ def bill_rows(items: list[dict], catalog: list[dict], diag: str = "", cancer: bo
             final_group = group
         if md == "02" and claimcat == "D":
             final_group = "05"
-        unit = abs(dec(first.get("unitprice")))
+        # HOSxP's sum_price is the amount (the user chose it over qty x unitprice, 2026-11-18); the unit price goes
+        # with it (sum_price / qty), so an item HOSxP rounded (1 x 8.25 billed 8.00) is sent and claimed as 8.00.
+        unit = (abs(amount) / abs(qty)).quantize(Decimal("0.01")) if qty else abs(dec(first.get("unitprice")))
         claimup = unit if paidst in NOT_CLAIMED else (rate if rate > 0 else unit)
         rev = cc.get("rev_date") if cc else None
         rows.append(BillRow(
@@ -263,7 +265,8 @@ def bill_rows(items: list[dict], catalog: list[dict], diag: str = "", cancer: bo
             stdcode=cscode if group in {"03", "04"} else (text(first.get("tmlt_code")) if group in {"06", "07"} else ""),
             claimcat=claimcat,
             daterev=f"{as_date(rev):%Y-%m-%d}" if as_date(rev) else "0000-00-00",
-            claimup=claimup, claimamt=qty * claimup, pttype=pttype, key=item_key(first), sort_group=group,
+            claimup=claimup, claimamt=amount if claimup == unit and qty else qty * claimup, pttype=pttype,
+            key=item_key(first), sort_group=group,
         ))
     # The old query ordered by the bill group before claimcat.income could change it.
     rows.sort(key=lambda r: (r.sort_group, r.icode, r.servdate))

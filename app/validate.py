@@ -46,6 +46,16 @@ def text(value) -> str:
     return "" if value is None else str(value).strip()
 
 
+def unit_price(item: dict) -> Decimal:
+    """The unit price that goes with HOSxP's sum_price: sum_price / qty, so QTY x price adds up to what the bill
+    charged after HOSxP's rounding (the user chose sum_price over qty x unitprice, 2026-11-18). With no qty, HOSxP's
+    unitprice."""
+    qty, total = dec(item.get("qty")), dec(item.get("sum_price"))
+    if qty == 0:
+        return dec(item.get("unitprice"))
+    return (total / qty).quantize(Decimal("0.01"))
+
+
 def as_date(value) -> date | None:
     if isinstance(value, datetime):
         return value.date()
@@ -256,9 +266,10 @@ def check_visit(
 
     income = dec(visit.get("income"))
     cents = Decimal("0.01")
-    line_total = sum((dec(i.get("qty")) * dec(i.get("unitprice")) for i in items), Decimal("0")).quantize(cents)
+    # Items are sent with HOSxP's sum_price; only an item with no qty but a charge cannot be sent as it is.
+    line_total = sum((dec(i.get("sum_price")) for i in items), Decimal("0")).quantize(cents)
     paid = sum((dec(i.get("sum_price")) for i in items if text(i.get("paidst")) in PATIENT_PAID), Decimal("0")).quantize(cents)
-    line_mismatch = any(dec(i.get("qty")) * dec(i.get("unitprice")) != dec(i.get("sum_price")) for i in items)
+    line_mismatch = any(dec(i.get("qty")) == 0 and dec(i.get("sum_price")) != 0 for i in items)
 
     if income == 0:
         add("INCOME_ZERO", ERROR, "ค่าใช้จ่ายเป็น 0")

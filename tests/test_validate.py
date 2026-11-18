@@ -42,7 +42,7 @@ def test_z_check_is_skipped_when_no_z_table():
 @pytest.mark.parametrize("changes,items,code", [
     ({"income": 0}, [], "INCOME_ZERO"),
     ({"income": 999}, None, "INCOME_MISMATCH"),
-    ({}, [item(qty=2)], "INCOME_MISMATCH"),
+    ({}, [item(qty=0)], "INCOME_MISMATCH"),
     ({"rcpt_money": 10}, None, "PAYMENT_MISMATCH"),
     ({"clinic": "55"}, None, "CLINIC_INVALID"),
     ({"typeout_name": "Admit"}, None, "ADMITTED"),
@@ -158,3 +158,11 @@ def test_result_codes_put_causes_before_warnings():
 
 def test_no_result_codes():
     assert v.explain_result_codes(None, {}) == []
+
+
+def test_a_rounded_item_follows_sum_price():
+    """HOSxP charged 8.00 for 1 x 8.25: sum_price is what is sent, so it is not a mismatch."""
+    rounded = item(qty=1, unitprice=8.25, sum_price=8)
+    assert "INCOME_MISMATCH" not in codes(visit(income=8), [rounded])
+    assert v.unit_price(rounded) == v.dec("8.00") and v.unit_price(item(qty=3, sum_price=10)) == v.dec("3.33")
+    assert v.unit_price(item(qty=0, unitprice=5, sum_price=5)) == v.dec("5")
