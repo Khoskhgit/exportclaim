@@ -268,6 +268,10 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
             found = services.get(i["icode"], [])
             i.update(send=p["send"], locked=p["locked"], default=p["default"],
                      services=[{"key": k, "label": ppfs.SERVICES[k].label} for k in found], this_service=service.key in found)
+        # The visit's refer-in / refer-out (ORF and the AER refer fields) and the choice, shared with the 18 แฟ้ม page,
+        # to send it without them.
+        out["refers"] = svc.refer_info(q, [{"kind": "OPD", "vn": vn, "an": ""}]).get(vn, [])
+        out["no_refer"] = vn in local.nhso18_no_refer([vn])
         return out
 
     def item_services(items: list[tuple[str, str]]) -> dict[str, list[str]]:

@@ -267,6 +267,29 @@ function table(headers, rows) {
 }
 const info = (pairs) => el("dl", { class: "info-grid" }, ...pairs.map(([k, v]) => el("div", {}, el("dt", {}, k), el("dd", {}, v || "—"))));
 
+// The visit's refer-in / refer-out, and the choice (shared with the 18 แฟ้ม page) to send it without them.
+function referBox(r, data) {
+  const refers = data.refers || [];
+  const box = el("div", { class: "uuc-box" });
+  const draw = () => box.replaceChildren(
+    el("div", { class: "uuc-head" }, el("strong", {}, "การส่งต่อ / รับเข้า")),
+    refers.length ? table(["", "หน่วยบริการ", "วันที่", "เลขที่"], refers.map((x) => el("tr", { class: data.no_refer ? "excluded" : "" },
+      el("td", {}, x.dir === "out" ? "ส่งต่อ →" : "รับเข้า ←"), el("td", {}, `${x.hcode || "—"} ${x.name || ""}`.trim()),
+      el("td", { class: "mono" }, x.date ? toDmy(x.date) : "—"), el("td", { class: "mono" }, x.no || "—"))))
+      : el("p", { class: "muted" }, "visit นี้ไม่มีการส่งต่อ / รับเข้า"),
+    refers.length ? el("label", { class: "tm-choice" }, el("input", { type: "checkbox", checked: !!data.no_refer, onchange: async (e) => {
+      try {
+        await api("/api/nhso18/no-refer", { key: r.vn, on: e.target.checked });
+        data.no_refer = e.target.checked;
+        draw();
+        notice(data.no_refer ? `VN ${r.vn}: ไม่ส่งข้อมูลการส่งต่อ / รับเข้า` : `VN ${r.vn}: ส่งข้อมูลการส่งต่อ / รับเข้า`, "ok");
+      } catch (err) { e.target.checked = !e.target.checked; notice(err.message); }
+    } }), "ไม่ส่งข้อมูลการส่งต่อ / รับเข้า") : null,
+    refers.length ? el("p", { class: "muted-note" }, "ติ๊กแล้วจะไม่ส่งแฟ้ม ORF/IRF และช่อง Refer ใน AER ของ visit นี้ ทั้ง ZIP และ FDH (ใช้ค่าเดียวกับหน้า 18 แฟ้ม) ไม่แก้ข้อมูลใน HOSxP") : null);
+  draw();
+  return el("div", {}, el("h3", {}, "ข้อมูลส่งต่อ / รับเข้า"), box);
+}
+
 async function openDrawer(r) {
   state.current = r.key; render();
   $("drawer").hidden = false; $("drawer-backdrop").hidden = false;
@@ -501,7 +524,8 @@ async function openDrawer(r) {
       : el("p", { class: "muted" }, "ไม่พบ"));
     }
 
-    const dx = [data.dx.length ? table(["ประเภท", "รหัส", "ชื่อโรค"], data.dx.map((d) => el("tr", {}, el("td", {}, d.type), el("td", { class: "mono" }, d.code), el("td", {}, d.name)))) : el("p", { class: "muted" }, "ไม่มีข้อมูล")];
+    const dx = [data.dx.length ? table(["ประเภท", "รหัส", "ชื่อโรค"], data.dx.map((d) => el("tr", {}, el("td", {}, d.type), el("td", { class: "mono" }, d.code), el("td", {}, d.name)))) : el("p", { class: "muted" }, "ไม่มีข้อมูล"),
+      referBox(r, data)];
     const claimed = new Set(state.rows.filter((x) => x.vn === r.vn).map((x) => x.code));
     // Tick what goes into the ZIP with the claimed fee (the fee itself is always sent); kept per visit in this app.
     const sentTotal = el("p", { class: "muted-note" });
