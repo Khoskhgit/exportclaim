@@ -1,6 +1,6 @@
 "use strict";
 // NTIP: the Z11.1 screening visits (exported for NTIP Plus) and the TB labs checked against the payment rules.
-const state = { view: "screen", period: null, screen: [], labs: [], filter: "all", text: "", opts: null, current: null,
+const state = { view: "screen", period: null, screen: [], labs: [], filter: "all", text: "", opts: null, current: null, selected: new Set(),
   sort: { key: "", dir: "asc" }, loaded: { screen: false, labs: false } };
 
 const status = (r) => (r.errors.length ? "error" : r.warnings.length ? "warn" : "ok");
@@ -50,14 +50,24 @@ async function saveTechnique(key, technique) {
 
 // ------------------------------------------------------------------ table
 const HEADS = {
-  screen: [["ผลตรวจ", ""], ["วันที่", "date"], ["VN", "vn"], ["HN", "hn"], ["ชื่อ", "ptname"], ["สิทธิ", "pttype"], ["กลุ่มเสี่ยง", ""],
+  screen: [["", "", "check"], ["ผลตรวจ", ""], ["วันที่", "date"], ["VN", "vn"], ["HN", "hn"], ["ชื่อ", "ptname"], ["สิทธิ", "pttype"], ["กลุ่มเสี่ยง", ""],
     ["ซักประวัติ", ""], ["CXR", ""], ["ผลพิจารณา (DX)", ""], ["ครั้งที่", "nth"], ["ปัญหาที่พบ", ""]],
   labs: [["ผลตรวจ", ""], ["วันที่", "date"], ["VN / AN", "vn"], ["HN", "hn"], ["ชื่อ", "ptname"], ["สิทธิ", "pttype"], ["รายการ LAB", "name"],
     ["ผล", "result"], ["วิธี / อัตรา", ""], ["ครั้งที่ในปีงบ", "nth"], ["ปัญหาที่พบ", ""]],
 };
 
+// A row can be picked for the NTIP Plus file when it has no Error; the header box picks every such row shown.
+const pickable = (r) => !r.errors.length;
+function selectAll() {
+  return el("input", { type: "checkbox", id: "select-all", "aria-label": "เลือกทั้งหมดในหน้านี้", title: "เลือกทั้งหมดที่แสดงอยู่และส่งออกได้",
+    onchange: (e) => {
+      for (const r of visible().filter(pickable)) e.target.checked ? state.selected.add(r.vn) : state.selected.delete(r.vn);
+      render();
+    } });
+}
 function head() {
-  $("thead").replaceChildren(el("tr", {}, ...HEADS[state.view].map(([label, key]) => el("th", key ? { "data-sort": key } : {}, label))));
+  $("thead").replaceChildren(el("tr", {}, ...HEADS[state.view].map(([label, key, cls]) =>
+    cls === "check" ? el("th", { class: "check" }, selectAll()) : el("th", key ? { "data-sort": key } : {}, label))));
   bindSort($("thead"), state.sort, render);
 }
 
@@ -67,7 +77,11 @@ function screenRow(r) {
   const cxr = el("span", { class: "parts" }, pick(r, "cxr_result", o.cxr_results, { blank: "ไม่ได้ถ่าย", label: "ผล CXR" }),
     r.picked.cxr_result === "02" ? pick(r, "cxr_abnormal", o.cxr_abnormal, { blank: "เลือกผล Abnormal", label: "ผล Abnormal" }) : null,
     r.cxr.date ? el("span", { class: "sub" }, `${r.cxr.name.trim()} ${toDmy(r.cxr.date)}`) : null);
+  const box = el("input", { type: "checkbox", checked: state.selected.has(r.vn), disabled: !pickable(r),
+    title: pickable(r) ? "เลือกส่งออก" : "มี Error ส่งออกไม่ได้", "aria-label": `เลือก VN ${r.vn}`, onclick: (e) => e.stopPropagation(),
+    onchange: (e) => { e.target.checked ? state.selected.add(r.vn) : state.selected.delete(r.vn); render(); } });
   return el("tr", { class: state.current === r.vn ? "current" : "", onclick: () => openScreen(r) },
+    el("td", { class: "check" }, box),
     el("td", {}, el("span", { class: `badge ${cls}` }, label), r.exported ? el("span", { class: "sub" }, "ส่งออกแล้ว") : null),
     el("td", { class: "mono" }, toDmy(r.date)), el("td", { class: "mono" }, r.vn), el("td", { class: "mono" }, r.hn),
     el("td", { class: "name-cell", title: r.ptname }, r.ptname), el("td", { class: "name-cell", title: r.pttype }, r.pttype),
@@ -111,9 +125,17 @@ function render() {
   $("empty").hidden = list.length > 0;
   if (!list.length && state.loaded[state.view]) $("empty").replaceChildren(...emptyState(rows.length ? "ไม่มีรายการตามตัวกรองนี้" : "ไม่พบรายการในช่วงวันที่นี้"));
   $("result-count").textContent = state.loaded[state.view] ? `แสดง ${count.format(list.length)} จาก ${count.format(rows.length)} รายการ` : "";
-  const ready = state.screen.filter((r) => !r.errors.length).length;
-  $("excel").textContent = state.view === "screen" ? `ส่งออก NTIP Plus${state.loaded.screen ? ` (${count.format(ready)})` : ""}` : "ส่งออก Excel ตรวจ Lab";
-  $("excel").disabled = !state.loaded[state.view] || (state.view === "screen" && !ready);
+  const picked = state.screen.filter((r) => state.selected.has(r.vn) && pickable(r)).length;
+  $("excel").textContent = state.view === "screen" ? `ส่งออก NTIP Plus (เลือก ${count.format(picked)})` : "ส่งออก Excel ตรวจ Lab";
+  $("excel").disabled = !state.loaded[state.view] || (state.view === "screen" && !picked);
+  const all = $("select-all");
+  if (all) {
+    const shown = list.filter(pickable);
+    const on = shown.filter((r) => state.selected.has(r.vn)).length;
+    all.checked = shown.length > 0 && on === shown.length;
+    all.indeterminate = on > 0 && on < shown.length;
+    all.disabled = !shown.length;
+  }
   for (const v of ["screen", "labs"]) {
     const badge = $(`badge-${v}`);
     badge.hidden = !state.loaded[v];
@@ -203,6 +225,7 @@ async function load(quiet = false) {
     if (!state.opts) state.opts = await api("/api/ntip/options");
     if (!quiet || JSON.stringify(body) !== JSON.stringify(state.period)) {
       state.loaded = { screen: false, labs: false };
+      state.selected.clear();
       if (!quiet) state.filter = "all";
     }
     state.period = body;
@@ -217,17 +240,16 @@ async function load(quiet = false) {
 async function exportFile() {
   const button = $("excel");
   const screen = state.view === "screen";
+  const picked = state.screen.filter((r) => state.selected.has(r.vn) && pickable(r));
   if (screen) {
-    const bad = state.screen.filter((r) => r.errors.length).length;
-    const again = state.screen.filter((r) => !r.errors.length && r.exported).length;
-    if ((bad || again) && !(await confirmDialog("ส่งออกไฟล์ NTIP Plus", [
-      el("p", {}, `ส่งออก ${count.format(state.screen.length - bad)} รายการที่ไม่มี Error`),
-      bad ? el("p", {}, `ข้าม ${count.format(bad)} รายการที่มี Error`) : null,
-      again ? el("p", {}, `มี ${count.format(again)} รายการที่เคยส่งออกแล้ว จะอยู่ในไฟล์ด้วย`) : null].filter(Boolean), "ส่งออก"))) return;
+    const again = picked.filter((r) => r.exported).length;
+    if (again && !(await confirmDialog("ส่งออกไฟล์ NTIP Plus", [
+      el("p", {}, `ส่งออก ${count.format(picked.length)} รายการที่เลือก`),
+      el("p", {}, `มี ${count.format(again)} รายการที่เคยส่งออกแล้ว จะอยู่ในไฟล์ด้วย`)], "ส่งออก"))) return;
   }
   button.disabled = true;
   try {
-    const response = await fetch(screen ? "/api/ntip/export" : "/api/ntip/labs/excel", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(state.period) });
+    const response = await fetch(screen ? "/api/ntip/export" : "/api/ntip/labs/excel", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(screen ? { ...state.period, vns: picked.map((r) => r.vn) } : state.period) });
     if (!response.ok) {
       const data = await response.json().catch(() => ({}));
       if (response.status === 401 && data.login) { window.location.assign("/login?error=expired"); return; }
@@ -238,7 +260,7 @@ async function exportFile() {
     const link = el("a", { href: URL.createObjectURL(blob), download: name });
     document.body.append(link); link.click(); link.remove();
     setTimeout(() => URL.revokeObjectURL(link.href), 1000);
-    if (screen) { notice(`ส่งออก ${name} แล้ว`, "ok"); await load(true); }
+    if (screen) { notice(`ส่งออก ${name} แล้ว (${count.format(picked.length)} รายการ)`, "ok"); state.selected.clear(); await load(true); }
   } catch (err) { notice(err.message); } finally { render(); }
 }
 

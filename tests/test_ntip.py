@@ -157,3 +157,5 @@ def test_store_and_routes(tmp_path):
     assert client.post("/api/ntip/choice", json={"vn": "v1", "name": "risk", "value": "BAD"}).status_code == 400
     assert client.post("/api/ntip/choice", json={"vn": "v1", "name": "risk", "reset": True}).json()["ok"]
     assert client.post("/api/ntip/lab-choice", json={"key": "1:279", "technique": "gold"}).status_code == 400
+    nothing = client.post("/api/ntip/export", json={"start": "2025-10-01", "end": "2025-10-31", "vns": []})
+    assert nothing.status_code == 400 and nothing.json()["detail"] == "ยังไม่ได้เลือกรายการ"

@@ -168,7 +168,9 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
     def export(request: Request, body: dict = Body(...)):
         start, end = period(body)
         wanted = {text(v) for v in body.get("vns") or []}
-        rows = [s for s in screening(start, end) if not wanted or s.vn in wanted]
+        if not wanted:
+            raise HTTPException(400, "ยังไม่ได้เลือกรายการ")
+        rows = [s for s in screening(start, end) if s.vn in wanted]
         ready = [s for s in rows if not s.errors]
         if not ready:
             raise HTTPException(400, "ไม่มีรายการที่พร้อมส่งออก (แก้รายการที่มี Error ก่อน)")
