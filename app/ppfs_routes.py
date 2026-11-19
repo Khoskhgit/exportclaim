@@ -634,7 +634,7 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
                 claimed.setdefault(vn, set())
         else:
             for r in picked:
-                claimed.setdefault(r.vn, set()).add(r.code)
+                claimed.setdefault(r.vn, set()).update(c for c, _ in ppfs_instrument.codes_of(r))
         vns = list(claimed)
         # Leave out every other item of these visits, so CHT/CHA add up to the claimed PP items only.
         # Only the claimed fees and what the user ticked in the cost tab go into the ZIP (CHT/CHA add up to those).
@@ -681,9 +681,9 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
             if missing:
                 raise HTTPException(400, f"ไม่พบผล HbA1c ของ VN {missing[0]} แล้ว ให้ค้นหาใหม่")
         found = {(text(r["SEQ"]), text(r["CODE"])) for r in data["ADP"]}
-        lost = [r.key for r in picked if service.key != "dmrem" and (r.vn, r.code) not in found]
+        lost = [(r.vn, c) for r in picked if service.key != "dmrem" for c, _ in ppfs_instrument.codes_of(r) if (r.vn, c) not in found]
         if lost:
-            raise HTTPException(400, f"สร้างแฟ้ม ADP ของ {lost[0].replace('|', ' รหัส ')} ไม่ได้ ตรวจรายการค่าบริการใน HOSxP")
+            raise HTTPException(400, f"สร้างแฟ้ม ADP ของ {lost[0][0]} รหัส {lost[0][1]} ไม่ได้ ตรวจรายการค่าบริการใน HOSxP")
         return service, picked, vns, data
 
     @app.post("/api/ppfs/export")
@@ -693,7 +693,7 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
             return built
         service, picked, vns, data = built
         result = nhso18.build_zip(data, settings.hcode, settings.export_dir)
-        items = [{"vn": r.vn, "code": r.code, "amount": f"{r.amount:.2f}"} for r in picked]
+        items = [{"vn": r.vn, "code": c, "amount": f"{a:.2f}"} for r in picked for c, a in ppfs_instrument.codes_of(r)]
         export_id = store.record(service.key, result.zip_path, items, auth.user_label(request))
         log.info("ppfs export id=%s service=%s items=%s", export_id, service.key, len(items))
         return {"id": export_id, "file": result.zip_path.name, "count": len(items), "visits": len(vns),
@@ -752,7 +752,7 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
         export_id = None
         if reply.ok and mode == "send" and zone == "prod":  # only a real send makes the rows "ส่งแล้ว"
             zip_result = nhso18.build_zip(data, settings.hcode, settings.export_dir)
-            items = [{"vn": r.vn, "code": r.code, "amount": f"{r.amount:.2f}"} for r in picked]
+            items = [{"vn": r.vn, "code": c, "amount": f"{a:.2f}"} for r in picked for c, a in ppfs_instrument.codes_of(r)]
             export_id = store.record(service.key, zip_result.zip_path, items, f"{user} (FDH)")
         log.info("ppfs fdh %s zone=%s service=%s items=%s ok=%s http=%s fdh_user=%s", mode, zone, service.key, len(picked),
                  reply.ok, reply.http_status, fdh_user)

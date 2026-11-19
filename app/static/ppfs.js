@@ -30,9 +30,10 @@ const COLUMNS = {
   ],
   instrument: [
     ["AuthenCode", "authen", false, (r) => r.extra.authen || el("span", { class: "badge b-warn" }, "ไม่มี")],
-    ["ADP (nhso_adp_code)", "", false, (r) => (!r.extra.adp_found ? el("span", { class: "badge b-error" }, "ไม่พบ")
-      : r.extra.adp_type !== "2" ? el("span", { class: "badge b-error" }, `ประเภท ${r.extra.adp_type}`)
-      : el("span", {}, el("span", { class: "badge b-ok" }, "Y"), r.extra.adp_ucs ? el("span", { class: "sub" }, `UCS ${money(r.extra.adp_ucs)}`) : null))],
+    ["ADP (nhso_adp_code)", "", false, (r) => el("span", { class: "parts" }, ...parts(r).map((p) => el("span", { class: "part" },
+      !p.adp_found ? el("span", { class: "badge b-error" }, "ไม่พบ")
+      : p.adp_type !== "2" ? el("span", { class: "badge b-error" }, `ประเภท ${p.adp_type}`)
+      : el("span", { class: "badge b-ok" }, "Y"), p.adp_ucs ? ` UCS ${money(p.adp_ucs)}` : "")))],
     ["Project code", "", false, (r) => projectInput(r)],
     ["เว็บ / เงินพึงได้", "", false, (r) => (r.extra.web ? el("span", {}, el("span", { class: "badge b-sent" }, "Y"),
       el("span", { class: "sub" }, [r.extra.income ? `${money(r.extra.income)} บาท` : "", r.extra.web_reg ? `บันทึก ${toDmy(r.extra.web_reg)}` : ""].filter(Boolean).join(" · "))) : dash())],
@@ -127,11 +128,22 @@ const ITEM_CHARS = 15;
 // Thai vowel and tone marks join the letter before them, so they do not count as characters.
 const SEGMENTER = typeof Intl !== "undefined" && Intl.Segmenter ? new Intl.Segmenter("th", { granularity: "grapheme" }) : null;
 const graphemes = (s) => (SEGMENTER ? [...SEGMENTER.segment(s)].map((g) => g.segment) : [...s]);
-function itemLabel(r) {
-  const name = (r.code_name || r.item_name || "").replace(/\s+/g, " ").trim();
+const shortName = (name) => {
   const chars = graphemes(name);
-  const short = chars.length > ITEM_CHARS ? `${chars.slice(0, ITEM_CHARS).join("")}…` : name;
-  return el("span", { title: [r.code, name].filter(Boolean).join(" ") }, el("strong", { class: "mono" }, r.code), short ? ` ${short}` : "",
+  return chars.length > ITEM_CHARS ? `${chars.slice(0, ITEM_CHARS).join("")}…` : name;
+};
+// An Instrument row is one visit with each ADP code in extra.parts; other services have one code per row.
+const parts = (r) => (r.extra && r.extra.parts) || [{ code: r.code, name: r.code_name || r.item_name, ...r.extra }];
+const rowCodes = (r) => parts(r).map((p) => p.code);
+function itemLabel(r) {
+  if (r.extra && r.extra.parts && r.extra.parts.length > 1) {
+    return el("span", { class: "parts" }, ...r.extra.parts.map((p) => {
+      const name = (p.name || "").replace(/\s+/g, " ").trim();
+      return el("span", { class: "part", title: `${p.code} ${name} · ${p.qty} ชิ้น ${money(p.amount)} บาท` }, el("strong", { class: "mono" }, p.code), name ? ` ${shortName(name)}` : "");
+    }));
+  }
+  const name = (r.code_name || r.item_name || "").replace(/\s+/g, " ").trim();
+  return el("span", { title: [r.code, name].filter(Boolean).join(" ") }, el("strong", { class: "mono" }, r.code), name ? ` ${shortName(name)}` : "",
     r.window_label ? el("span", { class: "sub" }, `ช่วงวันที่ ${r.window_label}`) : null);
 }
 
@@ -259,12 +271,12 @@ async function openDrawer(r) {
   state.current = r.key; render();
   $("drawer").hidden = false; $("drawer-backdrop").hidden = false;
   $("drawer-title").textContent = r.ptname || r.vn;
-  $("drawer-sub").textContent = `VN ${r.vn} · HN ${r.hn} · ${toDmy(r.date)}${r.time ? ` ${r.time.slice(0, 5)}` : ""} · ${r.code} ${r.code_name}`;
+  $("drawer-sub").textContent = `VN ${r.vn} · HN ${r.hn} · ${toDmy(r.date)}${r.time ? ` ${r.time.slice(0, 5)}` : ""} · ${rowCodes(r).join(", ")} ${rowCodes(r).length > 1 ? "" : r.code_name}`;
   const body = $("drawer-body");
   body.replaceChildren(el("p", { class: "muted" }, "กำลังโหลด…"));
   try {
     const kind = service();
-    const data = await api("/api/ppfs/detail", { vn: r.vn, service: kind, codes: state.rows.filter((x) => x.vn === r.vn).map((x) => x.code) });
+    const data = await api("/api/ppfs/detail", { vn: r.vn, service: kind, codes: state.rows.filter((x) => x.vn === r.vn).flatMap(rowCodes) });
     if (state.current !== r.key) return;
     const b = data.birth;
     const own = kind === "cervix" ? [
@@ -276,9 +288,10 @@ async function openDrawer(r) {
     ] : kind === "instrument" ? [
       ["AuthenCode", r.extra.authen || "ไม่มี"],
       ["Project code", r.extra.project ? `${r.extra.project} (เลือกในแถว)` : "ตาม visit ใน HOSxP"],
-      ["nhso_adp_code", r.extra.adp_found ? `${r.code} ประเภท ${r.extra.adp_type}${r.extra.adp_ucs ? ` · UCS ${money(r.extra.adp_ucs)} บาท` : ""}${r.extra.adp_name ? ` · ${r.extra.adp_name}` : ""}` : "ไม่พบรหัสนี้"],
-      ["เว็บบันทึกอุปกรณ์", r.extra.web ? `บันทึกแล้ว${r.extra.web_reg ? ` ${toDmy(r.extra.web_reg)}` : ""}${r.extra.web_status ? ` · ${r.extra.web_status}` : ""}` : "ยังไม่พบ"],
-      ["เงินพึงได้ (เว็บ)", r.extra.income ? `${money(r.extra.income)} บาท` : "—"],
+      ...parts(r).flatMap((p) => [
+        [`nhso_adp_code ${p.code}`, p.adp_found ? `ประเภท ${p.adp_type}${p.adp_ucs ? ` · UCS ${money(p.adp_ucs)} บาท` : ""}${p.adp_name ? ` · ${p.adp_name}` : ""}${p.amount ? ` · HOSxP ${p.qty} ชิ้น ${money(p.amount)} บาท` : ""}` : "ไม่พบรหัสนี้"],
+        [`เว็บบันทึกอุปกรณ์ ${p.code}`, p.web ? `บันทึกแล้ว${p.web_reg ? ` ${toDmy(p.web_reg)}` : ""}${p.web_status ? ` · ${p.web_status}` : ""}${p.income ? ` · เงินพึงได้ ${money(p.income)} บาท` : ""}` : "ยังไม่พบ"],
+      ]),
       ["REP e-Claim", r.extra.eclaim ? `${r.extra.eclaim}${r.extra.eclaim_paid ? ` · ชดเชย ${money(r.extra.eclaim_paid)} บาท` : ""}` : "ไม่มี"],
     ] : kind === "dmrem" ? [
       ["อายุ", r.extra.age === null || r.extra.age === undefined ? "—" : `${r.extra.age} ปี`], ["สิทธิหลัก", r.extra.maininscl],
@@ -448,13 +461,13 @@ async function openDrawer(r) {
     } else if (kind === "instrument") {
       post.push(el("h3", {}, "อุปกรณ์ที่ได้รับย้อนหลัง 2 ปี (HOSxP)"));
       post.push(data.history.length ? table(["วันที่", "VN", "ADP", "รายการ", { label: "จำนวน", num: true }, { label: "ยอด", num: true }, "ส่งออก"],
-        data.history.map((h) => el("tr", { class: h.vn === r.vn && h.code === r.code ? "current" : "" }, el("td", { class: "mono" }, toDmy(h.date)),
+        data.history.map((h) => el("tr", { class: h.vn === r.vn && rowCodes(r).includes(h.code) ? "current" : "" }, el("td", { class: "mono" }, toDmy(h.date)),
           el("td", { class: "mono" }, h.vn), el("td", { class: "mono" }, h.code), el("td", {}, h.name),
           el("td", { class: "num" }, h.qty), el("td", { class: "num" }, money(h.amount)), el("td", {}, h.sent ? thaiDateTime(h.sent) : "—"))))
         : el("p", { class: "muted" }, "ไม่มี"));
       post.push(el("h3", {}, "เว็บบันทึกอุปกรณ์คนพิการ (CSV ที่นำเข้า) วันนี้"));
       post.push(data.web.length ? table(["Code", "รายการ", { label: "จำนวน", num: true }, { label: "ขอเบิก", num: true }, { label: "เงินพึงได้", num: true }, "บันทึก", "สถานะ"],
-        data.web.map((w) => el("tr", { class: w.code === r.code ? "current" : "" }, el("td", { class: "mono" }, w.code), el("td", {}, w.name, w.serial_no ? el("span", { class: "sub" }, `S/N ${w.serial_no}`) : null),
+        data.web.map((w) => el("tr", { class: rowCodes(r).includes(w.code) ? "current" : "" }, el("td", { class: "mono" }, w.code), el("td", {}, w.name, w.serial_no ? el("span", { class: "sub" }, `S/N ${w.serial_no}`) : null),
           el("td", { class: "num" }, w.amount), el("td", { class: "num" }, money(w.request_price)), el("td", { class: "num" }, money(w.income)),
           el("td", { class: "mono" }, w.reg_date ? toDmy(w.reg_date) : "—"), el("td", {}, w.status || "—"))))
         : el("p", { class: "muted" }, "ไม่พบในไฟล์ที่นำเข้า"));

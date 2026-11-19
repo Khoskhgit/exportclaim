@@ -184,3 +184,19 @@ def test_a_code_under_several_types_uses_its_type_2_row():
     for order in (rows, rows[::-1]):
         found = adp_codes(lambda sql: order, ["3001", "4511"])
         assert (found["3001"]["type_id"], found["4511"]["type_id"]) == (2, 2)
+
+
+def test_one_row_per_visit_with_each_code_in_parts():
+    rows = {**ADP, "3001": adp("3001", ucs=130), "4511": adp("4511", ucs=2850)}
+    (row,) = check(data([item(code="4511", amount=3000), item(code="3001", amount=100)], adp_rows=rows))
+    assert row.key == "v1|3001+4511" and row.amount == Decimal("3100.00") and row.count == 2
+    assert [(p["code"], p["amount"], p["adp_ucs"], p["warnings"]) for p in row.extra["parts"]] == [
+        ("3001", "100.00", "130.00", []), ("4511", "3000.00", "2850.00", ["OVER_UCS"])]
+    assert [w["message"].split(":")[0] for w in row.warnings] == ["4511"]
+    from app.ppfs_instrument import codes_of
+    assert codes_of(row) == [("3001", Decimal("100.00")), ("4511", Decimal("3000.00"))]
+
+
+def test_visit_warnings_are_said_once():
+    (row,) = check(data([item(code="8902", authen=""), item(code="8705", amount=250, authen="")]))
+    assert codes(row)[1] == ["NO_AUTHEN"]

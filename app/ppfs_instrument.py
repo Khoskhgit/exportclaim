@@ -12,7 +12,8 @@ Ported from the old program's "รายชื่อสิทธิผู้พ�
    web        the device recorded in the NHSO device web: rcmdb.equipment_service, or the Export-Equipment*.CSV
               imported on the PPFS page ("ตรวจสอบ"); it may be claimed twice, so it is a warning, and the CSV's
               เงินพึงได้ (Income) is compared with what HOSxP bills
-One row per visit and ADP code. HOSxP is only read.
+One row per visit (the user's choice, 2026-11-19): each ADP code is checked on its own and kept in
+extra["parts"]; the row's key is VN|code+code. HOSxP is only read.
 """
 from __future__ import annotations
 
@@ -323,7 +324,52 @@ def check(data: dict, sent: dict[tuple[str, str], str] | None = None) -> list[Ro
         if row.extra["eclaim"]:
             row.add(WARN, "ECLAIM", f"visit นี้มี REP e-Claim แล้ว ({row.extra['eclaim']})")
         row.sent = sent.get((vn, code), "")
-    return sorted(rows.values(), key=lambda x: (x.date, x.time, x.vn, x.code))
+    by_vn: dict[str, list[Row]] = {}
+    for part in sorted(rows.values(), key=lambda x: x.code):
+        by_vn.setdefault(part.vn, []).append(part)
+    return sorted((merge(parts) for parts in by_vn.values()), key=lambda x: (x.date, x.time, x.vn))
+
+
+VISIT_LEVEL = {"NO_AUTHEN", "ECLAIM"}  # said once per visit, not per code
+PART_KEYS = ("adp_found", "adp_name", "adp_type", "adp_ucs", "web", "income", "web_reg", "web_status")
+
+
+def merge(parts: list[Row]) -> Row:
+    """The rows of one visit (one per ADP code) as one row; each code's own findings stay in extra["parts"]."""
+    first = parts[0]
+    if len(parts) == 1:
+        first.extra["parts"] = [_part(first)]
+        return first
+    row = Row(key=f"{first.vn}|{'+'.join(p.code for p in parts)}", vn=first.vn, code=first.code,
+              item_name=", ".join(p.item_name for p in parts))
+    row.hn, row.date, row.time, row.ptname, row.cid, row.pttype = first.hn, first.date, first.time, first.ptname, first.cid, first.pttype
+    row.qty = sum((p.qty for p in parts), Decimal(0))
+    row.amount = sum((p.amount for p in parts), Decimal(0))
+    row.count = int(row.qty) if all(p.count is not None for p in parts) else None
+    row.self_paid = any(p.self_paid for p in parts)
+    row.sent = max(p.sent for p in parts)
+    row.extra = {**first.extra, "web": any(p.extra["web"] for p in parts), "parts": [_part(p) for p in parts]}
+    seen = set()
+    for p in parts:
+        for level, found in ((ERROR, p.errors), (WARN, p.warnings)):
+            for f in found:
+                message = f["message"] if f["code"] in VISIT_LEVEL or p.code in f["message"] else f"{p.code}: {f['message']}"
+                if (f["code"], message) not in seen:
+                    seen.add((f["code"], message))
+                    row.add(level, f["code"], message)
+    return row
+
+
+def _part(p: Row) -> dict:
+    return {"code": p.code, "name": p.item_name, "qty": f"{p.qty:g}", "amount": f"{p.amount:.2f}", "sent": p.sent,
+            "errors": [e["code"] for e in p.errors], "warnings": [w["code"] for w in p.warnings],
+            **{k: p.extra.get(k) for k in PART_KEYS}}
+
+
+def codes_of(row: Row) -> list[tuple[str, Decimal]]:
+    """(ADP code, amount) of each code a row claims: several for an Instrument visit, else the row's own."""
+    parts = row.extra.get("parts") if isinstance(row.extra, dict) else None
+    return [(p["code"], Decimal(p["amount"])) for p in parts] if parts else [(row.code, row.amount)]
 
 
 def detail(q: Select, vn: str) -> dict:
