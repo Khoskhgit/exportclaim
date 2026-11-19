@@ -409,6 +409,7 @@ tr.flag-row td{background:var(--warn-bg)!important}
 .service-rules:empty{display:none}
 .service-rules li+li{margin-top:2px}
 .sent-tag{margin-left:4px}
+.ppfs-table .problems{min-width:360px;max-width:480px}
 tr.picked td{background:#f1f8f5}
 .picked-panel{padding:14px 16px}
 .picked-head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
