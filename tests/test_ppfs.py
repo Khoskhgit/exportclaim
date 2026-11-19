@@ -74,6 +74,18 @@ def test_sent_and_the_zip_keeps_only_the_claimed_items():
     assert out["DRU"] == [{"SEQ": "v1"}]  # drugs left in the build were ticked by the user
 
 
+def test_the_zip_keeps_the_refer_in_aer_but_not_the_accident():
+    refer = {"SEQ": "v1", "REFER_NO": "Out:228/70", "REFMAINO": "10699", "OREFTYPE": "1100", "UCAE": "E", "AUTHAE": "X1",
+             "AEDATE": "20261021", "AETYPE": "V", "EMTYPE": "1"}
+    accident = {"SEQ": "v2", "UCAE": "A", "AUTHAE": "X2", "AEDATE": "20261021"}
+    out = ppfs.only_claimed({"ADP": [], "AER": [refer, accident]}, {"v1": set()})
+    (row,) = out["AER"]
+    assert (row["REFMAINO"], row["REFER_NO"], row["OREFTYPE"]) == ("10699", "Out:228/70", "1100")
+    assert (row["UCAE"], row["AUTHAE"], row["AEDATE"], row["AETYPE"], row["EMTYPE"]) == ("", "", "", "", "")
+    assert ppfs.only_claimed({"ADP": [], "AER": [{**refer, "UCAE": "R"}]}, {})["AER"][0]["UCAE"] == "R"
+    assert ppfs.only_claimed({"ADP": [], "AER": [accident]}, {}, keep_lab=True)["AER"] == [accident]
+
+
 def test_fdh_needs_an_account_and_a_known_zone(tmp_path):
     from dataclasses import replace
 

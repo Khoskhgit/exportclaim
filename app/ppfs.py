@@ -441,11 +441,31 @@ def postnatal(data: dict, sent: dict[tuple[str, str], str] | None = None) -> lis
     return sorted(rows.values(), key=lambda x: (x.date, x.time, x.vn, x.code))
 
 
+AER_REFER = ("REFER_NO", "REFMAINI", "IREFTYPE", "REFMAINO", "OREFTYPE")
+REFER_UCAE = {"R", "O", "P", "I"}  # OP refer across / within the province
+
+
+def refer_only(rows: list[dict]) -> list[dict]:
+    """AER carries both the accident/emergency claim and the refer (REFER_NO, REFMAINI/O, I/OREFTYPE). A PP claim
+    keeps the refer, as the 18 แฟ้ม page sends it (the user's report, 2026-11-19), and drops the rest: rows without
+    refer data go, and the accident fields of the others are cleared."""
+    out = []
+    for r in rows:
+        if not any(text(r.get(f)) for f in AER_REFER):
+            continue
+        r = {**r, "AUTHAE": "", "AEDATE": "", "AETIME": "", "AETYPE": "", "EMTYPE": "", "AESTATUS": "", "DALERT": "", "TALERT": ""}
+        if text(r.get("UCAE")) not in REFER_UCAE:
+            r["UCAE"] = ""
+        out.append(r)
+    return out
+
+
 def only_claimed(data: dict[str, list[dict]], claimed: dict[str, set[str]], keep_lab: bool = False) -> dict[str, list[dict]]:
-    """Keep the 18 files to the PP items being sent: ADP rows of those codes, no lab or accident rows. Drugs the user
-    ticked stay in DRU (the others were left out of the build already)."""
+    """Keep the 18 files to the PP items being sent: ADP rows of those codes, no lab rows, and of AER only the refer
+    (6) keeps LAB and the whole AER). Drugs the user ticked stay in DRU (the others were left out of the build already)."""
     out = dict(data)
     out["ADP"] = [r for r in data.get("ADP", []) if text(r.get("CODE")) in claimed.get(text(r.get("SEQ")), set())]
-    for name in ("AER",) if keep_lab else ("LAB", "AER"):
-        out[name] = []
+    if not keep_lab:
+        out["LAB"] = []
+        out["AER"] = refer_only(data.get("AER", []))
     return out
