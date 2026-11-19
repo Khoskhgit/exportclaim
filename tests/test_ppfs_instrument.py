@@ -4,7 +4,7 @@ from decimal import Decimal
 from fastapi.testclient import TestClient
 
 from app.main import create_app
-from app.ppfs_instrument import CsvError, WebStore, check, is_instrument, parse_csv
+from app.ppfs_instrument import CsvError, WebStore, adp_codes, check, instrument_icodes, parse_csv
 from app.store import Store
 from factories import settings
 from test_api import FakeHosxp
@@ -48,9 +48,12 @@ def web_row(code="8902", income="4000.00"):
             "request_price": "4400.00", "income": income, "reg_date": "2026-03-06", "status": "อนุมัติ", "serial_no": "SN1"}
 
 
-def test_codes_follow_the_old_pattern_without_the_pipe():
-    assert all(is_instrument(c) for c in ("2505", "6006", "8101", "8705", "8902"))
-    assert not any(is_instrument(c) for c in ("8|01", "8301", "16006", "30015", ""))
+def test_every_adp_type_2_item_is_an_instrument():
+    seen = []
+    q = lambda sql: seen.append(sql) or [{"icode": "3003848"}]
+    assert instrument_icodes(q, ["3003848", "1500087", ""]) == {"3003848"}
+    assert "nhso_adp_type_id=2" in seen[0] and "REGEXP" not in seen[0]
+    assert instrument_icodes(q, []) == set() and len(seen) == 1
 
 
 def test_a_registered_device_in_the_list():
@@ -174,3 +177,10 @@ def test_import_route_checks_the_hospital(tmp_path):
     assert other.status_code == 400
     assert client.get("/api/ppfs/instrument/web").json()["n"] == 1
     assert any(s["key"] == "instrument" for s in client.get("/api/ppfs/services").json())
+
+
+def test_a_code_under_several_types_uses_its_type_2_row():
+    rows = [adp("3001", type_id=2, ucs=130), adp("3001", type_id=19, ucs=130), adp("4511", type_id=2, ucs=2850)]
+    for order in (rows, rows[::-1]):
+        found = adp_codes(lambda sql: order, ["3001", "4511"])
+        assert (found["3001"]["type_id"], found["4511"]["type_id"]) == (2, 2)

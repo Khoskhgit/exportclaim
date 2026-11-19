@@ -277,10 +277,11 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
         by_icode |= {i: "ironchild" for i in ppfs_ironchild.all_icodes(ppfs_ironchild.bands(settings))}
         hba1c = {text(r["icode"]) for r in q(f"SELECT icode FROM lab_items WHERE lab_items_code={ppfs_dmrem.HBA1C_LAB}")}
         cervix_icodes = set(ppfs_cervix.test_icodes(q))
+        instrument = ppfs_instrument.instrument_icodes(q, [i for i, _ in items])
         out: dict[str, list[str]] = {}
         for icode, code in items:
             found = [k for k, s in ppfs.SERVICES.items() if code and code in s.codes and k not in ("anemiachild", "ironchild", "dmrem", "cervix")]
-            if ppfs_instrument.is_instrument(code):
+            if icode in instrument:
                 found.append("instrument")
             if icode in cervix_icodes:
                 found.append("cervix")

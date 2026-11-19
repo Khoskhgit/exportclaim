@@ -4,8 +4,8 @@ Ported from the old program's "รายชื่อสิทธิผู้พ�
    visits     every OPD visit under a UC right (pttype.hipdata_code UCS/WEL); at this hospital disabled patients
               mostly come under the normal UC rights, so the disabled right and the disability registry
               (person_deformed) are neither checked nor shown (the user removed them, 2026-11-19)
-   devices    opitemrece + s_drugitems with nhso_adp_type_id=2 and an ADP code starting 25, 81, 82, 85, 87, 88, 89 or
-              equal to 6006 (the old regexp '^25|6006|^8[1|2|5|7|8|9]', without the '|' it also matched)
+   devices    every opitemrece + s_drugitems item with nhso_adp_type_id=2, whatever its code (the user dropped the old
+              code list 25/81/82/85/87/88/89/6006 on 2026-11-19, so e.g. 3001/3002/4511 show too)
    ADP code   checked against HOSxP's nhso_adp_code (the user's choice, 2026-11-18, instead of the old program's fixed
               list): a code missing there, not of type 2, closed or out of its dates is an error; a unit price above
               the table's UCS price is a warning
@@ -31,14 +31,17 @@ from .store import Store
 from .validate import text
 
 KEY = "instrument"
-CODE_PATTERN = "^(25|81|82|85|87|88|89)|^6006$"
 INSTRUMENT_TYPE = 2
 PROJECT_PATTERN = r"[A-Za-z0-9_\-]{1,15}"
-ITEM_FILTER = f"d.nhso_adp_type_id=2 AND d.nhso_adp_code REGEXP {lit(CODE_PATTERN)}"
+ITEM_FILTER = f"d.nhso_adp_type_id={INSTRUMENT_TYPE} AND IFNULL(d.nhso_adp_code,'')<>''"
 
 
-def is_instrument(code: str) -> bool:
-    return bool(re.search(CODE_PATTERN, code or ""))
+def instrument_icodes(q: Select, icodes: Iterable[str]) -> set[str]:
+    """The icodes whose s_drugitems ADP type is 2 (Instrument)."""
+    icodes = sorted({i for i in icodes if i})
+    if not icodes:
+        return set()
+    return {text(r["icode"]) for r in q(f"SELECT d.icode FROM s_drugitems d WHERE d.icode IN ({lit_list(icodes)}) AND {ITEM_FILTER}")}
 
 
 # ------------------------------------------------------------------ the NHSO device web export (CSV)
@@ -215,13 +218,19 @@ def fetch(q: Select, start: date, end: date, rcm: str, web: list[dict]) -> dict:
 
 
 def adp_codes(q: Select, codes: Iterable[str]) -> dict[str, dict]:
-    """The codes' rows in HOSxP's nhso_adp_code (the ADP master)."""
+    """The codes' rows in HOSxP's nhso_adp_code (the ADP master). A code can be there under several types (3001 is
+    both an Instrument and a procedure), so the type 2 row wins."""
     codes = sorted({c for c in codes if c})
     if not codes:
         return {}
-    return {text(r["code"]): r for r in q(f"""
+    found: dict[str, dict] = {}
+    for r in q(f"""
         SELECT nhso_adp_code code, nhso_adp_type_id type_id, nhso_adp_code_name name, UCS ucs, StartDate start_date,
-          ExpireDate expire_date, active_status FROM nhso_adp_code WHERE nhso_adp_code IN ({lit_list(codes)})""")}
+          ExpireDate expire_date, active_status FROM nhso_adp_code WHERE nhso_adp_code IN ({lit_list(codes)})"""):
+        code = text(r["code"])
+        if code not in found or (text(r["type_id"]) == str(INSTRUMENT_TYPE) and text(found[code]["type_id"]) != str(INSTRUMENT_TYPE)):
+            found[code] = r
+    return found
 
 
 def adp_problems(row: Row, adp: dict | None, billed: bool) -> None:
