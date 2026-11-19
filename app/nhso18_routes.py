@@ -10,7 +10,7 @@ from fastapi import Body, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 
-from . import auth, eclaim_api, fdh, fdh_claims, nhso18, nhso18_service as svc
+from . import auth, eclaim_api, eclaim_codes, fdh, fdh_claims, nhso18, nhso18_service as svc
 from .config import Settings
 from .hosxp import clean_cc as hosxp_clean_cc
 from .store import Store
@@ -117,9 +117,14 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
         """The newest imported REP of a visit when it did not pass: its number and error codes (ติด C)."""
         if not result or not result.get("rep_stat") or result["rep_stat"] == "A" or result.get("stm_no"):
             return None
-        codes = [c.strip() for c in text(result.get("rep_codes")).split(",") if c.strip()]
-        return {"rep_no": text(result.get("rep_no")), "stat": result["rep_stat"],
-                "codes": [{"code": c, "name": names.get(c, "")} for c in codes]}
+        codes = eclaim_codes.split(text(result.get("rep_codes")))
+        eclaim = eclaim_codes.is_eclaim(result.get("rep_account"))
+        out = []
+        for c in codes:
+            found = eclaim_codes.explain(c) if eclaim else {"found": False}
+            out.append({"code": c, "name": found["detail"] if found["found"] else names.get(c, ""),
+                        "fix": found["fix"] if found["found"] else "", "found": found["found"]})
+        return {"rep_no": text(result.get("rep_no")), "stat": result["rep_stat"], "codes": out}
 
     @app.get("/nhso18", response_class=HTMLResponse)
     def page(request: Request):

@@ -302,6 +302,13 @@ function problemText(list) {
   return el("span", { class: "problem-line", title: list.join("\n") }, first, list.length > 1 ? el("span", { class: "more" }, ` +${list.length - 1}`) : null);
 }
 
+// The e-Claim C code fix (แนวทางแก้ไข), one line per step as in the สปสช. document.
+function fixBlock(fix) {
+  if (!fix) return null;
+  return el("div", { class: "fix-block" }, el("span", { class: "fix-label" }, "แนวทางแก้ไข"),
+    ...fix.split("\n").map((line) => el("div", {}, line)));
+}
+
 function emptyState(text, icon = "○") {
   return [el("div", { class: "empty-icon", "aria-hidden": "true" }, icon), el("div", {}, text)];
 }

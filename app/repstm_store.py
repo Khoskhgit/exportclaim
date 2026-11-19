@@ -242,6 +242,7 @@ class RepStmStore:
                     mine["accepted"] = mine.get("accepted", False) or row["stat"] == "A"
                     mine.update(
                         rep_stat=row["stat"], rep_codes=row["codes"], rep_no=row["rep_no"], rep_at=row["issued_at"],
+                        rep_account=row["account"],
                         rep_file=f"{row['hcode']}_{row['account']}BIL_{row['rep_no']}")
                 for row in db.execute(
                     f"""SELECT b.invno, GROUP_CONCAT(b.stm_no) AS stm_no, SUM(CAST(b.total AS REAL)) AS paid

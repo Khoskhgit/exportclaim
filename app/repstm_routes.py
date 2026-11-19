@@ -9,7 +9,7 @@ from fastapi import Body, FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
-from . import auth, fdh_claims
+from . import auth, eclaim_codes, fdh_claims
 from .config import Settings
 from .repstm import RepStmError, parse_upload
 from .repstm_store import RepStmStore
@@ -89,7 +89,9 @@ def register(app: FastAPI, settings: Settings, local: Store, templates: Jinja2Te
         found = results.rep_detail(text(body.get("rep_no")))
         if not found:
             raise HTTPException(404, "ไม่พบ REP นี้")
-        return {**found, "code_names": results.code_names()}
+        codes = [b["codes"] for b in found["bills"]] + [d["codes"] for d in found["disps"]] + [
+            g["codes"] for d in found["disps"] for g in d["drugs"]]
+        return {**found, "code_names": results.code_names(), "c_codes": c_codes(codes) if eclaim_codes.is_eclaim(found.get("account")) else {}}
 
     @app.post("/api/repstm/stm")
     def stm_detail(body: dict = Body(...)):
@@ -103,6 +105,20 @@ def register(app: FastAPI, settings: Settings, local: Store, templates: Jinja2Te
         vn = text(body.get("vn"))
         if not vn:
             raise HTTPException(400, "ไม่ได้ระบุ VN")
-        return {**results.vn_history(vn), "code_names": results.code_names(), "fdh": claims.for_key(vn)}
+        history = results.vn_history(vn)
+        codes = [b["codes"] for b in history["reps"] if eclaim_codes.is_eclaim(b.get("account"))]
+        codes += [d["codes"] for d in history["disps"] if eclaim_codes.is_eclaim(d.get("account"))]
+        return {**history, "code_names": results.code_names(), "c_codes": c_codes(codes), "fdh": claims.for_key(vn)}
+
+    @app.get("/api/repstm/c-codes")
+    def c_code_lookup(q: str = "", limit: int = 100):
+        """The e-Claim C code lookup (สปสช.): search by code, detail or fix."""
+        rows = eclaim_codes.search(q, max(1, min(limit, 600)))
+        return {"rows": rows, "total": len(eclaim_codes.table()), "source": eclaim_codes.SOURCE}
 
     return results
+
+
+def c_codes(code_lists) -> dict[str, dict]:
+    """The e-Claim C code detail and fix for the codes of e-Claim REP lines (one comma list per line)."""
+    return eclaim_codes.describe(c for codes in code_lists for c in eclaim_codes.split(codes))

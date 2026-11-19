@@ -343,3 +343,21 @@ def test_aipn_rows_take_the_imported_result():
     failed = with_result(base(), {"rep_stat": "C", "rep_codes": "644,666", "rep_no": "10117"})
     assert (failed["status"], failed["rep_codes"], failed["already_sent"], failed["default_selected"]) == ("ติด C", "644,666", False, False)
     assert with_result(base(), {"rep_stat": "A"})["status"] == "ผ่าน (A)"
+
+
+def test_eclaim_rep_codes_come_with_the_nhso_detail_and_fix(client):
+    data = ofc_rep_xls([("691000025", 14, "07/10/2026 07:55:00", 0.0, "565", 7057.75, "691007075513")])
+    assert client.post("/api/repstm/import?name=eclaim_10866_OPCS_25691010_111902014.xls", content=data).status_code == 200
+    history = client.post("/api/repstm/vn", json={"vn": "691007075513"}).json()
+    assert history["c_codes"]["565"]["found"] and history["c_codes"]["565"]["fix"]
+    detail = client.post("/api/repstm/rep", json={"rep_no": "691000025"}).json()
+    assert set(detail["c_codes"]) == {"565"}
+    found = client.get("/api/repstm/c-codes", params={"q": "565"}).json()
+    assert found["rows"][0]["code"] == "565" and found["total"] == 578
+
+
+def test_aipn_codes_are_not_explained_by_the_eclaim_document(client):
+    rep_zip, _ = aipn_zips()
+    assert client.post("/api/repstm/import?name=11111_SIGNREP_10117.ZIP", content=rep_zip).status_code == 200
+    failed = client.post("/api/repstm/vn", json={"vn": "690001434"}).json()
+    assert failed["c_codes"] == {}

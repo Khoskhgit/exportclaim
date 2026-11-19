@@ -45,7 +45,8 @@ function renderRows() {
     const box = el("input", { type: "checkbox", checked: state.selected.has(r.key), disabled: !r.selectable,
       title: r.selectable ? "เลือกส่ง" : "รายการนี้ส่งไม่ได้", "aria-label": `เลือก ${r.key}`, onclick: (e) => e.stopPropagation(),
       onchange: (e) => { pick(r, e.target.checked); renderRows(); renderTotals(); } });
-    const problems = [...(r.rep_fail ? [`ติด ${r.rep_fail.stat}: ${r.rep_fail.codes.map((c) => c.code).join(", ") || "ไม่มีรหัส"}`] : []),
+    const problems = [...(r.rep_fail ? (r.rep_fail.codes.length ? r.rep_fail.codes.map((c) => `ติด ${r.rep_fail.stat} ${c.code}${c.name ? `: ${c.name}` : ""}`)
+      : [`ติด ${r.rep_fail.stat}: ไม่มีรหัส`]) : []),
       ...[...r.errors, ...r.warns].map((i) => i.message)];
     return el("tr", { class: state.current === r.key ? "current" : "", onclick: () => openDrawer(r) },
       el("td", { class: "check" }, box), el("td", {}, resultBadge(r)),
@@ -82,8 +83,10 @@ function ktbTag(r) {
 function repFailBox(f) {
   return el("div", { class: "issues-box" }, el("h3", {}, `REP ไม่ผ่าน (${f.stat}) · REP ${f.rep_no}`),
     f.codes.length ? el("ul", { class: "issues" }, ...f.codes.map((c) => el("li", { class: "issue error" },
-      el("div", { class: "issue-title" }, el("span", { class: "badge b-error" }, c.code), " ", c.name || "ดูความหมายของรหัสในโปรแกรม e-Claim / FDH"))))
-      : el("p", { class: "muted" }, "REP ไม่ได้ระบุรหัส"));
+      el("div", { class: "issue-title" }, el("span", { class: "badge b-error" }, c.code), " ", c.name || "ไม่พบรหัสนี้ในคู่มือ C Error e-Claim"),
+      c.fix ? fixBlock(c.fix) : null)))
+      : el("p", { class: "muted" }, "REP ไม่ได้ระบุรหัส"),
+    f.codes.some((c) => c.found) ? el("p", { class: "muted-note" }, "รายละเอียดและแนวทางแก้ไขจากเอกสาร C ERROR E-CLAIM NHSO (สปสช.) · ค้นหารหัสทั้งหมดได้ที่หน้า REP / STM") : null);
 }
 // Refer in / out of the visit (what ORF/IRF and AER carry), after the UUC; crossed out when the user chose not to send it.
 const referText = (x) => `${x.dir === "out" ? "ส่งต่อ →" : "รับเข้า ←"} ${x.hcode || "?"}${x.name ? ` ${x.name}` : ""}`;

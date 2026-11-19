@@ -11,18 +11,29 @@ const statBadge = (stat) => stat === "A"
   ? el("span", { class: "badge b-ok" }, "A ผ่าน")
   : el("span", { class: "badge b-error" }, `${stat || "?"} ไม่ผ่าน`);
 
-function codeList(codes, names) {
+// e-Claim REP codes (UCS / OFC / LGO) are explained by the สปสช. C ERROR document (cc = c_codes from the server);
+// SSOP and AIPN codes by the names their own REP files carry.
+const codeName = (code, names, cc) => (cc && cc[code] && cc[code].found ? cc[code].detail : names[code]) || "";
+
+function codeList(codes, names, cc, detailed = false) {
   if (!codes) return el("span", { class: "muted" }, "-");
-  return el("span", { class: "code-list" }, ...codes.split(",").map((code) => el("span", {
-    class: `badge ${code.startsWith("W") ? "b-warn" : "b-error"}`, title: names[code] || "",
-  }, code)));
+  const list = codes.split(",").filter(Boolean);
+  return el("span", { class: "code-list" }, ...list.map((code) => el("span", {
+    class: `badge ${code.startsWith("W") ? "b-warn" : "b-error"}`, title: codeName(code, names, cc),
+  }, code)), ...(detailed ? list.filter((code) => codeName(code, names, cc)).map((code) => el("span", { class: "code-detail" }, `${code}: ${codeName(code, names, cc)}`)) : []));
 }
 
-function codeLegend(codes, names) {
+function codeLegend(codes, names, cc) {
   const used = [...new Set(codes.flatMap((c) => (c || "").split(",")).filter(Boolean))].sort();
   if (!used.length) return null;
-  return el("ul", { class: "issues" }, ...used.map((code) => el("li", { class: `issue ${code.startsWith("W") ? "warn" : "error"}` },
-    el("div", { class: "issue-title" }, el("span", { class: `badge ${code.startsWith("W") ? "b-warn" : "b-error"}` }, code), " ", names[code] || "ไม่มีคำอธิบายในไฟล์ REP"))));
+  const fromDoc = used.some((code) => cc && cc[code] && cc[code].found);
+  return el("div", {}, el("ul", { class: "issues" }, ...used.map((code) => {
+    const doc = cc && cc[code];
+    return el("li", { class: `issue ${code.startsWith("W") ? "warn" : "error"}` },
+      el("div", { class: "issue-title" }, el("span", { class: `badge ${code.startsWith("W") ? "b-warn" : "b-error"}` }, code), " ",
+        codeName(code, names, cc) || (doc ? "ไม่พบรหัสนี้ในเอกสาร C ERROR E-CLAIM" : "ไม่มีคำอธิบายในไฟล์ REP")),
+      doc && doc.found ? fixBlock(doc.fix || "เอกสารไม่ได้ระบุแนวทางแก้ไขของรหัสนี้") : null);
+  })), fromDoc ? el("p", { class: "muted-note" }, "รายละเอียดและแนวทางแก้ไขจากเอกสาร C ERROR E-CLAIM NHSO (สปสช. 06-01-2565)") : null);
 }
 
 // FDH claim status: paid or capitation in green, refused or failed in red, anything else (waiting) grey-blue.
@@ -154,14 +165,14 @@ async function openRep(repNo) {
       el("td", { class: "num" }, String(b.line)), el("td", {}, statBadge(b.stat)), el("td", { class: "mono" }, b.invno),
       ...(aipn ? [el("td", { class: "mono" }, b.authcode || "—"), el("td", { class: "num" }, b.amount || "—"), el("td", {}, b.bp), el("td", { class: "mono" }, b.hmain)]
         : [el("td", {}, when(b.dttran)), el("td", {}, b.bp), el("td", { class: "num" }, money(b.claimamt))]),
-      el("td", {}, codeList(b.codes, r.code_names))));
+      el("td", {}, codeList(b.codes, r.code_names, r.c_codes, b.stat !== "A"))));
     openDrawer(`REP ${r.rep_no}`, `ออก ${when(r.issued_at)} · งวดส่ง ${r.session} · สถานี ${r.station}`, [
       info([["ส่ง", r.sent], ["ผ่าน", r.passed], ["ไม่ผ่าน", r.failed]]),
       r.bills.length ? table(aipn ? [["บรรทัด", "num"], ["ผล"], ["AN"], ["DRG"], ["AdjRW", "num"], ["CareAs"], ["HMain"], ["รหัส"]]
         : [["บรรทัด", "num"], ["ผล"], ["VN (InvNo)"], ["วันเวลาบริการ"], ["BP"], ["ยอดเบิก", "num"], ["รหัส"]], rows)
         : el("p", { class: "hint" }, aipn ? "นำเข้าเฉพาะ SIGNSUP ยังไม่มีไฟล์ SIGNREP" : "นำเข้าเฉพาะไฟล์ยา (DIS) ยังไม่มีไฟล์ BIL"),
       ...dispBlock(r.disps, r.code_names),
-      el("h3", {}, "ความหมายของรหัส"), codeLegend([...r.bills.map((b) => b.codes), ...r.disps.flatMap((d) => [d.codes, ...d.drugs.map((g) => g.codes)])], r.code_names) || el("p", { class: "hint" }, "ไม่มีรหัส"),
+      el("h3", {}, "ความหมายของรหัสและแนวทางแก้ไข"), codeLegend([...r.bills.map((b) => b.codes), ...r.disps.flatMap((d) => [d.codes, ...d.drugs.map((g) => g.codes)])], r.code_names, r.c_codes) || el("p", { class: "hint" }, "ไม่มีรหัส"),
     ]);
   } catch (err) { notice(err.message); }
 }
@@ -194,7 +205,7 @@ async function openVn(vn) {
     const repRows = h.reps.map((b) => el("tr", { onclick: () => openRep(b.rep_no) },
       el("td", { class: "mono" }, b.rep_no), el("td", {}, when(b.issued_at)), el("td", { class: "mono" }, b.session),
       el("td", {}, statBadge(b.stat), b.duplicate ? el("span", { class: "sub" }, "ส่งซ้ำ รายการเดิมผ่านแล้ว") : null),
-      el("td", { class: "num" }, money(b.claimamt)), el("td", {}, codeList(b.codes, h.code_names))));
+      el("td", { class: "num" }, money(b.claimamt)), el("td", {}, codeList(b.codes, h.code_names, h.c_codes, b.stat !== "A"))));
     const stmRows = h.stms.map((b) => el("tr", { onclick: () => openStm(b.stm_no) },
       el("td", { class: "mono" }, b.stm_no), el("td", { class: "mono" }, b.period), el("td", {}, toDmy(b.date_issue)),
       el("td", { class: "mono" }, b.rid), el("td", { class: "num" }, money(b.total))));
@@ -213,10 +224,25 @@ async function openVn(vn) {
         el("td", { class: "mono" }, f.claim_id), el("td", {}, f.fund), el("td", {}, f.uuc === "2" ? "2 ไม่ใช้สิทธิ" : f.uuc ? "1 ใช้สิทธิ" : "—"),
         el("td", {}, when(f.sent_at)), el("td", {}, fdhBadge(f.status)))))
         : el("p", { class: "hint" }, "ไม่พบในรายละเอียดรายการเคลม FDH ที่นำเข้า"),
-      el("h3", {}, "ความหมายของรหัส"), codeLegend([...h.reps.map((b) => b.codes), ...h.disps.flatMap((d) => [d.codes, ...d.drugs.map((g) => g.codes)])], h.code_names) || el("p", { class: "hint" }, "ไม่มีรหัส"),
+      el("h3", {}, "ความหมายของรหัสและแนวทางแก้ไข"), codeLegend([...h.reps.map((b) => b.codes), ...h.disps.flatMap((d) => [d.codes, ...d.drugs.map((g) => g.codes)])], h.code_names, h.c_codes) || el("p", { class: "hint" }, "ไม่มีรหัส"),
     ]);
   } catch (err) { notice(err.message); }
 }
+
+// The e-Claim C code lookup (สปสช. C ERROR E-CLAIM NHSO): detail and fix, by code or by a word in either.
+async function openCodes(q) {
+  try {
+    const data = await api(`/api/repstm/c-codes?q=${encodeURIComponent(q)}&limit=600`);
+    const rows = data.rows.map((c) => el("li", { class: "issue error" },
+      el("div", { class: "issue-title" }, el("span", { class: "badge b-error" }, c.code), " ", c.detail),
+      fixBlock(c.fix || "เอกสารไม่ได้ระบุแนวทางแก้ไขของรหัสนี้")));
+    openDrawer(q ? `รหัส C: ${q}` : "รหัส C e-Claim ทั้งหมด", `${data.source} · พบ ${count.format(data.rows.length)} จาก ${count.format(data.total)} รหัส`, [
+      rows.length ? el("ul", { class: "issues" }, ...rows) : el("p", { class: "hint" }, "ไม่พบรหัสหรือคำค้นนี้ในเอกสาร"),
+    ]);
+  } catch (err) { notice(err.message); }
+}
+$("c-search").addEventListener("submit", (e) => { e.preventDefault(); openCodes(new FormData(e.target).get("q").trim()); });
+$("c-all").addEventListener("click", () => openCodes(""));
 
 $("vn-search").addEventListener("submit", (e) => {
   e.preventDefault();

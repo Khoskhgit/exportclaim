@@ -202,6 +202,9 @@ th[aria-sort=descending] .sort-mark::after{content:"▼";opacity:1;color:var(--a
 .issue{padding:10px 12px;border-radius:var(--radius-sm);border:1px solid var(--line);border-left-width:4px;background:#fff}
 .issue.error{border-left-color:var(--error)}.issue.warn,.issue.warn_c{border-left-color:#d99a00}.issue.special{border-left-color:var(--special)}
 .issue-title{font-weight:600}
+.fix-block{margin:6px 0 0;padding:6px 10px;border-left:3px solid var(--accent);background:var(--accent-soft);border-radius:var(--radius-sm);font-size:13px;line-height:1.55;color:var(--ink);font-weight:400}
+.fix-label{display:block;font-weight:600;font-size:12px;color:var(--accent);margin-bottom:2px}
+.code-detail{display:block;font-size:12px;color:var(--muted);max-width:340px;white-space:normal}
 .issue ul{margin:6px 0 0;padding-left:18px;font-size:13px;color:var(--muted)}
 .hint{margin:10px 0 0;padding:9px 12px;border-radius:var(--radius-sm);background:var(--accent-soft);color:var(--accent-2);font-size:13px}
 .all-good{display:flex;gap:10px;align-items:center;padding:14px;border-radius:var(--radius);background:var(--ok-bg);color:var(--ok);font-weight:600}
