@@ -1,5 +1,5 @@
 "use strict";
-const state = { rows: [], selected: new Set(), filter: "all", text: "", current: null, sort: { key: "", dir: "asc" } };
+const state = { rows: [], selected: new Set(), filter: "all", text: "", current: null, sort: { key: "", dir: "asc" }, codeNames: {} };
 const CARE_AS = { M: "M: Main", B: "B: suB", A: "A: suprA", X: "X: eXt" };
 
 const CATEGORIES = {
@@ -17,6 +17,39 @@ function resultBadge(r) {
   if (r.has_error) return el("span", { class: "badge b-error" }, "Error");
   if (r.has_warn) return el("span", { class: "badge b-warn" }, "เตือน");
   return el("span", { class: "badge b-ok" }, "ผ่าน");
+}
+
+// The status: the imported สกส. REP/STM (ชดเชยแล้ว / ผ่าน (A) / ติด C), else rcmdb or "ส่งออกแล้ว".
+const STATUS_TONE = { "ชดเชยแล้ว": "b-ok", "ผ่าน (A)": "b-ok", "ติด C": "b-c" };
+function codeChips(codes) {
+  return (codes || "").split(",").filter(Boolean).map((c) => el("span", { class: "badge b-error", title: state.codeNames[c] || "" }, c));
+}
+function statusCell(r) {
+  if (!r.status) return el("span", { class: "muted" }, "—");
+  return el("span", {}, el("span", { class: `badge ${STATUS_TONE[r.status] || "b-sent"}`, title: r.rep_no ? `REP ${r.rep_no}` : "" }, r.status),
+    r.stm_paid ? el("span", { class: "sub" }, `${baht.format(Number(r.stm_paid))} บาท`)
+      : r.rep_codes ? el("span", { class: "sub" }, ...codeChips(r.rep_codes)) : null);
+}
+
+function resultSection(h) {
+  if (!h || (!h.reps.length && !h.stms.length)) return [el("h3", {}, "ผล REP / STM (สกส.)"), el("p", { class: "muted" }, "ยังไม่ได้นำเข้า REP/STM ของ AN นี้ (หน้า REP / STM)")];
+  const out = [el("h3", {}, "ผล REP / STM (สกส.)")];
+  if (h.reps.length) out.push(table(["REP", "วันที่ออก", "ผล", "DRG", "AdjRW", "รหัส"], h.reps.map((b) => el("tr", {},
+    el("td", { class: "mono" }, b.rep_no), el("td", {}, thaiDateTime(b.issued_at)),
+    el("td", {}, el("span", { class: `badge ${b.stat === "A" ? "b-ok" : "b-c"}` }, b.stat === "A" ? "ผ่าน" : "ไม่ผ่าน")),
+    el("td", { class: "mono" }, b.authcode || "—"), el("td", { class: "num" }, b.amount || "—"), el("td", {}, ...codeChips(b.codes))))));
+  for (const d of h.disps) {
+    out.push(el("p", { class: "hint" }, `รายการที่ต้องแก้ (REP ${d.rep_no}):`));
+    out.push(table(["กลุ่ม", "รหัส", "รายการ", { label: "ยอด", num: true }, "รหัสที่ไม่ผ่าน"], d.drugs.map((g) => el("tr", {},
+      el("td", { class: "mono" }, g.prdcat), el("td", { class: "mono" }, g.hospdrgid), el("td", {}, g.name),
+      el("td", { class: "num" }, Number(g.chargeamt) ? baht.format(Number(g.chargeamt)) : "—"), el("td", {}, ...codeChips(g.codes))))));
+  }
+  if (h.stms.length) out.push(table(["STM", "งวด", "ครบกำหนด", "REP", { label: "ชดเชย", num: true }], h.stms.map((b) => el("tr", {},
+    el("td", { class: "mono" }, b.stm_no), el("td", { class: "mono" }, b.period), el("td", {}, toDmy(b.date_due)),
+    el("td", { class: "mono" }, b.rid), el("td", { class: "num" }, baht.format(Number(b.total)))))));
+  const codes = [...new Set([...h.reps.map((b) => b.codes), ...h.disps.flatMap((d) => d.drugs.map((g) => g.codes))].join(",").split(",").filter(Boolean))];
+  if (codes.length) out.push(el("ul", { class: "service-rules" }, ...codes.map((c) => el("li", {}, el("b", {}, c), ` ${state.codeNames[c] || ""}`))));
+  return out;
 }
 
 function visible() {
@@ -53,7 +86,7 @@ function renderRows() {
     const problems = r.special ? ["ต้องส่งด้วยโปรแกรมเดิม"] : r.issues.map((i) => i.message);
     return el("tr", { class: state.current === r.an ? "current" : "", onclick: () => openDrawer(r) },
       el("td", { class: "check" }, box), el("td", {}, resultBadge(r)),
-      el("td", {}, r.status ? el("span", { class: "badge b-sent" }, r.status) : el("span", { class: "muted" }, "—")),
+      el("td", {}, statusCell(r)),
       el("td", { class: "mono" }, r.an), el("td", { class: "mono" }, r.hn),
       el("td", { class: "name-cell", title: r.ptname }, r.ptname, el("span", { class: "sub" }, r.pttype)),
       el("td", { class: "mono" }, thaiDateTime(r.discharge_at)), el("td", {}, r.pdx || el("span", { class: "muted" }, "—")), el("td", {}, r.pay_plan), el("td", {}, care),
@@ -108,6 +141,7 @@ async function openDrawer(r) {
     } else {
       check.push(el("div", { class: "all-good" }, "✓ ผ่านการตรวจทั้งหมด พร้อมส่ง"));
     }
+    check.push(...resultSection(data.results));
 
     const dx = [el("h3", {}, "CC (อาการสำคัญ ตอนรับ Admit)"),
       data.cc ? el("p", { class: "cc-text" }, data.cc) : el("p", { class: "muted" }, "ไม่มีข้อมูล CC"),
@@ -222,6 +256,7 @@ async function search() {
   try {
     const data = await api("/api/aipn/search", body);
     state.rows = data.admissions;
+    state.codeNames = data.code_names || {};
     state.selected = new Set(data.admissions.filter((r) => r.default_selected).map((r) => r.an));
     if (!$("session").value && data.next_session) $("session").value = data.next_session;
     $("empty").replaceChildren(...emptyState("ไม่พบรายการในช่วงนี้"));

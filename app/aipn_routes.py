@@ -14,6 +14,7 @@ from fastapi.templating import Jinja2Templates
 from . import aipn, aipn_service, auth
 from .aipn_db import AipnDb
 from .config import Settings
+from .repstm_store import RepStmStore
 from .store import Store
 from .validate import text
 
@@ -34,7 +35,29 @@ def _mask(value: Any) -> str:
     return f"{'x' * (len(cid) - 4)}{cid[-4:]}" if len(cid) > 4 else cid
 
 
+def with_result(row: dict, found: dict | None) -> dict:
+    """The imported AIPN REP/STM (สกส. SIGNREP/SIGNSTMS, keyed by AN) wins over rcmdb and the local export mark:
+    an STM means paid, otherwise the newest REP line gives A or C."""
+    if not found:
+        return row
+    row.update(rep_no=found.get("rep_no", ""), rep_stat=found.get("rep_stat", ""), rep_codes=found.get("rep_codes", ""),
+               stm_no=found.get("stm_no", ""), stm_paid=found.get("stm_paid", ""))
+    if found.get("stm_no"):
+        row["status"] = "ชดเชยแล้ว"
+    elif found.get("rep_stat") == "A":
+        row["status"] = "ผ่าน (A)"
+    elif found.get("rep_stat"):
+        row["status"] = "ติด C"
+    else:
+        return row
+    row["already_sent"] = row["status"] != "ติด C"
+    row["default_selected"] = row["selectable"] and not row["status"]
+    return row
+
+
 def register(app: FastAPI, settings: Settings, db: AipnDb, local: Store, templates: Jinja2Templates) -> None:
+    results = RepStmStore(local)
+
     @app.exception_handler(aipn.AipnError)
     async def aipn_error(_: Request, exc: aipn.AipnError):
         return JSONResponse({"detail": str(exc)}, status_code=400)
@@ -45,6 +68,7 @@ def register(app: FastAPI, settings: Settings, db: AipnDb, local: Store, templat
         sent = local.aipn_sent(ans)
         excluded, included = local.aipn_item_choices(ans)
         care = local.aipn_care_as(ans)
+        imported = results.latest(ans)
         out = {}
         for adm in admissions:
             an = text(adm["an"])
@@ -67,6 +91,7 @@ def register(app: FastAPI, settings: Settings, db: AipnDb, local: Store, templat
                 **aipn.review(adm, items, bundle.ops.get(an, []), settings.hosp_main, an in sent, an in bundle.missing_debt,
                               excluded.get(an, set()), included.get(an, set())),
             }
+            with_result(out[an], imported.get(an))
         return bundle, out
 
     @app.get("/aipn", response_class=HTMLResponse)
@@ -84,7 +109,7 @@ def register(app: FastAPI, settings: Settings, db: AipnDb, local: Store, templat
             body.get("pttypes") or [], text(body.get("an")),
         )
         _, out = reviews(admissions)
-        return {"admissions": list(out.values()), "next_session": local.next_aipn_session()}
+        return {"admissions": list(out.values()), "next_session": local.next_aipn_session(), "code_names": results.code_names()}
 
     @app.post("/api/aipn/detail")
     def detail(body: dict = Body(...)):
@@ -118,6 +143,7 @@ def register(app: FastAPI, settings: Settings, db: AipnDb, local: Store, templat
             "items": rows, "skipped": skipped, "cc": db.cc(an) if hasattr(db, "cc") else "",
             "dx": [{"type": text(d.get("subclass")), "code": text(d.get("code")), "name": text(d.get("name"))} for d in claim.dx],
             "ops": [{"line": line.rstrip("\r\n")} for line in aipn.op_lines(claim.ops)],
+            "results": results.vn_history(an),
         }
 
     @app.post("/api/aipn/item")

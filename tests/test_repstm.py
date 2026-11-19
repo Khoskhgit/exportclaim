@@ -332,3 +332,14 @@ def test_aipn_stm_is_read_and_shows_in_the_an_history(client):
     assert h["status_stat"] == "A" and [s["total"] for s in h["stms"]] == ["4649.50"] and h["stms"][0]["account"] == "SIGN"
     failed = client.post("/api/repstm/vn", json={"vn": "690001434"}).json()
     assert failed["status_stat"] == "C" and failed["disps"][0]["account"] == "SIGN"
+
+
+def test_aipn_rows_take_the_imported_result():
+    from app.aipn_routes import with_result
+    base = lambda: {"status": "ส่งออกแล้ว", "selectable": True, "already_sent": True, "default_selected": False}
+    assert with_result(base(), None)["status"] == "ส่งออกแล้ว"
+    paid = with_result(base(), {"rep_stat": "A", "stm_no": "11111ST6910", "stm_paid": "4649.50"})
+    assert (paid["status"], paid["stm_paid"], paid["already_sent"]) == ("ชดเชยแล้ว", "4649.50", True)
+    failed = with_result(base(), {"rep_stat": "C", "rep_codes": "644,666", "rep_no": "10117"})
+    assert (failed["status"], failed["rep_codes"], failed["already_sent"], failed["default_selected"]) == ("ติด C", "644,666", False, False)
+    assert with_result(base(), {"rep_stat": "A"})["status"] == "ผ่าน (A)"
