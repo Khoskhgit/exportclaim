@@ -3,7 +3,7 @@
 Ported from the old program's "รายชื่อสิทธิผู้พิการ" report, with these choices of the user (2026-11-17):
    visits     every OPD visit under a UC right (pttype.hipdata_code UCS/WEL); at this hospital disabled patients
               mostly come under the normal UC rights, so the disabled right and the disability registry
-              (person_deformed) are only shown, never checked (the user dropped the warning, 2026-11-17)
+              (person_deformed) are neither checked nor shown (the user removed them, 2026-11-19)
    devices    opitemrece + s_drugitems with nhso_adp_type_id=2 and an ADP code starting 25, 81, 82, 85, 87, 88, 89 or
               equal to 6006 (the old regexp '^25|6006|^8[1|2|5|7|8|9]', without the '|' it also matched)
    ADP code   checked against HOSxP's nhso_adp_code (the user's choice, 2026-11-18, instead of the old program's fixed
@@ -32,7 +32,6 @@ from .validate import text
 
 KEY = "instrument"
 CODE_PATTERN = "^(25|81|82|85|87|88|89)|^6006$"
-DISABLED_PTTYPE = "พิการ"
 INSTRUMENT_TYPE = 2
 PROJECT_PATTERN = r"[A-Za-z0-9_\-]{1,15}"
 ITEM_FILTER = f"d.nhso_adp_type_id=2 AND d.nhso_adp_code REGEXP {lit(CODE_PATTERN)}"
@@ -171,7 +170,7 @@ class WebStore:
 
 
 # ------------------------------------------------------------------ HOSxP (read only)
-VISIT_COLS = """o.vn, o.hn, o.vstdate, o.vsttime, o.an, o.pttype, ptt.name pttype_name, ptt.pcode, p.cid,
+VISIT_COLS = """o.vn, o.hn, o.vstdate, o.vsttime, o.an, o.pttype, ptt.name pttype_name, p.cid,
           CONCAT(IFNULL(p.pname,''),p.fname,' ',p.lname) ptname,
           (SELECT vp.claim_code FROM visit_pttype vp WHERE vp.vn=o.vn AND vp.pttype=o.pttype LIMIT 1) authen"""
 VISIT_JOINS = "JOIN patient p ON p.hn=o.hn JOIN pttype ptt ON ptt.pttype=o.pttype"
@@ -196,14 +195,6 @@ def fetch(q: Select, start: date, end: date, rcm: str, web: list[dict]) -> dict:
             WHERE o.vstdate BETWEEN {lit(start)} AND {lit(end)} AND IFNULL(o.an,'')='' AND ({who})""")
             if (text(v["cid"]), str(v["vstdate"])[:10]) in keys or ("hn:" + text(v["hn"]), str(v["vstdate"])[:10]) in keys]
     vns = sorted({text(r["vn"]) for r in items + web_visits})
-    hn_list = sorted({text(r["hn"]) for r in items + web_visits})
-    deformed = {}
-    if hn_list:
-        for r in q(f"""
-            SELECT p.hn, MIN(pd.register_date) register_date, MAX(pd.deformed_no) deformed_no FROM patient p
-            JOIN person pe ON pe.cid=p.cid JOIN person_deformed pd ON pd.person_id=pe.person_id
-            WHERE p.hn IN ({lit_list(hn_list)}) GROUP BY p.hn"""):
-            deformed[text(r["hn"])] = r
     has_rcm = lambda t: bool(q(f"SELECT 1 FROM information_schema.tables WHERE table_schema={lit(rcm)} AND table_name={lit(t)}"))
     equipment = {}
     if vns and has_rcm("equipment_service"):
@@ -219,7 +210,7 @@ def fetch(q: Select, start: date, end: date, rcm: str, web: list[dict]) -> dict:
         for r in q(f"SELECT vn, GROUP_CONCAT(DISTINCT rep) rep FROM `{rcm}`.repdata "
                    f"WHERE vn IN ({lit_list(vns)}) AND IFNULL(errorcode,'')='' GROUP BY vn"):
             eclaim.setdefault(text(r["vn"]), {"rep": text(r["rep"]), "paid": ""})
-    return {"items": items, "web_visits": web_visits, "web": web, "deformed": deformed, "equipment": equipment, "eclaim": eclaim,
+    return {"items": items, "web_visits": web_visits, "web": web, "equipment": equipment, "eclaim": eclaim,
             "adp": adp_codes(q, [text(r["code"]) for r in items] + [w["code"] for w in web])}
 
 
@@ -297,16 +288,12 @@ def check(data: dict, sent: dict[tuple[str, str], str] | None = None) -> list[Ro
         row.hn, row.date, row.time = text(r.get("hn")), day.isoformat() if day else "", str(r.get("vsttime") or "")[:8]
         row.ptname, row.cid = text(r.get("ptname")), text(r.get("cid"))
         row.pttype = f"{text(r.get('pttype'))}: {text(r.get('pttype_name'))}".strip(": ")
-        disabled_right = DISABLED_PTTYPE in text(r.get("pttype_name")) or text(r.get("pcode")) == "AD"
-        deformed = data["deformed"].get(row.hn)
         web = [w for w in _web_for(data["web"], row.cid, row.hn, row.date) if w["code"] == code]
         equipment = data["equipment"].get((vn, code))
         income = sum((Decimal(w["income"] or 0) for w in web), Decimal(0))
         eclaim = data["eclaim"].get(vn, {})
         row.extra = {
-            "authen": text(r.get("authen")), "disabled_right": disabled_right,
-            "deformed": bool(deformed), "deformed_no": text(deformed.get("deformed_no")) if deformed else "",
-            "deformed_date": str(deformed.get("register_date") or "")[:10] if deformed else "",
+            "authen": text(r.get("authen")),
             "web": bool(web or equipment), "income": f"{income:.2f}" if web else "",
             "web_reg": web[0]["reg_date"] if web else str(equipment.get("regdate") or "")[:10] if equipment else "",
             "web_status": web[0]["status"] if web else text(equipment.get("status")) if equipment else "",
@@ -346,16 +333,13 @@ def detail(q: Select, vn: str) -> dict:
         FROM ovst o JOIN opitemrece oo ON oo.vn=o.vn JOIN s_drugitems d ON d.icode=oo.icode
         WHERE o.hn={lit(visit["hn"])} AND o.vstdate BETWEEN {lit(since)} AND {lit(day)} AND {ITEM_FILTER}
         GROUP BY o.vn, d.nhso_adp_code, oo.icode ORDER BY o.vstdate DESC, o.vn""")
-    deformed = q(f"""
-        SELECT pd.deformed_no, pd.register_date, pd.certificate_date FROM person pe JOIN person_deformed pd ON pd.person_id=pe.person_id
-        WHERE pe.cid={lit(visit["cid"])} ORDER BY pd.register_date""") if text(visit.get("cid")) else []
     items = q(f"""
         SELECT oo.icode, CONCAT_WS(' ',d.name,d.strength) name, d.nhso_adp_code adp, SUM(oo.qty) qty,
           SUM(IF(IFNULL(oo.qty,0)=0,0,IFNULL(oo.sum_price,0))) amount
         FROM opitemrece oo LEFT JOIN s_drugitems d ON d.icode=oo.icode WHERE oo.vn={lit(vn)}
         GROUP BY oo.icode ORDER BY d.nhso_adp_code IS NULL, oo.icode""")
     dx = q(f"SELECT diagtype, icd10, icdname(icd10) name FROM ovstdiag WHERE vn={lit(vn)} ORDER BY diagtype, icd10")
-    return {"visit": visit, "history": history, "deformed": deformed, "items": items, "dx": dx}
+    return {"visit": visit, "history": history, "items": items, "dx": dx}
 
 
 def web_rows_for(rows: Iterable[dict], cid: str, hn: str, day: str) -> list[dict]:

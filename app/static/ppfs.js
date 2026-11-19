@@ -30,8 +30,6 @@ const COLUMNS = {
   ],
   instrument: [
     ["AuthenCode", "authen", false, (r) => r.extra.authen || el("span", { class: "badge b-warn" }, "ไม่มี")],
-    ["คนพิการ", "", false, (r) => (r.extra.disabled_right ? el("span", { class: "badge b-ok" }, "สิทธิผู้พิการ")
-      : r.extra.deformed ? el("span", {}, el("span", { class: "badge b-ok" }, "ทะเบียน"), el("span", { class: "sub" }, r.extra.deformed_no)) : el("span", { class: "badge b-warn" }, "ไม่พบ"))],
     ["ADP (nhso_adp_code)", "", false, (r) => (!r.extra.adp_found ? el("span", { class: "badge b-error" }, "ไม่พบ")
       : r.extra.adp_type !== "2" ? el("span", { class: "badge b-error" }, `ประเภท ${r.extra.adp_type}`)
       : el("span", {}, el("span", { class: "badge b-ok" }, "Y"), r.extra.adp_ucs ? el("span", { class: "sub" }, `UCS ${money(r.extra.adp_ucs)}`) : null))],
@@ -276,8 +274,7 @@ async function openDrawer(r) {
       ["รหัส Z12.4 / Z01.4", r.extra.dx ? "มี" : "ไม่มี"],
       ["คัดกรองครั้งก่อน (5 ปี)", r.extra.last ? `${toDmy(r.extra.last)} (VN ${r.extra.last_vn})` : "ไม่มี"],
     ] : kind === "instrument" ? [
-      ["AuthenCode", r.extra.authen || "ไม่มี"], ["สิทธิผู้พิการ", r.extra.disabled_right ? "ใช่" : "ไม่ใช่"],
-      ["ทะเบียนคนพิการ", r.extra.deformed ? `${r.extra.deformed_no || "มี"}${r.extra.deformed_date ? ` · ลงทะเบียน ${toDmy(r.extra.deformed_date)}` : ""}` : "ไม่พบ"],
+      ["AuthenCode", r.extra.authen || "ไม่มี"],
       ["Project code", r.extra.project ? `${r.extra.project} (เลือกในแถว)` : "ตาม visit ใน HOSxP"],
       ["nhso_adp_code", r.extra.adp_found ? `${r.code} ประเภท ${r.extra.adp_type}${r.extra.adp_ucs ? ` · UCS ${money(r.extra.adp_ucs)} บาท` : ""}${r.extra.adp_name ? ` · ${r.extra.adp_name}` : ""}` : "ไม่พบรหัสนี้"],
       ["เว็บบันทึกอุปกรณ์", r.extra.web ? `บันทึกแล้ว${r.extra.web_reg ? ` ${toDmy(r.extra.web_reg)}` : ""}${r.extra.web_status ? ` · ${r.extra.web_status}` : ""}` : "ยังไม่พบ"],
@@ -339,7 +336,7 @@ async function openDrawer(r) {
       check.push(el("h3", {}, "ผลตรวจ"));
       check.push(el("ul", { class: "issues" }, ...issues.map((i) => el("li", { class: `issue ${i.level}` },
         el("div", { class: "issue-title" }, el("span", { class: `badge ${i.level === "error" ? "b-error" : "b-warn"}` }, i.level === "error" ? "Error" : "เตือน"), " ", i.message)))));
-      check.push(el("p", { class: "hint" }, kind === "cervix" ? "ลงผล HPV/Pap ใน HOSxP ให้แปลได้ (Negative / HPV Type … / NILM) แล้วค้นหาใหม่ คัดกรองซ้ำภายใน 5 ปีเบิกไม่ได้" : kind === "instrument" ? "คำเตือนไม่บล็อกการส่ง ตรวจสิทธิคนพิการและรายการที่บันทึกในเว็บแล้วก่อนส่ง เพื่อไม่ให้เบิกซ้ำ" : kind === "dmrem" ? "ตรวจว่าลงทะเบียนผู้ป่วยในโปรแกรม e-Claim แล้ว และตั้งรหัส ADP ใน .env ก่อนส่ง" : kind === "anemiachild" ? "เบิกได้ช่วงอายุละ 1 ครั้ง (6–12 เดือน และ 3–5 ปี) รวมไม่เกิน 2 ครั้งต่อคน" : kind === "ironchild" ? "เบิกได้ช่วงละ 1 ครั้งต่อปีงบ ค่าบริการ 6–12 เดือนต้องให้เด็กอายุ 6–12 เดือน ค่าบริการ 2–5 ปีต้องให้เด็กอายุ 2–5 ปี" : kind === "fluoride" ? "เบิกได้อายุ 25–59 ปี ไม่เกิน 2 ครั้งต่อปีงบ ถ้ายังไม่คีย์ 15001 ให้คีย์ใน HOSxP แล้วค้นหาใหม่" : kind === "iron" ? "เบิกได้คนละ 1 ครั้งต่อปีงบ อายุ 13–45 ปี เฉพาะหญิงไทย รายที่ไม่ตรงเงื่อนไขไม่ต้องส่ง" : kind === "anemia" ? "เบิกได้คนละ 1 ครั้ง อายุ 13–24 ปี เฉพาะหญิงไทย รายที่ไม่ตรงเงื่อนไขไม่ต้องส่ง" : kind === "ncd" ? "ผู้ที่มีประวัติรักษาโรคมาก่อน หรือเบิกไปแล้วในรอบ ไม่ใช่กลุ่มที่เบิกได้ ไม่ต้องส่ง" : kind === "fp" ? "แก้ข้อมูลใน HOSxP (คีย์ค่าบริการ 18… ให้ตรงกับยาที่จ่าย) แล้วกดค้นหาอีกครั้ง" : kind === "pregtest" ? "แก้ข้อมูลใน HOSxP (รายการค่าบริการ / รหัสวินิจฉัย / ผล lab) แล้วกดค้นหาอีกครั้ง"
+      check.push(el("p", { class: "hint" }, kind === "cervix" ? "ลงผล HPV/Pap ใน HOSxP ให้แปลได้ (Negative / HPV Type … / NILM) แล้วค้นหาใหม่ คัดกรองซ้ำภายใน 5 ปีเบิกไม่ได้" : kind === "instrument" ? "คำเตือนไม่บล็อกการส่ง ตรวจรายการที่บันทึกในเว็บแล้วก่อนส่ง เพื่อไม่ให้เบิกซ้ำ" : kind === "dmrem" ? "ตรวจว่าลงทะเบียนผู้ป่วยในโปรแกรม e-Claim แล้ว และตั้งรหัส ADP ใน .env ก่อนส่ง" : kind === "anemiachild" ? "เบิกได้ช่วงอายุละ 1 ครั้ง (6–12 เดือน และ 3–5 ปี) รวมไม่เกิน 2 ครั้งต่อคน" : kind === "ironchild" ? "เบิกได้ช่วงละ 1 ครั้งต่อปีงบ ค่าบริการ 6–12 เดือนต้องให้เด็กอายุ 6–12 เดือน ค่าบริการ 2–5 ปีต้องให้เด็กอายุ 2–5 ปี" : kind === "fluoride" ? "เบิกได้อายุ 25–59 ปี ไม่เกิน 2 ครั้งต่อปีงบ ถ้ายังไม่คีย์ 15001 ให้คีย์ใน HOSxP แล้วค้นหาใหม่" : kind === "iron" ? "เบิกได้คนละ 1 ครั้งต่อปีงบ อายุ 13–45 ปี เฉพาะหญิงไทย รายที่ไม่ตรงเงื่อนไขไม่ต้องส่ง" : kind === "anemia" ? "เบิกได้คนละ 1 ครั้ง อายุ 13–24 ปี เฉพาะหญิงไทย รายที่ไม่ตรงเงื่อนไขไม่ต้องส่ง" : kind === "ncd" ? "ผู้ที่มีประวัติรักษาโรคมาก่อน หรือเบิกไปแล้วในรอบ ไม่ใช่กลุ่มที่เบิกได้ ไม่ต้องส่ง" : kind === "fp" ? "แก้ข้อมูลใน HOSxP (คีย์ค่าบริการ 18… ให้ตรงกับยาที่จ่าย) แล้วกดค้นหาอีกครั้ง" : kind === "pregtest" ? "แก้ข้อมูลใน HOSxP (รายการค่าบริการ / รหัสวินิจฉัย / ผล lab) แล้วกดค้นหาอีกครั้ง"
         : "แก้ข้อมูลใน HOSxP (บันทึกหลังคลอด / วันคลอด / รายการค่าบริการ) แล้วกดค้นหาอีกครั้ง"));
     } else check.push(el("div", { class: "all-good" }, "✓ ผ่านการตรวจทั้งหมด พร้อมส่ง"));
 
@@ -461,10 +458,6 @@ async function openDrawer(r) {
           el("td", { class: "num" }, w.amount), el("td", { class: "num" }, money(w.request_price)), el("td", { class: "num" }, money(w.income)),
           el("td", { class: "mono" }, w.reg_date ? toDmy(w.reg_date) : "—"), el("td", {}, w.status || "—"))))
         : el("p", { class: "muted" }, "ไม่พบในไฟล์ที่นำเข้า"));
-      post.push(el("h3", {}, "ทะเบียนคนพิการ (person_deformed)"));
-      post.push(data.deformed.length ? table(["เลขทะเบียน", "วันที่ลงทะเบียน", "วันที่ออกบัตร"],
-        data.deformed.map((x) => el("tr", {}, el("td", { class: "mono" }, x.no || "—"), el("td", { class: "mono" }, x.date ? toDmy(x.date) : "—"), el("td", { class: "mono" }, x.cert ? toDmy(x.cert) : "—"))))
-        : el("p", { class: "muted" }, "ไม่พบ"));
     } else if (kind === "pregtest") {
       post.push(el("h3", {}, `ทดสอบการตั้งครรภ์ (30014) ของปีงบ ${data.year + 543}`));
       post.push(data.tests.length ? table(["#", "วันที่", "VN", "ผล UPT", { label: "จำนวน", num: true }, { label: "ยอด", num: true }, "ส่งออก"],

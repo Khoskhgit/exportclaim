@@ -20,9 +20,9 @@ def line(code="8902", day="05/03/2569", cid=CID, hn="000001", income="4000", hos
             f"ขาเทียม,,,Z89,,4400,0,4400,0,1,4400,{income},06/03/2569,เจ้าหน้าที่,SN1,อนุมัติ")
 
 
-def item(vn="v1", day="2026-03-05", code="8902", qty=1, amount=4400, pttype_name="บัตรทอง", pcode="UC", authen="EP1", paidst="02"):
+def item(vn="v1", day="2026-03-05", code="8902", qty=1, amount=4400, pttype_name="บัตรทอง", authen="EP1", paidst="02"):
     return {"vn": vn, "hn": "000001", "vstdate": date.fromisoformat(day), "vsttime": "09:00:00", "an": None, "pttype": "72",
-            "pttype_name": pttype_name, "pcode": pcode, "cid": CID, "ptname": "ผู้ป่วย ทดสอบ", "authen": authen,
+            "pttype_name": pttype_name, "cid": CID, "ptname": "ผู้ป่วย ทดสอบ", "authen": authen,
             "icode": "3000001", "paidst": paidst, "code": code, "item_name": "ขาเทียม", "qty": qty, "amount": amount}
 
 
@@ -34,8 +34,8 @@ def adp(code, type_id=2, ucs=4400, start=None, expire="0000-00-00", active=None)
 ADP = {c: adp(c, ucs=u) for c, u in (("8902", 4400), ("8705", 250), ("8101", 0))}
 
 
-def data(items=(), web=(), web_visits=(), deformed=None, equipment=None, eclaim=None, adp_rows=None):
-    return {"items": list(items), "web": list(web), "web_visits": list(web_visits), "deformed": deformed or {},
+def data(items=(), web=(), web_visits=(), equipment=None, eclaim=None, adp_rows=None):
+    return {"items": list(items), "web": list(web), "web_visits": list(web_visits),
             "equipment": equipment or {}, "eclaim": eclaim or {}, "adp": ADP if adp_rows is None else adp_rows}
 
 
@@ -54,9 +54,9 @@ def test_codes_follow_the_old_pattern_without_the_pipe():
 
 
 def test_a_registered_device_in_the_list():
-    (row,) = check(data([item()], deformed={"000001": {"deformed_no": "D1", "register_date": date(2020, 1, 1)}}))
-    assert (row.key, row.count, row.amount, row.extra["adp_found"], row.extra["adp_ucs"], row.extra["deformed_no"]) == (
-        "v1|8902", 1, Decimal("4400.00"), True, "4400.00", "D1")
+    (row,) = check(data([item()]))
+    assert (row.key, row.count, row.amount, row.extra["adp_found"], row.extra["adp_ucs"]) == (
+        "v1|8902", 1, Decimal("4400.00"), True, "4400.00")
     assert codes(row) == ([], [])
 
 
@@ -105,11 +105,11 @@ def test_project_store(tmp_path):
     assert store.projects("cervix", ["v1"]) == {}
 
 
-def test_disability_is_shown_but_not_checked():
+def test_disability_right_and_registry_are_not_used():
     (row,) = check(data([item()]))
-    assert codes(row) == ([], []) and not row.extra["deformed"] and not row.extra["disabled_right"]
-    (row,) = check(data([item(pttype_name="ผู้พิการ ในเขต", pcode="AD")]))
-    assert row.extra["disabled_right"]
+    assert codes(row) == ([], []) and "deformed" not in row.extra and "disabled_right" not in row.extra
+    (row,) = check(data([item(pttype_name="ผู้พิการ ในเขต")]))
+    assert codes(row) == ([], [])
 
 
 def test_web_record_and_income():

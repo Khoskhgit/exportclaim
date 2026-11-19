@@ -328,8 +328,6 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
                     "history": [{"date": iso(h["vstdate"]), "vn": text(h["vn"]), "code": text(h["code"]), "name": text(h["name"]),
                                  "qty": f"{float(h['qty'] or 0):g}", "amount": money(h["amount"]),
                                  "sent": sent.get((text(h["vn"]), text(h["code"])), "")} for h in d["history"]],
-                    "deformed": [{"no": text(x["deformed_no"]), "date": iso(x["register_date"]), "cert": iso(x["certificate_date"])}
-                                 for x in d["deformed"]],
                     "web": [{"code": w["code"], "name": w["name"], "amount": w["amount"], "request_price": w["request_price"],
                              "income": w["income"], "reg_date": w["reg_date"], "status": w["status"], "serial_no": w["serial_no"]}
                             for w in web]}
