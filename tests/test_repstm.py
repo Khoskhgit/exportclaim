@@ -262,3 +262,73 @@ def test_eclaim_rep_account_from_the_document_name():
     assert rep_account("eclaim_10866_OPCS_25691101_1") == "OFC" and rep_account("eclaim_10866_IPCS_25691101_1") == "OFC"
     assert rep_account("eclaim_10866_OP_25691116_153533322") == "UCS" and rep_account("eclaim_10866_IP_25691116_1") == "UCS"
     assert rep_account("eclaim_10866_OPLGO_25691116_1") == "LGO" and rep_account("") == "OFC"
+
+
+AIPN_REP = """\t\t          เอกสารตอบรับข้อมูลผู้ป่วยใน ประกันสังคม
+รหัส ร.พ.    = 11111
+เลขตอบรับที่   = 10117
+วันที่ออกเลขตอบรับ\t=  9/10/2569     เวลา : 13:43:18
+งวดที่ส่งไป\t=  1\t\tเลขงวดที่ส่ง : 10124
+รายการที่ส่งไป\t= 3 ราย
+รายการที่ตรวจผ่าน\t= 1 ราย
+รายการที่ตรวจไม่ผ่าน\t= 2 ราย
+รูปแบบรายการ *| pcode tcode iptype CareAs, SS, HMain, HCare, AN, DRG, rw, adjrw, ST, SST, PT, Amt, name [:err[:dat]]
+*| 0 A S B Y, 10699, 11111, 690001807, 04550,  0.6005,   0.6005, IPR,,,, นาย ทดสอบ: 837
+*| - C - B -, 10699, 11111, 690001434,,,,,,,, นาย สอง, สาม: 644,666
+*| - C - M -, 11111, 11111, 690001339,,,,,,,, นาง สี่: 432:11111,644
+--432: รหัสสถานพยาบาลหลัก(Hmain) ไม่มี/ไม่ถูกต้อง/ไม่อยู่ในทะเบียน
+--644: ในข้อมูล BillItems: เบิกค่าใช้จ่ายหมวด 03,04,06,07 แต่ไม่แจ้ง STDCode
+"""
+AIPN_SUP = """*| AN , HN , Name (PID),  chkstat ([checkcode[,checkcode[,...]]])---
+        =|[checkcode[,checkcode[,...]]]--- | sequence,billGrCs,LCCode ,CSCode , STDCode,Descript  , QTY, UnitPrice ,ChargeAmt , ClaimUP , ClaimAmount
+*|690001434     ,000009408,     นาย สอง  (1111111111111 ) , C (644,666,)
+          =| 666, |15 , 04 ,1690021         ,         ,           ,gabapentin 300 mg.   ,   30.00 ,    3.00 ,   90.00 ,    3.00 ,   90.00
+          #| 251, |1 ,ICD9CM     ,9396         ,Respiratory therapy,Other
+"""
+AIPN_STM = """<?xml version="1.0" encoding="UTF-8"?><STMLIST><stmAccountID>SIGN</stmAccountID><stmdat><hcode>11111</hcode>
+<period>6910</period><stmno>11111ST6910</stmno><dateDue>2  พฤศจิกายน  2569</dateDue><cases>1</cases></stmdat>
+<Bills><Bill><hcode>11111</hcode><hmain>10699</hmain><hproc>11111</hproc><hn>000018066</hn><an>690001807</an>
+<pid>1111111111111</pid><name>นาย ทดสอบ</name><dateadm>2026-09-09</dateadm><datedsc>2026-09-11</datedsc><ft>S</ft><bf>Y</bf>
+<drg>04550</drg><rw>0.6005</rw><adjrw>0.6005</adjrw><ptype>2</ptype><rid>10117</rid><careas>B</careas>
+<Reimb>4649.50</Reimb><Nreimb>0.00</Nreimb><Copay>0.00</Copay><PP>Q</PP></Bill></Bills></STMLIST>"""
+
+
+def aipn_zips():
+    rep, stm = io.BytesIO(), io.BytesIO()
+    with zipfile.ZipFile(rep, "w") as z:
+        z.writestr("11111_SIGNREP_10117.REP", AIPN_REP.encode("cp874"))
+        z.writestr("11111_SIGNSUP_10117.REP", AIPN_SUP.encode("cp874"))
+    with zipfile.ZipFile(stm, "w") as z:
+        z.writestr("11111_SIGNSTMS_6910.xml", AIPN_STM.encode())
+        z.writestr("11111_SIGNSUMS_6910.xml", b"<STMSUMS/>")
+        z.writestr("ssSTMS2025.xsl", b"")
+    return rep.getvalue(), stm.getvalue()
+
+
+def test_aipn_rep_and_sup_are_read_by_an_without_names():
+    parsed = repstm.parse_upload("11111_SIGNREP_10117.ZIP", aipn_zips()[0])
+    rep = parsed.reps["10117"]
+    assert (rep.account, rep.session, rep.issued_at, rep.sent, rep.passed, rep.failed) == ("SIGN", "10124", "2026-10-09T13:43", 3, 1, 2)
+    assert [(b.invno, b.stat, b.authcode, b.amount, b.bp, b.codes) for b in rep.bills] == [
+        ("690001807", "A", "04550", "0.6005", "B", "837"), ("690001434", "C", "", "", "B", "644,666"),
+        ("690001339", "C", "", "", "M", "432,644")]
+    (disp,) = rep.disps
+    assert (disp.invno, disp.codes, disp.charge) == ("690001434", "644,666", "90.00")
+    assert [(g.prdcat, g.hospdrgid, g.codes) for g in disp.drugs] == [("04", "1690021", "666"), ("IPOp ICD9CM", "9396", "251")]
+    assert rep.code_names["432"].startswith("รหัสสถานพยาบาลหลัก")
+    assert "ทดสอบ" not in repr(rep) and "สอง" not in repr(rep) and "1111111111111" not in repr(rep)
+
+
+def test_aipn_stm_is_read_and_shows_in_the_an_history(client):
+    rep_zip, stm_zip = aipn_zips()
+    stm = repstm.parse_upload("11111_SIGNSTM_6910.ZIP", stm_zip).stms["11111ST6910"]
+    assert (stm.account, stm.period, stm.date_due, stm.count, stm.amount) == ("SIGN", "6910", "2026-11-02", 1, "4649.50")
+    (bill,) = stm.bills
+    assert (bill.invno, bill.payplan, bill.cfh, bill.total, bill.rid) == ("690001807", "04550", "0.6005", "4649.50", "10117")
+    assert "ทดสอบ" not in repr(stm)
+    for name, data in (("11111_SIGNREP_10117.ZIP", rep_zip), ("11111_SIGNSTM_6910.ZIP", stm_zip)):
+        assert client.post(f"/api/repstm/import?name={name}", content=data).status_code == 200
+    h = client.post("/api/repstm/vn", json={"vn": "690001807"}).json()
+    assert h["status_stat"] == "A" and [s["total"] for s in h["stms"]] == ["4649.50"] and h["stms"][0]["account"] == "SIGN"
+    failed = client.post("/api/repstm/vn", json={"vn": "690001434"}).json()
+    assert failed["status_stat"] == "C" and failed["disps"][0]["account"] == "SIGN"

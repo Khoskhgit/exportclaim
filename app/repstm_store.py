@@ -199,14 +199,15 @@ class RepStmStore:
     def vn_history(self, vn: str) -> dict:
         with self._db() as db:
             reps = [dict(r) for r in db.execute(
-                """SELECT b.*, f.issued_at, f.session FROM rep_bills b JOIN rep_files f ON f.rep_no=b.rep_no
+                """SELECT b.*, f.issued_at, f.session, f.account FROM rep_bills b JOIN rep_files f ON f.rep_no=b.rep_no
                 WHERE b.invno=? ORDER BY f.issued_at, b.rep_no""", (vn,))]
-            disps = [dict(r) for r in db.execute("SELECT * FROM rep_disps WHERE invno=? ORDER BY rep_no", (vn,))]
+            disps = [dict(r) for r in db.execute(
+                "SELECT d.*, f.account FROM rep_disps d JOIN rep_files f ON f.rep_no=d.rep_no WHERE d.invno=? ORDER BY d.rep_no", (vn,))]
             drugs = [dict(r) for r in db.execute(
                 "SELECT d.* FROM rep_drugs d JOIN rep_disps p ON p.rep_no=d.rep_no AND p.dispid=d.dispid "
                 "WHERE p.invno=? ORDER BY d.rep_no, d.seq", (vn,))]
             stms = [dict(r) for r in db.execute(
-                """SELECT b.*, f.period, f.date_issue, f.date_due FROM stm_bills b JOIN stm_files f ON f.stm_no=b.stm_no
+                """SELECT b.*, f.period, f.date_issue, f.date_due, f.account FROM stm_bills b JOIN stm_files f ON f.stm_no=b.stm_no
                 WHERE b.invno=? ORDER BY f.period""", (vn,))]
         for disp in disps:
             disp["drugs"] = [d for d in drugs if d["rep_no"] == disp["rep_no"] and d["dispid"] == disp["dispid"]]

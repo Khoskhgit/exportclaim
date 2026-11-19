@@ -86,9 +86,11 @@ function renderLists() {
     el("td", { class: "num" }, String(r.sent || r.lines)), el("td", { class: "num" }, String(r.passed)),
     el("td", { class: "num" }, r.failed ? el("span", { class: "badge b-error" }, String(r.failed)) : "0"),
     el("td", { class: "num" }, money(r.passed_amount)), el("td", { class: "num" }, money(r.failed_amount)),
-    el("td", {}, r.account === "OFC" ? "e-Claim ข้าราชการ" : r.account === "UCS" ? "e-Claim UC" : r.account === "LGO" ? "e-Claim อปท." : [r.has_bil ? "BIL" : "", r.has_dis ? "DIS" : ""].filter(Boolean).join(" + "))));
+    el("td", {}, r.account === "OFC" ? "e-Claim ข้าราชการ" : r.account === "UCS" ? "e-Claim UC" : r.account === "LGO" ? "e-Claim อปท."
+      : r.account === "SIGN" ? `AIPN ผู้ป่วยใน ปกส. (${[r.has_bil ? "REP" : "", r.has_dis ? "SUP" : ""].filter(Boolean).join(" + ")})`
+      : [r.has_bil ? "BIL" : "", r.has_dis ? "DIS" : ""].filter(Boolean).join(" + "))));
   const stmRows = state.stms.map((s) => el("tr", { onclick: () => openStm(s.stm_no) },
-    el("td", { class: "mono" }, s.stm_no), el("td", {}, s.account), el("td", { class: "mono" }, s.period),
+    el("td", { class: "mono" }, s.stm_no), el("td", {}, s.account === "SIGN" ? "AIPN ผู้ป่วยใน ปกส." : s.account), el("td", { class: "mono" }, s.period),
     el("td", {}, `${toDmy(s.date_start)} – ${toDmy(s.date_end)}`), el("td", {}, toDmy(s.date_issue)), el("td", {}, toDmy(s.date_due)),
     el("td", { class: "num" }, count.format(s.count)), el("td", { class: "num" }, money(s.amount))));
   const uploadRows = state.uploads.map((u) => el("tr", {},
@@ -123,8 +125,18 @@ function openDrawer(title, sub, content) {
 }
 function closeDrawer() { $("drawer").hidden = true; $("drawer-backdrop").hidden = true; }
 
+// AIPN (account SIGN): the SIGNSUP lines to fix for each failed AN (dispid = AN).
+function supBlock(disps, names) {
+  return [el("h3", {}, "รายการที่ต้องแก้ไข AIPN (SIGNSUP)"), ...disps.map((d) => el("div", { class: "disp" },
+    el("div", { class: "disp-head" }, el("strong", {}, `AN ${d.invno}`), ` · ${d.item_count} รายการ · ยอด ${money(d.charge)} บาท `, codeList(d.codes, names)),
+    table([["กลุ่ม"], ["รหัส (LCCode / ICD)"], ["รายการ"], ["จำนวน", "num"], ["ยอด", "num"], ["STDCode"], ["รหัสที่ไม่ผ่าน"]], d.drugs.map((g) => el("tr", {},
+      el("td", { class: "mono" }, g.prdcat), el("td", { class: "mono" }, g.hospdrgid), el("td", {}, g.name), el("td", { class: "num" }, g.qty || "—"),
+      el("td", { class: "num" }, Number(g.chargeamt) ? money(g.chargeamt) : "—"), el("td", { class: "mono" }, g.drgid || "—"), el("td", {}, codeList(g.codes, names)))))))];
+}
+
 function dispBlock(disps, names) {
   if (!disps.length) return [];
+  if (disps.every((d) => d.account === "SIGN")) return supBlock(disps, names);
   return [el("h3", {}, "ใบสั่งยาที่ตรวจไม่ผ่าน (SOCDDIS)"), ...disps.map((d) => el("div", { class: "disp" },
     el("div", { class: "disp-head" }, el("strong", {}, `VN ${d.invno}`), ` · Dispense ID ${d.dispid} · ยา ${d.item_count} รายการ · ${money(d.charge)} บาท `, codeList(d.codes, names)),
     table([["รหัสยา"], ["ชื่อยา"], ["จำนวน", "num"], ["ราคา/หน่วย", "num"], ["ยอด", "num"], ["TMT"], ["ผล"]], d.drugs.map((g) => el("tr", {},
@@ -136,12 +148,18 @@ async function openRep(repNo) {
   try {
     const r = await api("/api/repstm/rep", { rep_no: repNo });
     const failed = r.bills.filter((b) => b.stat !== "A");
+    const aipn = r.account === "SIGN";
+    r.disps.forEach((d) => { d.account = r.account; });
     const rows = [...failed, ...r.bills.filter((b) => b.stat === "A")].map((b) => el("tr", { onclick: () => openVn(b.invno) },
       el("td", { class: "num" }, String(b.line)), el("td", {}, statBadge(b.stat)), el("td", { class: "mono" }, b.invno),
-      el("td", {}, when(b.dttran)), el("td", {}, b.bp), el("td", { class: "num" }, money(b.claimamt)), el("td", {}, codeList(b.codes, r.code_names))));
+      ...(aipn ? [el("td", { class: "mono" }, b.authcode || "—"), el("td", { class: "num" }, b.amount || "—"), el("td", {}, b.bp), el("td", { class: "mono" }, b.hmain)]
+        : [el("td", {}, when(b.dttran)), el("td", {}, b.bp), el("td", { class: "num" }, money(b.claimamt))]),
+      el("td", {}, codeList(b.codes, r.code_names))));
     openDrawer(`REP ${r.rep_no}`, `ออก ${when(r.issued_at)} · งวดส่ง ${r.session} · สถานี ${r.station}`, [
       info([["ส่ง", r.sent], ["ผ่าน", r.passed], ["ไม่ผ่าน", r.failed]]),
-      r.bills.length ? table([["บรรทัด", "num"], ["ผล"], ["VN (InvNo)"], ["วันเวลาบริการ"], ["BP"], ["ยอดเบิก", "num"], ["รหัส"]], rows) : el("p", { class: "hint" }, "นำเข้าเฉพาะไฟล์ยา (DIS) ยังไม่มีไฟล์ BIL"),
+      r.bills.length ? table(aipn ? [["บรรทัด", "num"], ["ผล"], ["AN"], ["DRG"], ["AdjRW", "num"], ["CareAs"], ["HMain"], ["รหัส"]]
+        : [["บรรทัด", "num"], ["ผล"], ["VN (InvNo)"], ["วันเวลาบริการ"], ["BP"], ["ยอดเบิก", "num"], ["รหัส"]], rows)
+        : el("p", { class: "hint" }, aipn ? "นำเข้าเฉพาะ SIGNSUP ยังไม่มีไฟล์ SIGNREP" : "นำเข้าเฉพาะไฟล์ยา (DIS) ยังไม่มีไฟล์ BIL"),
       ...dispBlock(r.disps, r.code_names),
       el("h3", {}, "ความหมายของรหัส"), codeLegend([...r.bills.map((b) => b.codes), ...r.disps.flatMap((d) => [d.codes, ...d.drugs.map((g) => g.codes)])], r.code_names) || el("p", { class: "hint" }, "ไม่มีรหัส"),
     ]);
@@ -151,9 +169,11 @@ async function openRep(repNo) {
 async function openStm(stmNo) {
   try {
     const s = await api("/api/repstm/stm", { stm_no: stmNo });
+    const aipn = s.account === "SIGN";
     const rows = s.bills.map((b) => el("tr", { onclick: () => openVn(b.invno) },
       el("td", { class: "num" }, String(b.seq)), el("td", { class: "mono" }, b.invno), el("td", { class: "mono" }, b.hn),
-      el("td", {}, when(b.dttran)), el("td", {}, b.hmain), el("td", {}, b.bp), el("td", {}, b.care),
+      ...(aipn ? [el("td", {}, toDmy(b.dttran)), el("td", {}, b.hmain), el("td", { class: "mono" }, b.payplan), el("td", { class: "num" }, b.cfh), el("td", {}, b.care)]
+        : [el("td", {}, when(b.dttran)), el("td", {}, b.hmain), el("td", {}, b.bp), el("td", {}, b.care)]),
       el("td", { class: "mono" }, b.rid), el("td", { class: "num" }, money(b.total))));
     const total = s.bills.reduce((sum, b) => sum + Number(b.total || 0), 0);
     openDrawer(`STM ${s.stm_no}`, `งวด ${s.period} · ${toDmy(s.date_start)} – ${toDmy(s.date_end)} · ออก ${toDmy(s.date_issue)} · ครบกำหนด ${toDmy(s.date_due)}`, [
@@ -162,7 +182,8 @@ async function openStm(stmNo) {
         const q = e.target.value.trim();
         rows.forEach((tr, i) => { tr.hidden = q && !`${s.bills[i].invno} ${s.bills[i].hn}`.includes(q); });
       } })),
-      table([["ลำดับ", "num"], ["VN (InvNo)"], ["HN"], ["วันเวลาบริการ"], ["Hmain"], ["BP"], ["Care"], ["REP (rid)"], ["ยอดชดเชย", "num"]], rows),
+      table(aipn ? [["ลำดับ", "num"], ["AN"], ["HN"], ["วันจำหน่าย"], ["Hmain"], ["DRG"], ["AdjRW", "num"], ["CareAs"], ["REP (rid)"], ["ยอดชดเชย", "num"]]
+        : [["ลำดับ", "num"], ["VN (InvNo)"], ["HN"], ["วันเวลาบริการ"], ["Hmain"], ["BP"], ["Care"], ["REP (rid)"], ["ยอดชดเชย", "num"]], rows),
     ]);
   } catch (err) { notice(err.message); }
 }
@@ -179,7 +200,8 @@ async function openVn(vn) {
       el("td", { class: "mono" }, b.rid), el("td", { class: "num" }, money(b.total))));
     const status = h.stms.length ? el("span", { class: "badge b-ok" }, `ชดเชยแล้ว ${money(h.stms.reduce((s, b) => s + Number(b.total || 0), 0))} บาท`)
       : h.status_stat ? statBadge(h.status_stat) : el("span", { class: "badge b-sent" }, "ยังไม่มีผลตอบกลับ");
-    openDrawer(`VN ${vn}`, "ประวัติผลตอบรับและการชดเชย", [
+    const isAn = [...h.reps, ...h.stms].some((b) => b.account === "SIGN");
+    openDrawer(`${isAn ? "AN" : "VN"} ${vn}`, "ประวัติผลตอบรับและการชดเชย", [
       el("p", {}, "สถานะล่าสุด: ", status),
       el("h3", {}, `REP (${h.reps.length})`),
       h.reps.length ? table([["เลข REP"], ["วันที่ออก"], ["งวดส่ง"], ["ผล"], ["ยอดเบิก", "num"], ["รหัส"]], repRows) : el("p", { class: "hint" }, "ไม่พบใน REP ที่นำเข้า"),

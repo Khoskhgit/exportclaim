@@ -13,7 +13,14 @@ CSMBS (ข้าราชการ, จาก สปสช. e-Claim) REP and STM
   The UC (บัตรทอง) REP eclaim_{hcode}_{OP|IP}_{date}_{no}.xls has the same sheet ("REP No.") and is stored as "UCS".
   STM_{hcode}_OP{yyyymm}_{nn}.xls  sheet "พึงรับ": a block per REP NO, one row per visit with SEQ NO (= VN) and
                                    พึงรับทั้งหมด (the amount to be paid); it is stored as STM account "OFC".
-The patient's name and national ID in these files are not kept: VN and HN link back to HOSxP.
+SSO inpatient (AIPN, account "SIGN") REP comes as a ZIP of TIS-620 text and STM as UTF-8 XML; the AN is the key:
+  {hcode}_SIGNREP_{repno}.REP  one "*|" line per AN: pcode tcode(A/C) iptype CareAs SS, HMain, HCare, AN, DRG, rw,
+                               adjrw, ST, SST, PT, Amt, name[:err[:dat],err…]; "--251: …" explains the codes
+  {hcode}_SIGNSUP_{repno}.REP  the failed ANs ("*|AN, HN, name (PID), C (codes)") with the IPDx "+|", IPOp "#|" and
+                               BillItems "=|" lines to fix; kept as the REP's failed details (rep_disps, dispid = AN)
+  {hcode}_SIGNSTMS_{period}.xml  <STMLIST>: <stmdat> and one <Bill> per paid AN (drg, adjrw, Reimb, rid);
+                               SIGNSUMS / SIGNSUPS repeat the same bills and are not stored
+The patient's name and national ID in these files are not kept: VN, AN and HN link back to HOSxP.
 """
 from __future__ import annotations
 
@@ -27,7 +34,7 @@ from datetime import datetime
 THAI_MONTHS = {name: i for i, name in enumerate(
     ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน",
      "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"], start=1)}
-NAME = re.compile(r"(?P<hcode>\d{5})_(?P<acc>[A-Z]{4})(?P<part>BIL|DIS|STMP|SUMP)_(?P<no>[\w-]+)\.(?P<ext>\w+)$", re.I)
+NAME = re.compile(r"(?P<hcode>\d{5})_(?P<acc>[A-Z]{4})(?P<part>BIL|DIS|STMP|SUMP|REP|SUP|STMS|SUMS|SUPS)_(?P<no>[\w-]+)\.(?P<ext>\w+)$", re.I)
 MAX_FILES = 50
 
 
@@ -264,6 +271,85 @@ def parse_rep_dis(data: bytes, rep: Rep) -> None:
             ))
 
 
+# -------------------------------------------------------------- AIPN REP
+def _aipn_codes(value: str) -> str:
+    """'432:10866,644,666' (err[:dat] items) -> '432,644,666'."""
+    return ",".join(c for c in (p.split(":", 1)[0].strip() for p in (value or "").split(",")) if c)
+
+
+def parse_aipn_rep(data: bytes, rep: Rep) -> None:
+    lines = _decode(data).splitlines()
+    rep.has_bil = True
+    rep.hcode = rep.hcode or _header(lines, "รหัส ร.พ.")
+    rep.issued_at = be_datetime(_header(lines, "วันที่ออกเลขตอบรับ")) or rep.issued_at
+    session = next((ln.split(":", 1)[1].strip() for ln in lines if "เลขงวดที่ส่ง" in ln and ":" in ln), "")
+    rep.session = session or rep.session
+    rep.station = "AIPN"
+    for label, attr in (("รายการที่ส่งไป", "sent"), ("รายการที่ตรวจผ่าน", "passed"), ("รายการที่ตรวจไม่ผ่าน", "failed")):
+        value = _header(lines, label).split()
+        setattr(rep, attr, int(value[0]) if value and value[0].isdigit() else 0)
+    for line in lines:
+        match = re.match(r"\s*--(\d{3}):\s*(.+?)\s*$", line)
+        if match:
+            rep.code_names[match.group(1)] = match.group(2)
+    for line in lines:
+        if not line.startswith("*|"):
+            continue
+        parts = line[2:].split(",")
+        if len(parts) < 12:
+            continue
+        flags = parts[0].split()
+        hmain, hcare, an, drg, rw, adjrw, st, sst, pt, amt = (p.strip() for p in parts[1:11])
+        rest = ",".join(parts[11:])  # the patient's name, then ":" and the codes; the name is not kept
+        rep.bills.append(RepBill(
+            line=len(rep.bills) + 1, stat=flags[1].upper() if len(flags) > 1 else "", station=st, hcode=hcare,
+            hmain=hmain, authcode=drg, dttran="", invno=an, bp=flags[3] if len(flags) > 3 else "",
+            amount=adjrw, claimamt=_money(amt), codes=_aipn_codes(rest.split(":", 1)[1]) if ":" in rest else "",
+        ))
+
+
+def parse_aipn_sup(data: bytes, rep: Rep) -> None:
+    """The ANs that failed, each with its diagnosis, procedure and bill item lines to fix."""
+    lines = _decode(data).splitlines()
+    rep.has_dis = True
+    current = None
+    for line in lines:
+        if line.startswith("*|"):
+            fields = line[2:].split(",")
+            status = re.search(r",\s*([AC])\s*\(([^)]*)\)\s*$", line)
+            an = fields[0].strip()
+            if not an.isdigit():  # the format description at the top also starts with "*|"
+                current = None
+                continue
+            current = RepDisp(line=len(rep.disps) + 1, codes=_aipn_codes(status.group(2)) if status else "", invno=an,
+                              dispid=an, item_count="0", charge="0.00", claim="0.00", paid="0.00", other="0.00")
+            rep.disps.append(current)
+            continue
+        kind = line.strip()[:2]
+        if current is None or kind not in ("=|", "+|", "#|"):
+            continue
+        parts = line.strip().split("|", 2)
+        if len(parts) < 3:
+            continue
+        codes, fields = _codes(parts[1]), [f.strip() for f in parts[2].split(",")]
+        if kind == "=|" and len(fields) >= 11:
+            item = RepDrug(codes=codes, hospdrgid=fields[2], prdcat=fields[1], name=",".join(fields[5:-5]).strip(),
+                           qty=fields[-5], unitprice=_money(fields[-4]), chargeamt=_money(fields[-3]),
+                           reimbamt=_money(fields[-1]), drgid=fields[4], claimcont=fields[3])
+            current.charge = f"{float(current.charge) + float(item.chargeamt):.2f}"
+            current.claim = f"{float(current.claim) + float(item.reimbamt):.2f}"
+        elif kind == "#|" and len(fields) >= 3:
+            item = RepDrug(codes=codes, hospdrgid=fields[2], prdcat=f"IPOp {fields[1]}", name=",".join(fields[3:]).strip(),
+                           qty="", unitprice="0.00", chargeamt="0.00", reimbamt="0.00", drgid="", claimcont="")
+        elif kind == "+|" and len(fields) >= 4:
+            item = RepDrug(codes=codes, hospdrgid=fields[3], prdcat=f"IPDx {fields[1]}", name=",".join(fields[4:]).strip(),
+                           qty="", unitprice="0.00", chargeamt="0.00", reimbamt="0.00", drgid="", claimcont="")
+        else:
+            continue
+        current.drugs.append(item)
+        current.item_count = str(len(current.drugs))
+
+
 # ------------------------------------------------------------------- STM
 def _text(node, tag: str) -> str:
     found = node.find(tag)
@@ -298,6 +384,36 @@ def parse_stm(data: bytes) -> Stm:
         ))
     if not stm.stm_no:
         raise RepStmError("ไม่พบเลขที่ STM ในไฟล์")
+    return stm
+
+
+def parse_stm_aipn(data: bytes) -> Stm:
+    """SIGNSTMS: the paid ANs of one period; total is Reimb, payplan the DRG and cfh the AdjRW."""
+    try:
+        root = ET.fromstring(data)
+    except ET.ParseError as exc:
+        raise RepStmError(f"อ่าน XML ไม่ได้: {exc}") from None
+    head = root.find("stmdat")
+    if root.tag != "STMLIST" or head is None:
+        raise RepStmError("ไม่ใช่ไฟล์ STMS ของ AIPN")
+    stm = Stm(stm_no=_text(head, "stmno"), hcode=_text(head, "hcode"), account=_text(root, "stmAccountID") or "SIGN",
+              period=_text(head, "period"), date_due=thai_date(_text(head, "dateDue")))
+    bills = root.find("Bills")
+    for seq, bill in enumerate(bills.iter("Bill") if bills is not None else [], start=1):
+        stm.bills.append(StmBill(
+            seq=seq, station="AIPN", hmain=_text(bill, "hmain"), hproc=_text(bill, "hproc"), hcare=_text(bill, "hcode"),
+            hn=_text(bill, "hn"), invno=_text(bill, "an"), bf=_text(bill, "bf"), pcode=_text(bill, "ptype"),
+            care=_text(bill, "careas"), payplan=_text(bill, "drg"), bp=_text(bill, "PP"), dttran=_text(bill, "datedsc"),
+            copay=_money(_text(bill, "Copay")), cfh=_text(bill, "adjrw"), total=_money(_text(bill, "Reimb")),
+            extp=_money(_text(bill, "Nreimb")), rid=_text(bill, "rid"), cstat=_text(bill, "ft"),
+        ))
+    if not stm.stm_no:
+        raise RepStmError("ไม่พบเลขที่ STM ในไฟล์")
+    days = sorted(_text(b, "dateadm") for b in (bills.iter("Bill") if bills is not None else []) if _text(b, "dateadm"))
+    ends = sorted(b.dttran for b in stm.bills if b.dttran)
+    stm.date_start, stm.date_end = (days[0] if days else ""), (ends[-1] if ends else "")
+    stm.count = len(stm.bills)
+    stm.amount = f"{sum(float(b.total) for b in stm.bills):.2f}"
     return stm
 
 
@@ -458,7 +574,16 @@ def _add(name: str, data: bytes, parsed: Parsed) -> None:
             parsed.skipped.append(base)
         return
     part, ext = match["part"].upper(), match["ext"].lower()
-    if part in {"BIL", "DIS"} and ext == "bil":
+    if part in {"REP", "SUP"} and ext == "rep":
+        rep_no = match["no"]
+        rep = parsed.reps.setdefault(rep_no, Rep(rep_no=rep_no, hcode=match["hcode"], account=match["acc"].upper()))
+        (parse_aipn_rep if part == "REP" else parse_aipn_sup)(data, rep)
+    elif part == "STMS" and ext == "xml":
+        stm = parse_stm_aipn(data)
+        parsed.stms[stm.stm_no] = stm
+    elif part in {"SUMS", "SUPS"}:
+        return  # the AIPN cover sheet and the per-main-hospital copy repeat STMS
+    elif part in {"BIL", "DIS"} and ext == "bil":
         rep_no = match["no"]
         rep = parsed.reps.setdefault(rep_no, Rep(rep_no=rep_no, hcode=match["hcode"], account=match["acc"].upper()))
         (parse_rep_bil if part == "BIL" else parse_rep_dis)(data, rep)
@@ -491,5 +616,5 @@ def parse_upload(name: str, data: bytes) -> Parsed:
     parsed = Parsed()
     _add(name, data, parsed)
     if not parsed.reps and not parsed.stms:
-        raise RepStmError(f"{name}: ไม่พบไฟล์ REP (SOCDBIL/SOCDDIS), STM (STMP) หรือ REP/STM ข้าราชการ (.xls) ที่อ่านได้")
+        raise RepStmError(f"{name}: ไม่พบไฟล์ REP (SOCDBIL/SOCDDIS, AIPN SIGNREP), STM (STMP, AIPN SIGNSTMS) หรือ REP/STM ข้าราชการ (.xls) ที่อ่านได้")
     return parsed
