@@ -519,3 +519,14 @@ dialog{border-radius:18px}
 .actions-inner{padding:12px 24px}
 .notice{border-radius:12px}
 @media(max-width:720px){main{padding:14px}.top{padding:10px 14px}.notices{padding:0 14px}.search-inline{grid-template-columns:1fr 1fr}.search-inline .actions-cell{grid-column:1/-1}.drawer{border-radius:0}.drawer-head{border-radius:0}}
+
+/* NTIP */
+.ntip-views{margin:4px 0 14px}
+.table-wrap .ntip-table{min-width:1560px}
+.ntip-table td{vertical-align:middle}
+.ntip-table .problems{min-width:260px;max-width:380px}
+.ntip-pick{font-size:13px;padding:4px 6px;min-width:150px;max-width:230px}
+.ntip-pick.changed{border-color:var(--accent);background:var(--accent-soft)}
+.ntip-form{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;margin:8px 0 4px}
+.ntip-form label{display:flex;flex-direction:column;gap:4px;font-size:13px}
+.service-rules[hidden]{display:none}

@@ -11,7 +11,7 @@
 | login MOPH ID | ใช้ได้ | Health ID + Provider ID เข้าได้เฉพาะบุคลากร รพ.คลองหาด (10866) ส่ง `User-Agent: EMR` เพราะ Cloudflare ของ provider.id.th บล็อกชื่อ Python |
 | HTTPS | ใช้ได้ | certificate สร้างเองใน `data/tls/` (`make_cert.py`) |
 | GitHub | ขึ้นแล้ว | https://github.com/Khoskhgit/exportclaim branch `main` |
-| Test | ผ่าน 361 รายการ | `.venv/bin/python -m pytest -q` |
+| Test | ผ่าน 378 รายการ | `.venv/bin/python -m pytest -q` |
 
 ## เครื่องที่ใช้
 - **เครื่องพัฒนา (192.168.11.20):** https://localhost:5180 เปิดเฉพาะเครื่องตัวเอง
@@ -65,6 +65,7 @@ cd /var/khclaim/exportclaim && git pull && chown -R exportclaim:exportclaim . &&
 39. **18 แฟ้ม AN ของ visit ที่ Admit:** แถว OPD ที่ Admit แสดง "AN …" ใต้เลข VN (จาก ovst.an หรือ ipt.vn) ทดสอบ VN 691101120302 → AN 690002159 ภาพจากผู้ใช้ (VN 691106110116 ฯลฯ ยอด 0.00 คำเตือนยอดไม่ตรง) ยังไม่ได้ตรวจเพราะเครื่องทดสอบ 192.168.1.6 ไม่มี AN ของ visit เหล่านั้น
 40. **18 แฟ้ม เลือกทั้งหมดเฉพาะหน้านี้:** ช่องติ๊กที่หัวตารางหน้าคอลัมน์ผลตรวจ เลือกเฉพาะแถวที่แสดงอยู่และส่งได้ (ล้างรายการที่เลือกไว้นอกหน้าที่กรอง)
 41. **หมวดค่าใช้จ่ายว่าง (opitemrece.income):** ใช้หมวดจากทะเบียนรายการ (s_drugitems.income) แทน ทั้งแฟ้ม CHA/ADP/DRU ตัวตรวจ Billmaud และ drawer แสดงคำเตือน INCOME_EMPTY พร้อมรายการและหมวดที่ใช้ VN 691021161714: 49 รายการ Error Billmaud หาย CHA รวม 11,153.25 = CHT (ปีงบ 2569 บน 192.168.1.6 พบ visit นี้ visit เดียว ควรแก้ใน HOSxP ด้วย)
+42. **เมนู NTIP (คัดกรองวัณโรคกลุ่มเสี่ยงสูง ทุกสิทธิ):** ผู้ใช้ส่ง Template_ImportDataNTIPPlus.xlsx (2026-11-19) แท็บคัดกรอง CXR ดึง visit ที่มี Z11.1 ส่งออก .xlsx ชีต TEMPLATE-IMPORT 32 คอลัมน์ตามแบบ (ทุกช่องเป็นข้อความ วันที่ YYYYMMDD ค.ศ. คำนำหน้า/สิทธิ/สัญชาติ/ผลใช้ข้อความตาม MS_DATA RISK_TYPE ใช้รหัส RST) เฉพาะแถวไม่มี Error และจำว่าส่งออกแล้ว HOSxP ไม่มีกลุ่มเสี่ยงและข้อความผล CXR (report_text ว่าง) จึงเดากลุ่มเสี่ยงจาก ICD ของ visit แล้วอายุ ≥65 แล้วสัญชาติ และเลือกกลุ่มเสี่ยง/ซักประวัติ/ผล CXR/DX ในแถว ช่องเพิ่ม (INDEX CID, ICD10, HbA1C, CD4, ยากดภูมิ, เรือนจำ) ใน drawer บันทึกราย visit ในแอป (ntip_choices ไม่เก็บชื่อ) HbA1C (lab 198) และ CD4 ดึงผลล่าสุดใน 1 ปี แท็บ Lab วัณโรคตรวจเงื่อนไขเบิกต่อคนต่อปีงบ (นับจาก 1 ต.ค.): Molecular 1 ครั้ง (LAMP 200, Xpert 500, MTB/MDR 600, LPA 600; หลัง LAMP บวกตรวจดื้อยาได้อีก 1) Second-line 700 เฉพาะเมื่อมีผลดื้อยา AFB 20 ไม่เกิน 3 Culture 1 ครั้ง (เลือก Solid 200 / Liquid 300 ราย order) จับ LAB จากชื่อใน HOSxP แถว lab ของผู้ป่วยในใช้สิทธิจาก ipt และส่งออก Excel ผลตรวจ ปีงบ 2569 บน 192.168.1.6: คัดกรอง 380 visit (เดากลุ่มเสี่ยงได้ 48 ที่เหลือต้องเลือก) Lab 410 รายการ เกินสิทธิ 59 (AFB 56 เพราะตรวจติดตามเกิน 3 ครั้ง) ยังไม่ได้นำเข้าไฟล์จริงใน NTIP Plus อัตรา CXR ไม่ได้ให้มาจึงไม่แสดงยอด
 
 ## ไฟล์ที่ไม่อยู่ใน git
 `.env` (รหัสผ่านและ key), `data/` (SQLite, session, certificate), `exports/` และไฟล์ ZIP/XML ที่มีข้อมูลผู้ป่วย ต้องคัดลอกหรือสร้างใหม่บนแต่ละเครื่อง
