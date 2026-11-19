@@ -90,7 +90,7 @@ def _screen_out(s: ntip.Screen) -> dict:
     v = dict(s.values)
     for k in ("FNAME", "LNAME", "CID", "ADDR"):
         v.pop(k, None)
-    return {"key": s.vn, "vn": s.vn, "hn": s.hn, "date": s.date, "ptname": s.ptname, "cid": _mask(s.cid), "pttype": s.pttype,
+    return {"key": s.vn, "vn": s.vn, "hn": s.hn, "date": s.date, "ptname": s.ptname, "cid": _mask(s.cid), "pttype": s.pttype, "cc": s.cc,
             "nth": s.nth, "values": v, "picked": s.picked, "guess": s.guess, "dx": s.dx, "cxr": s.cxr, "exported": s.exported,
             "errors": s.errors, "warnings": s.warnings}
 

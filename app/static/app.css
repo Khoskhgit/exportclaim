@@ -198,6 +198,8 @@ th[aria-sort=descending] .sort-mark::after{content:"▼";opacity:1;color:var(--a
 .info-grid div{display:grid;min-width:0}
 .info-grid dt{font-size:12px;color:var(--faint)}
 .info-grid dd{margin:0;font-weight:600;overflow-wrap:anywhere}
+.info-grid .info-wide{grid-column:1/-1}
+.info-grid .cc-text{font-weight:500;white-space:pre-wrap}
 .issues{margin:0;padding:0;list-style:none;display:grid;gap:8px}
 .issue{padding:10px 12px;border-radius:var(--radius-sm);border:1px solid var(--line);border-left-width:4px;background:#fff}
 .issue.error{border-left-color:var(--error)}.issue.warn,.issue.warn_c{border-left-color:#d99a00}.issue.special{border-left-color:var(--special)}

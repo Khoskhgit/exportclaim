@@ -159,3 +159,10 @@ def test_store_and_routes(tmp_path):
     assert client.post("/api/ntip/lab-choice", json={"key": "1:279", "technique": "gold"}).status_code == 400
     nothing = client.post("/api/ntip/export", json={"start": "2025-10-01", "end": "2025-10-31", "vns": []})
     assert nothing.status_code == 400 and nothing.json()["detail"] == "ยังไม่ได้เลือกรายการ"
+
+
+def test_the_visit_cc_is_kept_for_the_drawer():
+    (s,) = ntip.check_screening(data([visit(cc="ไอเรื้อรัง 3 สัปดาห์")]), {})
+    assert s.cc == "ไอเรื้อรัง 3 สัปดาห์"
+    (s,) = ntip.check_screening(data([visit()]), {})
+    assert s.cc == ""

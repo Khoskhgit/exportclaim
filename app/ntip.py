@@ -143,8 +143,8 @@ def fetch_screening(q: Select, start: date, end: date) -> dict:
     since = fiscal_start(start)
     visits = q(f"""
         SELECT o.vn, o.hn, o.vstdate, p.pname, p.fname, p.lname, p.cid, p.sex, p.birthday, p.addrpart, p.moopart,
-          p.chwpart, p.amppart, p.tmbpart, p.nationality, ptt.hipdata_code, ptt.name pttype_name, o.pttype
-        FROM ovst o JOIN patient p ON p.hn=o.hn LEFT JOIN pttype ptt ON ptt.pttype=o.pttype
+          p.chwpart, p.amppart, p.tmbpart, p.nationality, ptt.hipdata_code, ptt.name pttype_name, o.pttype, os.cc
+        FROM ovst o JOIN patient p ON p.hn=o.hn LEFT JOIN pttype ptt ON ptt.pttype=o.pttype LEFT JOIN opdscreen os ON os.vn=o.vn
         WHERE o.vstdate BETWEEN {lit(since)} AND {lit(end)}
           AND o.vn IN (SELECT d.vn FROM ovstdiag d WHERE d.vstdate BETWEEN {lit(since)} AND {lit(end)} AND d.icd10 REGEXP {lit(SCREEN_ICD)})
         ORDER BY o.vstdate, o.vn""")
@@ -180,6 +180,7 @@ class Screen:
     ptname: str = ""
     cid: str = ""
     pttype: str = ""
+    cc: str = ""  # อาการสำคัญ (opdscreen.cc)
     nth: int = 1
     values: dict = field(default_factory=dict)  # the template's columns
     picked: dict = field(default_factory=dict)  # what the page saved for the visit
@@ -235,7 +236,7 @@ def check_screening(data: dict, picked: dict[str, dict], exported: dict[str, str
             pick["cxr_abnormal"] = ""
         risk = pick["risk"]
         s = Screen(vn=vn, hn=hn, date=day.isoformat(), ptname=" ".join(x for x in (text(v.get("pname")) + text(v.get("fname")), text(v.get("lname"))) if x),
-                   cid=text(v.get("cid")), pttype=f"{text(v.get('pttype'))}: {text(v.get('pttype_name'))}".strip(": "),
+                   cid=text(v.get("cid")), pttype=f"{text(v.get('pttype'))}: {text(v.get('pttype_name'))}".strip(": "), cc=text(v.get("cc")),
                    nth=seen[hn], picked=pick, guess=guess, dx=icds, exported=exported.get(vn, ""),
                    cxr={"name": text(cxr.get("name")), "date": str(cxr.get("day") or "")[:10], "report": text(cxr.get("report"))} if cxr else {})
         chw, amp, tmb = text(v.get("chwpart")), text(v.get("amppart")), text(v.get("tmbpart"))

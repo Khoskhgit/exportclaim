@@ -178,7 +178,8 @@ async function openScreen(r) {
     ["เลขบัตร", r.cid], ["สิทธิ (INSCL_ID)", v.INSCL_ID || "—"], ["เพศ / วันเกิด", `${v.GENDER || "—"} · ${v.BORN || "—"} (${v.AGE_Y} ปี ${v.AGE_M} เดือน)`],
     ["ที่อยู่ (รหัส)", `หมู่ ${v.MU || "—"} · ${v.TAMBOL_ID || "—"}`], ["ประชากร / สัญชาติ", `${v.PEOPLE_TYPE} · ${v.RACE_ID}`],
     ["CXR", r.cxr.date ? `${r.cxr.name.trim()} ${toDmy(r.cxr.date)}` : "ไม่พบใน visit"], ["ส่งออก", r.exported ? thaiDateTime(r.exported) : "ยังไม่ส่งออก"],
-  ].map(([k, val]) => el("div", {}, el("dt", {}, k), el("dd", {}, val))));
+  ].map(([k, val]) => el("div", {}, el("dt", {}, k), el("dd", {}, val))),
+    el("div", { class: "info-wide" }, el("dt", {}, "CC (อาการสำคัญ)"), el("dd", { class: "cc-text" }, r.cc || "ไม่ได้บันทึก")));
   const extra = el("div", { class: "ntip-form" },
     field(r, "index_cid", "เลขบัตร INDEX (ผู้สัมผัส)", { inputmode: "numeric", maxLength: 13, placeholder: "13 หลัก" }),
     field(r, "icd10", "ICD-10 (เบาหวาน/สุรา)", { maxLength: 6, placeholder: "เช่น E119" }),
