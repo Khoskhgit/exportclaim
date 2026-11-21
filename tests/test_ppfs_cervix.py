@@ -98,14 +98,14 @@ def test_ktb_zip_names_files_as_ktb_checks_them(tmp_path):
     rows = {"INS": [{"HN": "1", "SEQ": "691105"}], "PAT": [{"HN": "1", "PERSON_ID": "1101700000011"}],
             "ADP": [{"HN": "1", "SEQ": "691105", "DATEOPD": "20261105", "TYPE": "4", "CODE": "1B0046_0"},
                     {"HN": "2", "SEQ": "691001", "DATEOPD": "20261001", "TYPE": "4", "CODE": "1B0046_1"}],
-            "DRU": [], "LAB": [{"HN": "1"}], "PHDB": [{"HN": "1"}]}
+            "DRU": [], "ODX": [{"HN": "1", "DRDX": "ท17056"}], "OOP": [{"HN": "1"}], "LAB": [{"HN": "1"}], "PHDB": [{"HN": "1"}]}
     assert ktb_yymm(rows, date(2026, 12, 1)) == "6911"  # newest service month, Buddhist year
     assert ktb_yymm({}, date(2027, 1, 5)) == "7001"
     result = ktb_zip(rows, "10866", tmp_path, datetime(2026, 11, 21, 22, 0, 0))
     with zipfile.ZipFile(result.zip_path) as z:
         names = z.namelist()
         ins = z.read("INS6911.txt").decode("cp874")
-    assert names == ["INS6911.txt", "PAT6911.txt", "ADP6911.txt"]  # no empty DRU, no LAB/PHDB
+    assert names == ["INS6911.txt", "PAT6911.txt", "ADP6911.txt"]  # no ODX/OOP (KTB checks DRDX), no empty DRU, no LAB
     assert all(len(n.removesuffix(".txt")) <= 20 for n in names)
     assert ins.startswith("HN|INSCL|") and "|691105|" in ins
     assert result.counts == {"INS": 1, "PAT": 1, "ADP": 2}

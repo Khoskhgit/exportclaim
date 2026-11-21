@@ -251,8 +251,10 @@ def ktb_csv(q: Select, hcode: str, hns: list[str]) -> tuple[bytes, int, int]:
 # ---------------------------------------------------------------- KTB 16 files
 # Krungthai Digital Health Platform (นำเข้าข้อมูลผลการรักษา > นำเข้าข้อมูลจาก 16 แฟ้ม, Text Format) checks each file's
 # name: the file type + YYMM (Buddhist year, within a year of today), e.g. INS6911.txt, at most 20 characters.
-# P51/P53 need INS, PAT and ADP; files with no rows are left out (KTB refuses an upload with an empty file).
-KTB_FILES = ["INS", "PAT", "OPD", "ORF", "ODX", "OOP", "IPD", "IRF", "IDX", "IOP", "CHT", "CHA", "AER", "ADP", "LVD", "DRU"]
+# P51/P53 need INS, PAT and ADP (OPD passes too). ODX/OOP are left out: KTB checks DRDX/DROPID against the staff
+# registered on the platform, and the visit's other diagnoses and procedures (dental and so on) are not this claim;
+# one failing file fails the whole upload. Files with no rows are left out as well.
+KTB_FILES = ["INS", "PAT", "OPD", "ADP"]
 
 
 def ktb_yymm(rows: dict[str, list[dict]], today: date) -> str:
