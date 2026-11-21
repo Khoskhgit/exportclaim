@@ -241,7 +241,7 @@ def test_ofc_rep_xls_is_read_and_listed(client):
     failed = rep.bills[1]
     assert (failed.stat, failed.codes, failed.invno, failed.claimamt, failed.dttran) == (
         "C", "565", "691007075513", "7057.75", "2026-10-07T07:55")
-    assert rep.bills[0].stat == "A" and rep.bills[0].codes == ""
+    assert rep.bills[0].stat == "A" and rep.bills[0].codes == "" and rep.bills[0].paid == "65.00"
 
     response = client.post("/api/repstm/import?name=eclaim_10866_OPCS_25691010_111902014.xls", content=data)
     assert response.status_code == 200, response.text
@@ -249,6 +249,45 @@ def test_ofc_rep_xls_is_read_and_listed(client):
     assert listed[0]["rep_no"] == "691000025" and listed[0]["failed"] == 1
     history = client.post("/api/repstm/vn", json={"vn": "691007075513"}).json()
     assert history["status_stat"] == "C" and history["reps"][0]["codes"] == "565"
+
+
+def test_uc_rep_payout_adds_the_nhso_and_agency_columns(tmp_path):
+    xlrd = pytest.importorskip("xlrd")
+    data = ofc_rep_xls([("691100045", 1, "02/11/2026 07:03:00", 350.0, "DENY", 825.0, "691102070338")])
+    book = xlrd.open_workbook(file_contents=data, formatting_info=False)
+    sheet = book.sheet_by_name("Detail")
+    rows = [[sheet.cell_value(r, c) for c in range(sheet.ncols)] for r in range(sheet.nrows)]
+    rows[6][11], rows[7][11] = "ต้นสังกัด", 5.0  # ชดเชยสุทธิ: สปสช. 350 + ต้นสังกัด 5
+    xlwt = pytest.importorskip("xlwt")
+    out = xlwt.Workbook(encoding="utf-8")
+    detail = out.add_sheet("Detail")
+    for r, values in enumerate(rows):
+        for c, value in enumerate(values):
+            if value != "":
+                detail.write(r, c, value)
+    out.add_sheet("Summary")
+    buffer = io.BytesIO()
+    out.save(buffer)
+    rep = repstm.parse_upload("eclaim_10866_OP_25691116_153533322.xls", buffer.getvalue()).reps["691100045"]
+    assert (rep.bills[0].stat, rep.bills[0].codes, rep.bills[0].paid) == ("C", "DENY", "355.00")
+    store = repstm_store.RepStmStore(Store(tmp_path / "s.sqlite3"))
+    store.save(repstm.parse_upload("eclaim_10866_OP_25691116_153533322.xls", buffer.getvalue()), "x.xls", "h", "", "")
+    found = store.latest(["691102070338"])["691102070338"]
+    assert (found["rep_paid"], found["rep_claim"], found["rep_codes"]) == ("355.00", "825.00", "DENY")
+
+
+def test_old_rep_bills_table_gets_the_paid_column(tmp_path):
+    import sqlite3
+    path = tmp_path / "s.sqlite3"
+    with sqlite3.connect(path) as db:
+        db.execute("""CREATE TABLE rep_bills (rep_no TEXT NOT NULL, line INTEGER NOT NULL, stat TEXT NOT NULL, station TEXT NOT NULL,
+          hcode TEXT NOT NULL, hmain TEXT NOT NULL, authcode TEXT NOT NULL, dttran TEXT NOT NULL, invno TEXT NOT NULL, bp TEXT NOT NULL,
+          amount TEXT NOT NULL, claimamt TEXT NOT NULL, codes TEXT NOT NULL, PRIMARY KEY (rep_no, line))""")
+        db.execute("INSERT INTO rep_bills VALUES ('1',1,'A','','','','','','v1','','10','10','')")
+    store = repstm_store.RepStmStore(Store(path))
+    assert store.rep_detail("1") is None  # no rep_files row, but the table was migrated without losing rows
+    with sqlite3.connect(path) as db:
+        assert db.execute("SELECT paid FROM rep_bills WHERE invno='v1'").fetchone() == ("",)
 
 
 def test_ofc_ipcs_rep_uses_the_an():

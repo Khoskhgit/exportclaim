@@ -18,7 +18,8 @@ from fastapi.templating import Jinja2Templates
 
 from . import (auth, fdh, nhso18, nhso18_service as svc, ppfs, ppfs_anemia, ppfs_fluoride, ppfs_fp, ppfs_iron, ppfs_ironchild,
                ppfs_anemiachild, ppfs_cervix, ppfs_dmrem, ppfs_instrument,
-               ppfs_ncd, ppfs_pregtest)
+               ppfs_ncd, ppfs_pregtest, ppfs_summary)
+from .repstm_store import RepStmStore
 from . import dmrem_registry
 from .config import Settings
 from .store import Store
@@ -110,6 +111,24 @@ class PpfsStore:
             else:
                 db.execute("DELETE FROM ppfs_projects WHERE service=? AND vn=?", (service, vn))
 
+    def sent_by_fund(self, vns: list[str]) -> dict[str, dict[str, Decimal]]:
+        """vn -> fund -> amount, from the newest export of each (vn, code)."""
+        last: dict[tuple[str, str], tuple[int, str, str]] = {}
+        with self._db() as db:
+            for start in range(0, len(vns), 500):
+                part = vns[start:start + 500]
+                for r in db.execute(
+                        f"SELECT i.vn, i.code, i.amount, e.id, e.service FROM ppfs_export_items i JOIN ppfs_exports e "
+                        f"ON e.id=i.export_id WHERE i.vn IN ({','.join('?' * len(part))})", part):
+                    key = (r["vn"], r["code"])
+                    if key not in last or r["id"] > last[key][0]:
+                        last[key] = (r["id"], r["service"], r["amount"])
+        out: dict[str, dict[str, Decimal]] = {}
+        for (vn, _code), (_id, fund, amount) in last.items():
+            funds = out.setdefault(vn, {})
+            funds[fund] = funds.get(fund, Decimal(0)) + Decimal(amount or "0")
+        return out
+
     def history(self, limit: int = 50) -> list[dict]:
         with self._db() as db:
             return [dict(r) for r in db.execute(
@@ -152,6 +171,7 @@ def _out(row: ppfs.Row) -> dict:
 
 def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templates: Jinja2Templates) -> None:
     store = PpfsStore(local)
+    rep_store = RepStmStore(local)
     registry = dmrem_registry.RegistryStore(local)
     web_store = ppfs_instrument.WebStore(local)
 
@@ -255,6 +275,25 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
         if (end - start).days > 366:
             raise HTTPException(400, "ค้นได้ครั้งละไม่เกิน 1 ปี")
         return {"service": service.key, "rows": [_out(r) for r in check(service, start, end)]}
+
+    @app.get("/ppfs/summary", response_class=HTMLResponse)
+    def summary_page(request: Request):
+        return templates.TemplateResponse(request, "ppfs_summary.html", {"hname": settings.hname})
+
+    @app.post("/api/ppfs/summary")
+    def summary(body: dict = Body(...)):
+        """One fund's dashboard row; the page asks for each fund in turn."""
+        service = _service(body.get("service"))
+        start, end = _date(body.get("start"), "วันที่เริ่ม"), _date(body.get("end"), "วันที่สิ้นสุด")
+        if end < start:
+            raise HTTPException(400, "วันที่สิ้นสุดต้องไม่ก่อนวันที่เริ่ม")
+        if (end - start).days > 366:
+            raise HTTPException(400, "สรุปได้ครั้งละไม่เกิน 1 ปี")
+        rows = check(service, start, end)
+        sent_vns = sorted({r.vn for r in rows if r.sent})
+        out = ppfs_summary.summarize(rows, rep_store.latest(sent_vns),
+                                     ppfs_summary.shares(sent_vns, store.sent_by_fund(sent_vns), service.key))
+        return {"service": service.key, "label": service.label, **out}
 
     @app.post("/api/ppfs/detail")
     def detail(body: dict = Body(...)):

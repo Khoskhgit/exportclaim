@@ -24,7 +24,8 @@ CREATE TABLE IF NOT EXISTS rep_files (
 CREATE TABLE IF NOT EXISTS rep_bills (
   rep_no TEXT NOT NULL, line INTEGER NOT NULL, stat TEXT NOT NULL, station TEXT NOT NULL, hcode TEXT NOT NULL,
   hmain TEXT NOT NULL, authcode TEXT NOT NULL, dttran TEXT NOT NULL, invno TEXT NOT NULL, bp TEXT NOT NULL,
-  amount TEXT NOT NULL, claimamt TEXT NOT NULL, codes TEXT NOT NULL, PRIMARY KEY (rep_no, line)
+  amount TEXT NOT NULL, claimamt TEXT NOT NULL, codes TEXT NOT NULL, paid TEXT NOT NULL DEFAULT '',
+  PRIMARY KEY (rep_no, line)
 );
 CREATE INDEX IF NOT EXISTS rep_bills_invno ON rep_bills(invno);
 CREATE TABLE IF NOT EXISTS rep_disps (
@@ -82,6 +83,8 @@ class RepStmStore:
         with self._db() as db:
             self._migrate(db)
             db.executescript(SCHEMA)
+            if "paid" not in {r[1] for r in db.execute("PRAGMA table_info(rep_bills)")}:
+                db.execute("ALTER TABLE rep_bills ADD COLUMN paid TEXT NOT NULL DEFAULT ''")
 
     @staticmethod
     def _migrate(db) -> None:
@@ -144,7 +147,7 @@ class RepStmStore:
             (*values.values(), upload_id, at))
         if rep.has_bil:
             db.execute("DELETE FROM rep_bills WHERE rep_no=?", (rep.rep_no,))
-            db.executemany("INSERT INTO rep_bills VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            db.executemany("INSERT INTO rep_bills VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                            [(rep.rep_no, *asdict(b).values()) for b in rep.bills])
         if rep.has_dis:
             db.execute("DELETE FROM rep_disps WHERE rep_no=?", (rep.rep_no,))
@@ -232,7 +235,7 @@ class RepStmStore:
             for part in _chunks(vns):
                 marks = ",".join("?" * len(part))
                 for row in db.execute(
-                    f"""SELECT b.invno, b.stat, b.codes, b.rep_no, f.issued_at, f.hcode, f.account FROM rep_bills b
+                    f"""SELECT b.invno, b.stat, b.codes, b.rep_no, b.claimamt, b.paid, f.issued_at, f.hcode, f.account FROM rep_bills b
                     JOIN rep_files f ON f.rep_no=b.rep_no WHERE b.invno IN ({marks})
                     ORDER BY f.issued_at, b.rep_no, b.line""", part):
                     mine = found.setdefault(row["invno"], {})
@@ -242,7 +245,7 @@ class RepStmStore:
                     mine["accepted"] = mine.get("accepted", False) or row["stat"] == "A"
                     mine.update(
                         rep_stat=row["stat"], rep_codes=row["codes"], rep_no=row["rep_no"], rep_at=row["issued_at"],
-                        rep_account=row["account"],
+                        rep_account=row["account"], rep_claim=row["claimamt"], rep_paid=row["paid"],
                         rep_file=f"{row['hcode']}_{row['account']}BIL_{row['rep_no']}")
                 for row in db.execute(
                     f"""SELECT b.invno, GROUP_CONCAT(b.stm_no) AS stm_no, SUM(CAST(b.total AS REAL)) AS paid

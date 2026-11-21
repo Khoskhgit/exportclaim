@@ -412,6 +412,14 @@ tr.flag-row td{background:var(--warn-bg)!important}
 .service-rules li+li{margin-top:2px}
 .sent-tag{margin-left:4px}
 .ppfs-table .problems{min-width:360px;max-width:480px}
+/* สรุป PPFS (ppfs_summary.js) */
+.ppfs-dash td.num{white-space:nowrap}
+.ppfs-dash td:first-child{min-width:220px}
+.ppfs-dash td.ok{color:#0d6b55}.ppfs-dash td.warn{color:#9a6b00}.ppfs-dash td.bad{color:var(--error)}
+.ppfs-dash td.ok .sub,.ppfs-dash td.warn .sub,.ppfs-dash td.bad .sub{color:inherit;opacity:.75}
+.ppfs-dash tfoot td{font-weight:700;border-top:2px solid var(--line);background:var(--panel-2)}
+.dash-codes{min-width:180px}
+.code-chip{display:inline-block;margin:0 4px 4px 0;padding:1px 8px;border-radius:999px;background:#fff4dc;color:#7a5600;font-size:12px;font-weight:600;cursor:help}
 tr.picked td{background:#f1f8f5}
 .picked-panel{padding:14px 16px}
 .picked-head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}

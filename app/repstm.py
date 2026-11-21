@@ -56,6 +56,7 @@ class RepBill:
     amount: str
     claimamt: str
     codes: str
+    paid: str = ""  # ชดเชยสุทธิ (สปสช. + ต้นสังกัด) of the e-Claim REP; blank where the REP has no payout
 
 
 @dataclass
@@ -487,6 +488,11 @@ def parse_rep_ofc(data: bytes, name: str = "", book=None) -> list[Rep]:
     need = ("REP", "ลำดับที่", "TRAN_ID", "วันเข้ารักษา", "ชดเชยสุทธิ", "Error Code", "เรียกเก็บ", "SEQ NO")
     if any(label not in cols for label in need):
         raise RepStmError(f"{name}: คอลัมน์ในแผ่นงาน Detail ไม่ครบ ({', '.join(l for l in need if l not in cols)})")
+    # ชดเชยสุทธิ has two sub-columns, สปสช. and ต้นสังกัด (the second one's header cell is blank).
+    pay = cols.get("ชดเชยสุทธิ")
+    payout_cols = [] if pay is None else [pay] + [
+        c for c in (pay + 1,) if c < sheet.ncols and not _cell(sheet, head, c)
+        and any("ต้นสังกัด" in _cell(sheet, r, c) for r in range(head + 1, min(head + 4, sheet.nrows)))]
     session = _labelled(sheet, "เลขที่เอกสาร").split()[0] if _labelled(sheet, "เลขที่เอกสาร") else ""
     hcode = (_labelled(sheet, "โรงพยาบาล").split() or [""])[0]
     issued = be_datetime(_labelled(sheet, "ออกรายงานวันที่").replace("เวลา", ""))
@@ -502,10 +508,11 @@ def parse_rep_ofc(data: bytes, name: str = "", book=None) -> list[Rep]:
                                           issued_at=issued, has_bil=True))
         codes = _codes(_cell(sheet, row, cols["Error Code"]).replace("-", ""))
         claimed = _money(_cell(sheet, row, cols["เรียกเก็บ"]))
+        paid = sum(float(_money(_cell(sheet, row, c))) for c in payout_cols)
         rep.bills.append(RepBill(
             line=int(line), stat="C" if codes else "A", station="", hcode=hcode, hmain="",
             authcode=_cell(sheet, row, cols["TRAN_ID"]), dttran=_ofc_datetime(_cell(sheet, row, cols["วันเข้ารักษา"]))[:16],
-            invno=vn, bp="", amount=claimed, claimamt=claimed, codes=codes,
+            invno=vn, bp="", amount=claimed, claimamt=claimed, codes=codes, paid=f"{paid:.2f}",
         ))
     if not reps:
         raise RepStmError(f"{name}: ไม่พบรายการในแผ่นงาน Detail")
