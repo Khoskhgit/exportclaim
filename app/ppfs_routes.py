@@ -735,7 +735,10 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
         if isinstance(built, JSONResponse):
             return built
         service, picked, vns, data = built
-        result = nhso18.build_zip(data, settings.hcode, settings.export_dir)
+        if service.key == "cervix":  # KTB Health Platform: INSyymm.txt … only the files with rows
+            result = ppfs_cervix.ktb_zip(data, settings.hcode, settings.export_dir)
+        else:
+            result = nhso18.build_zip(data, settings.hcode, settings.export_dir)
         items = [{"vn": r.vn, "code": c, "amount": f"{a:.2f}"} for r in picked for c, a in ppfs_instrument.codes_of(r)]
         export_id = store.record(service.key, result.zip_path, items, auth.user_label(request))
         log.info("ppfs export id=%s service=%s items=%s", export_id, service.key, len(items))

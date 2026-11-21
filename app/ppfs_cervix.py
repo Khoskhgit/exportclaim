@@ -18,7 +18,11 @@ import re
 from datetime import date
 from decimal import Decimal
 
-from .nhso18 import lit, lit_list
+import zipfile
+from datetime import datetime
+from pathlib import Path
+
+from .nhso18 import Nhso18Error, Result, lit, lit_list, to_txt
 from .ppfs import ERROR, SELF_PAID, WARN, Row, Select, _day, _money, self_paid_error
 from .validate import text
 
@@ -242,3 +246,33 @@ def ktb_csv(q: Select, hcode: str, hns: list[str]) -> tuple[bytes, int, int]:
         writer.writerow([hcode, cid, _name(p["fname"]), "", _name(p["lname"]), born.strftime("%Y%m%d"), "THA", "", ""])
         written += 1
     return out.getvalue().encode("utf-8"), written, skipped
+
+
+# ---------------------------------------------------------------- KTB 16 files
+# Krungthai Digital Health Platform (นำเข้าข้อมูลผลการรักษา > นำเข้าข้อมูลจาก 16 แฟ้ม, Text Format) checks each file's
+# name: the file type + YYMM (Buddhist year, within a year of today), e.g. INS6911.txt, at most 20 characters.
+# P51/P53 need INS, PAT and ADP; files with no rows are left out (KTB refuses an upload with an empty file).
+KTB_FILES = ["INS", "PAT", "OPD", "ORF", "ODX", "OOP", "IPD", "IRF", "IDX", "IOP", "CHT", "CHA", "AER", "ADP", "LVD", "DRU"]
+
+
+def ktb_yymm(rows: dict[str, list[dict]], today: date) -> str:
+    """YYMM of the newest service date in ADP (Buddhist year), or of today when there is none."""
+    days = [d for d in (text(r.get("DATEOPD")) for r in rows.get("ADP", [])) if re.fullmatch(r"\d{8}", d)]
+    year, month = (int(max(days)[:4]), int(max(days)[4:6])) if days else (today.year, today.month)
+    return f"{(year + 543) % 100:02d}{month:02d}"
+
+
+def ktb_zip(rows: dict[str, list[dict]], hcode: str, output_root: Path, now: datetime | None = None) -> Result:
+    now = (now or datetime.now()).replace(microsecond=0)
+    yymm = ktb_yymm(rows, now.date())
+    folder = output_root / f"KTB16_{now:%Y%m%d-%H%M%S}"
+    zip_path = folder / f"{hcode}_KTB16_{yymm}_{now:%Y%m%d%H%M%S}.zip"
+    files = [n for n in KTB_FILES if rows.get(n)]
+    try:
+        folder.mkdir(parents=True, exist_ok=False)
+        with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as archive:
+            for name in files:
+                archive.writestr(f"{name}{yymm}.txt", to_txt(name, rows[name]))
+    except OSError as exc:
+        raise Nhso18Error(f"บันทึกไฟล์ส่งออกไม่สำเร็จ: {exc.__class__.__name__}") from exc
+    return Result(zip_path, {name: len(rows[name]) for name in files})

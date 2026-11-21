@@ -229,7 +229,12 @@ function renderPicked() {
   $("cervix-csv").disabled = !list.length;
 }
 
+function exportLabel() {
+  $("export").textContent = service() === "cervix" ? "สร้างไฟล์ 16 แฟ้ม (KTB)" : "สร้าง ZIP 18 แฟ้ม (e-Claim)";
+}
+
 function renderRules() {
+  exportLabel();
   const service = state.services.find((s) => s.key === $("service").value);
   const rules = service ? service.rules : [];
   $("rules").replaceChildren(...rules.map((t) => el("li", {}, t)));
@@ -260,7 +265,9 @@ async function exportZip() {
     el("dt", {}, "ยอดเบิก"), el("dd", {}, `${money(list.reduce((s, r) => s + Number(r.amount), 0))} บาท`),
     el("dt", {}, "มีคำเตือน"), el("dd", {}, `${list.filter((r) => r.warnings.length).length} รายการ`));
   const note = el("p", { class: "muted-note" }, "ZIP มีเฉพาะรายการ PPFS ที่เลือก ค่ารักษาอื่นของ visit ไม่ถูกส่ง");
-  if (!await confirmDialog("ยืนยันการสร้าง ZIP 18 แฟ้ม", [summary, note], "สร้าง ZIP")) return;
+  const ktb = service() === "cervix";
+  if (ktb) note.textContent = "ZIP มีไฟล์ INSyymm.txt, PATyymm.txt, ADPyymm.txt … (เฉพาะแฟ้มที่มีข้อมูล) แตกไฟล์แล้วอัปโหลดที่ KTB แบบ Text Format";
+  if (!await confirmDialog(ktb ? "ยืนยันการสร้างไฟล์ 16 แฟ้ม KTB" : "ยืนยันการสร้าง ZIP 18 แฟ้ม", [summary, note], "สร้าง ZIP")) return;
   const payload = { service: $("service").value, keys: list.map((r) => r.key), dates: [...new Set(list.map((r) => r.date))] };
   $("export").disabled = true; $("export").textContent = "กำลังสร้าง…";
   try {
@@ -279,7 +286,7 @@ async function exportZip() {
   } catch (err) {
     const detail = err.data && err.data.blocked ? `: ${err.data.blocked.map((b) => `${b.key.replace("|", " ")} (${b.reason})`).join(", ")}` : "";
     notice(err.message + detail);
-  } finally { $("export").textContent = "สร้าง ZIP 18 แฟ้ม (e-Claim)"; renderPicked(); }
+  } finally { exportLabel(); renderPicked(); }
 }
 
 // ------------------------------------------------------------- detail drawer (like the 18-file page)
