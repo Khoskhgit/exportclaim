@@ -110,7 +110,8 @@ const service = () => $("service").value;
 
 function renderHead() {
   const th = (label, key, num) => el("th", { class: num ? "num" : "", ...(key ? { "data-sort": key } : {}) }, label);
-  $("thead").replaceChildren(el("tr", {}, el("th", { class: "check" }, el("span", { class: "sr-only" }, "เลือก")),
+  $("thead").replaceChildren(el("tr", {}, el("th", { class: "check" }, el("input", { type: "checkbox", id: "check-all",
+      title: "เลือกทั้งหน้านี้ (ที่ส่งได้และยังไม่ส่ง)", "aria-label": "เลือกทั้งหน้านี้", onchange: (e) => pickPage(e.target.checked) })),
     th("ผลตรวจ", "rank"), th("วันที่", "date"), th("VN", "vn"), th("HN", "hn"), th("ชื่อ", "ptname"),
     ...(COLUMNS[service()] || []).map(([label, key, num]) => th(label, key, num)),
     th("รายการ", "code"), th(COUNT_LABEL[service()] || "ครั้งที่", "count", true), th("ยอด", "amount", true), th("ปัญหาที่พบ")));
@@ -175,10 +176,27 @@ function render() {
       el("td", { class: "num" }, money(r.amount)),
       el("td", { class: "problems" }, problems.length ? problems.join(" · ") : dash()));
   }));
+  showPageBox(list);
   $("empty").hidden = list.length > 0;
   if (!list.length && state.rows.length) $("empty").replaceChildren(...emptyState("ไม่มีรายการตามตัวกรองนี้"));
   $("result-count").textContent = state.rows.length ? `แสดง ${count.format(list.length)} จาก ${count.format(state.rows.length)} รายการ` : "";
   renderPicked();
+}
+
+// Rows on screen that the header box picks: no error and not sent yet.
+const pageRows = () => visible().filter((r) => selectable(r) && !r.sent);
+function pickPage(on) {
+  pageRows().forEach((r) => (on ? state.selected.add(r.key) : state.selected.delete(r.key)));
+  render();
+}
+function showPageBox(list) {
+  const all = $("check-all");
+  if (!all) return;
+  const page = list.filter((r) => selectable(r) && !r.sent);
+  const on = page.filter((r) => state.selected.has(r.key)).length;
+  all.disabled = !page.length;
+  all.checked = page.length > 0 && on === page.length;
+  all.indeterminate = on > 0 && on < page.length;
 }
 
 function toggle(key, on) {
@@ -213,7 +231,10 @@ function renderPicked() {
 
 function renderRules() {
   const service = state.services.find((s) => s.key === $("service").value);
-  $("rules").replaceChildren(...(service ? service.rules : []).map((t) => el("li", {}, t)));
+  const rules = service ? service.rules : [];
+  $("rules").replaceChildren(...rules.map((t) => el("li", {}, t)));
+  $("rules-title").textContent = service ? service.label : "กลุ่มเสี่ยง / เงื่อนไข";
+  $("rules-open").disabled = !rules.length;
 }
 
 async function search() {
@@ -821,3 +842,8 @@ loadHistory();
 loadFdhStatus();
 connection();
 render();
+
+// The service's target group and rules live in a popup behind the "กลุ่มเสี่ยง" button.
+$("rules-open").onclick = () => $("rules-dialog").showModal();
+$("rules-close").onclick = () => $("rules-dialog").close();
+$("rules-dialog").addEventListener("click", (e) => { if (e.target === e.currentTarget) e.currentTarget.close(); });

@@ -15,9 +15,8 @@
     <label class="service-pick">ประเภทบริการ<select name="service" id="service"><option value="postnatal">7) การตรวจหลังคลอด</option></select></label>
     <label>วันที่รับบริการตั้งแต่<input type="date" name="start" required></label>
     <label>ถึงวันที่<input type="date" name="end" required></label>
-    <div class="actions-cell"><button class="primary" type="submit">ค้นหาและตรวจ</button></div>
+    <div class="actions-cell"><button class="primary" type="submit">ค้นหาและตรวจ</button><button type="button" id="rules-open" class="ghost" aria-haspopup="dialog">กลุ่มเสี่ยง</button></div>
     <div class="presets"><span>ช่วงด่วน:</span><button type="button" data-preset="this">เดือนนี้</button><button type="button" data-preset="last">เดือนก่อน</button></div>
-    <ul id="rules" class="service-rules"></ul>
   </form>
 
   <section id="dmrem-panel" class="panel dmrem-panel" hidden>
@@ -99,6 +98,11 @@
   <div class="drawer-head"><div><h2 id="drawer-title"></h2><span id="drawer-sub" class="sub"></span></div><button type="button" id="drawer-close" class="ghost">ปิด ✕</button></div>
   <div id="drawer-body"></div>
 </aside>
+<dialog id="rules-dialog" class="rules-dialog" aria-labelledby="rules-title">
+  <h2 id="rules-title">กลุ่มเสี่ยง / เงื่อนไข</h2>
+  <ul id="rules" class="service-rules"></ul>
+  <div class="dialog-actions"><button type="button" id="rules-close" class="primary">ปิด</button></div>
+</dialog>
 <dialog id="confirm">
   <h2 id="confirm-title"></h2>
   <div id="confirm-body"></div>
