@@ -3,18 +3,21 @@
 const state = { view: "screen", period: null, screen: [], labs: [], filter: "all", text: "", opts: null, current: null, selected: new Set(),
   sort: { key: "", dir: "asc" }, loaded: { screen: false, labs: false } };
 
-const status = (r) => (r.errors.length ? "error" : r.warnings.length ? "warn" : "ok");
-const STATUS_BADGE = { error: ["b-error", "Error"], warn: ["b-warn", "เตือน"], ok: ["b-ok", "พร้อม"] };
-const problems = (r) => [...r.errors, ...r.warnings].map((p) => p.message).join(" · ");
+// A screening row already put in an NTIP Plus file shows "ส่งแล้ว" (unless it now has an Error); EXPORTED is that
+// fact, not a problem, so it is left out of the warnings shown.
+const otherWarnings = (r) => r.warnings.filter((w) => w.code !== "EXPORTED");
+const status = (r) => (r.errors.length ? "error" : r.exported ? "sent" : otherWarnings(r).length ? "warn" : "ok");
+const STATUS_BADGE = { error: ["b-error", "Error"], sent: ["b-sent", "ส่งแล้ว"], warn: ["b-warn", "เตือน"], ok: ["b-ok", "พร้อม"] };
+const problems = (r) => [...r.errors, ...otherWarnings(r)].map((p) => p.message).join(" · ");
 const dash = () => el("span", { class: "muted" }, "—");
 
 const CATS = {
   screen: () => ({
     all: ["ทั้งหมด", () => true, "all"],
-    ok: ["พร้อมส่งออก", (r) => !r.errors.length, "ok"],
-    warn: ["มีคำเตือน", (r) => !r.errors.length && r.warnings.some((w) => w.code !== "EXPORTED"), "warn"],
+    ok: ["พร้อมส่งออก (ยังไม่ส่ง)", (r) => !r.errors.length && !r.exported, "ok"],
+    warn: ["มีคำเตือน", (r) => !r.errors.length && !r.exported && otherWarnings(r).length > 0, "warn"],
     error: ["Error", (r) => r.errors.length > 0, "error"],
-    sent: ["ส่งออกแล้ว", (r) => !!r.exported, "sent"],
+    sent: ["ส่งแล้ว", (r) => !!r.exported, "sent"],
   }),
   labs: () => ({
     all: ["ทั้งหมด", () => true, "all"],
@@ -59,9 +62,10 @@ const HEADS = {
 // A row can be picked for the NTIP Plus file when it has no Error; the header box picks every such row shown.
 const pickable = (r) => !r.errors.length;
 function selectAll() {
-  return el("input", { type: "checkbox", id: "select-all", "aria-label": "เลือกทั้งหมดในหน้านี้", title: "เลือกทั้งหมดที่แสดงอยู่และส่งออกได้",
+  // Ticking it takes the rows not sent yet; a sent row is only sent again when ticked on its own.
+  return el("input", { type: "checkbox", id: "select-all", "aria-label": "เลือกทั้งหมดในหน้านี้", title: "เลือกทั้งหมดที่แสดงอยู่ ส่งออกได้ และยังไม่ส่ง",
     onchange: (e) => {
-      for (const r of visible().filter(pickable)) e.target.checked ? state.selected.add(r.vn) : state.selected.delete(r.vn);
+      for (const r of visible().filter((x) => pickable(x) && (!x.exported || !e.target.checked))) e.target.checked ? state.selected.add(r.vn) : state.selected.delete(r.vn);
       render();
     } });
 }
@@ -82,7 +86,8 @@ function screenRow(r) {
     onchange: (e) => { e.target.checked ? state.selected.add(r.vn) : state.selected.delete(r.vn); render(); } });
   return el("tr", { class: state.current === r.vn ? "current" : "", onclick: () => openScreen(r) },
     el("td", { class: "check" }, box),
-    el("td", {}, el("span", { class: `badge ${cls}` }, label), r.exported ? el("span", { class: "sub" }, "ส่งออกแล้ว") : null),
+    el("td", {}, el("span", { class: `badge ${cls}`, title: r.exported ? `ส่งออกไฟล์ NTIP Plus เมื่อ ${thaiDateTime(r.exported)}` : "" }, label),
+      r.exported ? el("span", { class: "sub" }, toDmy(r.exported.slice(0, 10))) : null),
     el("td", { class: "mono" }, toDmy(r.date)), el("td", { class: "mono" }, r.vn), el("td", { class: "mono" }, r.hn),
     el("td", { class: "name-cell", title: r.ptname }, r.ptname), el("td", { class: "name-cell", title: r.pttype }, r.pttype),
     el("td", {}, pick(r, "risk", o.risks, { blank: "— เลือกกลุ่มเสี่ยง —", codes: true, label: "กลุ่มเสี่ยง" })),
@@ -130,7 +135,7 @@ function render() {
   $("excel").disabled = !state.loaded[state.view] || (state.view === "screen" && !picked);
   const all = $("select-all");
   if (all) {
-    const shown = list.filter(pickable);
+    const shown = list.filter((r) => pickable(r) && !r.exported);
     const on = shown.filter((r) => state.selected.has(r.vn)).length;
     all.checked = shown.length > 0 && on === shown.length;
     all.indeterminate = on > 0 && on < shown.length;
