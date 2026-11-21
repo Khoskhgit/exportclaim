@@ -603,3 +603,5 @@ dialog{border-radius:18px}
 .viz-tip{position:fixed;left:0;top:0;z-index:60;pointer-events:none;max-width:280px;padding:8px 10px;border-radius:8px;background:var(--panel);color:var(--ink);border:1px solid var(--line);box-shadow:var(--shadow-lg);font-size:13px;line-height:1.45}
 .viz-tip strong{display:block;font-size:12px;color:var(--muted);font-weight:600}
 @media (max-width:700px){.dash-charts{grid-template-columns:1fr}.viz-row{grid-template-columns:1fr 80px}.viz-row .viz-label{grid-column:1/-1}.viz-bars{grid-column:1/-1}.viz-bar-line{grid-template-columns:minmax(0,1fr) 80px}}
+.rules-dialog{width:min(720px,94vw)}
+.rules-dialog .service-rules{margin-top:12px;line-height:1.6}

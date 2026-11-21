@@ -14,20 +14,8 @@
   <form id="search" class="panel search search-inline">
     <label>วันที่ตั้งแต่<input type="date" name="start" required></label>
     <label>ถึงวันที่<input type="date" name="end" required></label>
-    <div class="actions-cell"><button class="primary" type="submit">ค้นหา</button><button type="button" id="excel" class="primary" disabled>ส่งออก</button></div>
+    <div class="actions-cell"><button class="primary" type="submit">ค้นหา</button><button type="button" id="excel" class="primary" disabled>ส่งออก</button><button type="button" id="rules-open" class="ghost" aria-haspopup="dialog">กลุ่มเสี่ยง TB</button></div>
     <div class="presets"><span>ช่วงด่วน:</span><button type="button" data-preset="this">เดือนนี้</button><button type="button" data-preset="last">เดือนก่อน</button><button type="button" id="fiscal">ปีงบนี้</button></div>
-    <ul id="rules-screen" class="service-rules">
-        <li>ดึง visit ที่ลงรหัส <strong>Z11.1</strong> (คัดกรองวัณโรคปอด) ทุกสิทธิ · ส่งออกตามแบบ Template_ImportDataNTIPPlus.xlsx (ชีต TEMPLATE-IMPORT 32 คอลัมน์ วันที่ YYYYMMDD ค.ศ. และเลขบัตรเป็นข้อความ)</li>
-        <li>กลุ่มเสี่ยงเดาจากรหัสโรคของ visit (B20–B24, Z20.1, E10–E14, J44, N18, F10, F11–F19, F17, C, B90, J62, F2–F3, E40–E46) แล้วอายุ 65 ปีขึ้นไป และสัญชาติไม่ใช่ไทย · เลือกเปลี่ยนในแถวได้ ระบบจำไว้ต่อ visit</li>
-        <li>ผล CXR ใน HOSxP ไม่มีข้อความรายงาน จึงตั้งต้นเป็น Normal เมื่อมีการถ่าย Chest ใน visit · ซักประวัติตั้งต้น "ไม่สงสัย" · DX เป็น TB เมื่อมีรหัส A15–A19</li>
-        <li>CXR เบิกได้ไม่เกิน 1 ครั้งต่อคนต่อปีงบ (ผู้ต้องขัง 3 ครั้ง) · ส่งออกเฉพาะรายการที่ไม่มี Error</li>
-      </ul>
-    <ul id="rules-labs" class="service-rules" hidden>
-        <li><strong>Molecular</strong> วิธีใดวิธีหนึ่ง 1 ครั้งต่อคนต่อปีงบ: TB-LAMP 200 · Xpert MTB/RIF 500 · MTB/MDR 600 · LPA 600 บาท · หลังผล TB-LAMP บวก ตรวจหาเชื้อดื้อยาได้อีก 1 ครั้ง</li>
-        <li><strong>Second-line</strong> (LPA FQ และ AG/CP หรือ MTB/XDR) 700 บาท เฉพาะผู้ป่วยดื้อยา RR/MDR-TB</li>
-        <li><strong>AFB</strong> 20 บาท ไม่เกิน 3 ครั้งต่อคนต่อปีงบ · <strong>Culture</strong> 1 ครั้งต่อคนต่อปีงบ: Solid 200 · Liquid 300 บาท (เลือกเทคนิคในแถว)</li>
-        <li>นับครั้งตั้งแต่วันแรกของปีงบ (1 ต.ค.) แม้เลือกช่วงวันที่สั้นกว่า · รายการ LAB จับจากชื่อใน HOSxP: LAMP, Xpert/Gene expert, LPA, MDR/XDR, PCR TB, Sputum AFB, TB culture</li>
-      </ul>
   </form>
 
   <div class="tabs ntip-views" role="tablist">
@@ -58,6 +46,22 @@
   <div class="drawer-head"><div><h2 id="drawer-title"></h2><span id="drawer-sub" class="sub"></span></div><button type="button" id="drawer-close" class="ghost">ปิด ✕</button></div>
   <div id="drawer-body"></div>
 </aside>
+<dialog id="rules" class="rules-dialog" aria-labelledby="rules-title">
+  <h2 id="rules-title">กลุ่มเสี่ยง TB และเงื่อนไขการคัดกรอง</h2>
+  <ul id="rules-screen" class="service-rules">
+    <li>ดึง visit ที่ลงรหัส <strong>Z11.1</strong> (คัดกรองวัณโรคปอด) ทุกสิทธิ · ส่งออกตามแบบ Template_ImportDataNTIPPlus.xlsx (ชีต TEMPLATE-IMPORT 32 คอลัมน์ วันที่ YYYYMMDD ค.ศ. และเลขบัตรเป็นข้อความ)</li>
+    <li>กลุ่มเสี่ยงเดาจากรหัสโรคของ visit (B20–B24, Z20.1, E10–E14, J44, N18, F10, F11–F19, F17, C, B90, J62, F2–F3, E40–E46) แล้วอายุ 65 ปีขึ้นไป และสัญชาติไม่ใช่ไทย · เลือกเปลี่ยนในแถวได้ ระบบจำไว้ต่อ visit</li>
+    <li>ผล CXR ใน HOSxP ไม่มีข้อความรายงาน จึงตั้งต้นเป็น Normal เมื่อมีการถ่าย Chest ใน visit · ซักประวัติตั้งต้น "ไม่สงสัย" · DX เป็น TB เมื่อมีรหัส A15–A19</li>
+    <li>CXR เบิกได้ไม่เกิน 1 ครั้งต่อคนต่อปีงบ (ผู้ต้องขัง 3 ครั้ง) · ส่งออกเฉพาะรายการที่ไม่มี Error</li>
+  </ul>
+  <ul id="rules-labs" class="service-rules" hidden>
+    <li><strong>Molecular</strong> วิธีใดวิธีหนึ่ง 1 ครั้งต่อคนต่อปีงบ: TB-LAMP 200 · Xpert MTB/RIF 500 · MTB/MDR 600 · LPA 600 บาท · หลังผล TB-LAMP บวก ตรวจหาเชื้อดื้อยาได้อีก 1 ครั้ง</li>
+    <li><strong>Second-line</strong> (LPA FQ และ AG/CP หรือ MTB/XDR) 700 บาท เฉพาะผู้ป่วยดื้อยา RR/MDR-TB</li>
+    <li><strong>AFB</strong> 20 บาท ไม่เกิน 3 ครั้งต่อคนต่อปีงบ · <strong>Culture</strong> 1 ครั้งต่อคนต่อปีงบ: Solid 200 · Liquid 300 บาท (เลือกเทคนิคในแถว)</li>
+    <li>นับครั้งตั้งแต่วันแรกของปีงบ (1 ต.ค.) แม้เลือกช่วงวันที่สั้นกว่า · รายการ LAB จับจากชื่อใน HOSxP: LAMP, Xpert/Gene expert, LPA, MDR/XDR, PCR TB, Sputum AFB, TB culture</li>
+  </ul>
+  <div class="dialog-actions"><button type="button" id="rules-close" class="primary">ปิด</button></div>
+</dialog>
 <dialog id="confirm">
   <h2 id="confirm-title"></h2>
   <div id="confirm-body"></div>

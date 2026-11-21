@@ -153,6 +153,8 @@ function switchView(view) {
   document.querySelectorAll(".ntip-views .tab").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.view === view)));
   $("rules-screen").hidden = view !== "screen";
   $("rules-labs").hidden = view !== "labs";
+  $("rules-open").textContent = view === "labs" ? "เงื่อนไข Lab TB" : "กลุ่มเสี่ยง TB";
+  $("rules-title").textContent = view === "labs" ? "Lab วัณโรค · เงื่อนไขการเบิก" : "กลุ่มเสี่ยง TB และเงื่อนไขการคัดกรอง";
   head();
   render();
   if (state.period && !state.loaded[view]) load();
@@ -296,3 +298,8 @@ $("search").querySelector('[data-preset="last"]').click();
 head();
 render();
 connection();
+
+// The rules for the open tab live in a popup behind the "กลุ่มเสี่ยง TB" button.
+$("rules-open").onclick = () => $("rules").showModal();
+$("rules-close").onclick = () => $("rules").close();
+$("rules").addEventListener("click", (e) => { if (e.target === e.currentTarget) e.currentTarget.close(); });
