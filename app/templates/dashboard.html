@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dashboard · KHH Claim Sure</title>
+<link rel="stylesheet" href="/static/app.css?v={{ v }}">
+</head>
+<body class="no-footer">
+{% set active = "home" %}{% include "_top.html" %}
+<main>
+  <div class="page-head"><h2>Dashboard ภาพรวม</h2><p>ผล REP / STM ตามสิทธิ และการส่งของแต่ละเมนู · ใช้ข้อมูลที่แอปเก็บไว้ (ไฟล์ที่นำเข้าและประวัติการส่ง) ไม่ได้ดึง HOSxP · รายการที่ยังไม่ส่งดูในแต่ละเมนู</p></div>
+
+  <form id="search" class="panel search search-inline">
+    <label>วันที่รับบริการตั้งแต่<input type="date" name="start" required></label>
+    <label>ถึงวันที่<input type="date" name="end" required></label>
+    <div class="actions-cell"><button class="primary" type="submit">แสดง</button></div>
+    <div class="presets"><span>ช่วงด่วน:</span><button type="button" data-preset="this">เดือนนี้</button><button type="button" data-preset="last">เดือนก่อน</button><button type="button" id="fiscal">ปีงบนี้</button></div>
+  </form>
+
+  <section id="cards" class="cards" aria-label="สรุปผล REP รวม"></section>
+
+  <section class="panel dash-panel">
+    <div class="dash-head"><h3>ผล REP / STM ตามสิทธิ</h3><a href="/repstm">นำเข้า REP / STM →</a></div>
+    <p class="muted-note">นับ 1 ครั้งต่อ visit ต่อสิทธิ ใช้ผล REP ล่าสุด (ไม่นับการส่งซ้ำที่ถูกปฏิเสธเพราะซ้ำหลังผ่านแล้ว) · ช่วงวันที่ตามวันรับบริการใน REP (AIPN ใช้วันที่ออก REP) · ยอดส่ง = ยอดเรียกเก็บใน REP · ชดเชย (REP) มีเฉพาะ REP e-Claim ที่นำเข้าหลังรุ่นที่เก็บยอดชดเชย</p>
+    <div class="table-wrap">
+      <table class="dash-rep">
+        <thead><tr><th>สิทธิ</th><th class="num">ส่ง (REP)</th><th class="num">ผ่าน (A)</th><th class="num">ติด C</th><th class="num">Deny</th>
+          <th class="num">% ผ่าน</th><th class="num">ชดเชย (REP)</th><th class="num">STM จ่าย</th><th>รหัสที่ติดบ่อย</th></tr></thead>
+        <tbody id="rep-rows"></tbody>
+        <tfoot id="rep-foot"></tfoot>
+      </table>
+      <div id="rep-empty" class="empty" hidden><div class="empty-icon" aria-hidden="true">○</div><div>ยังไม่มี REP ในช่วงวันที่นี้ นำเข้าไฟล์ได้ที่หน้า REP / STM</div></div>
+    </div>
+  </section>
+
+  <section class="panel dash-panel">
+    <div class="dash-head"><h3>การส่งของแต่ละเมนู</h3></div>
+    <p class="muted-note">นับจากประวัติการสร้างไฟล์และการส่งในแอป ตามวันที่สร้างหรือส่ง (ทันตกรรมตามวันรับบริการ)</p>
+    <div id="menus" class="dash-menus"></div>
+  </section>
+
+  <section class="panel dash-panel">
+    <div class="dash-head"><h3>นำเข้า REP / STM ล่าสุด</h3><a href="/repstm">ดูทั้งหมด →</a></div>
+    <ul id="uploads" class="dash-uploads"></ul>
+  </section>
+</main>
+<script src="/static/common.js?v={{ v }}"></script>
+<script src="/static/dashboard.js?v={{ v }}"></script>
+</body>
+</html>

@@ -63,7 +63,7 @@ def export(client, vns, **kw):
 
 
 def test_page_loads(client):
-    assert "ส่งออก SSOP" in client.get("/").text
+    assert "ส่งออก SSOP" in client.get("/ssop").text
 
 
 def test_search_classifies_and_masks_id(client):
@@ -213,7 +213,7 @@ def test_status_reports_failed_connection_with_masked_host(tmp_path):
 
 
 def test_station_entered_on_screen_is_used(client):
-    assert 'id="station"' in client.get("/").text
+    assert 'id="station"' in client.get("/ssop").text
     response = export(client, [OK], station="9")
     assert response.status_code == 200
     name = response.json()["file"] if "file" in response.json() else client.get("/api/exports").json()[0]["file"]
@@ -240,7 +240,7 @@ def test_allowed_hosts_follow_settings(tmp_path):
 
 
 def test_static_links_carry_a_version(client):
-    page = client.get("/").text
+    page = client.get("/ssop").text
     assert re.search(r'/static/app\.css\?v=[0-9a-f]{10}"', page) and re.search(r'/static/app\.js\?v=[0-9a-f]{10}"', page)
 
 

@@ -17,7 +17,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
-from . import aipn_routes, approve_routes, auth, dental_routes, labwalkin_routes, nhso18_routes, ntip_routes, ppfs_routes, repstm_routes
+from . import aipn_routes, approve_routes, auth, dashboard, dental_routes, labwalkin_routes, nhso18_routes, ntip_routes, ppfs_routes, repstm_routes
 from .aipn_db import AipnDb
 from .config import Settings, load_settings
 from .export import ExportError, build_export, normalise_station, is_excluded, item_name, send_amounts, usage_fields
@@ -125,6 +125,7 @@ def create_app(settings: Settings | None = None, hosxp: Any = None, store: Store
     ppfs_routes.register(app, settings, db, local, templates)
     labwalkin_routes.register(app, settings, db, local, templates)
     ntip_routes.register(app, settings, db, local, templates)
+    dashboard.register(app, settings, local, templates)
 
     def with_results(visits: list[dict]) -> list[dict]:
         """Imported REP/STM files win over rcmdb: STM means paid, otherwise the newest REP line gives A or C."""
@@ -141,7 +142,7 @@ def create_app(settings: Settings | None = None, hosxp: Any = None, store: Store
                 visit["chi_status"], visit["chi_codes"] = mine["rep_stat"], mine["rep_codes"]
         return visits
 
-    @app.get("/", response_class=HTMLResponse)
+    @app.get("/ssop", response_class=HTMLResponse)
     def index(request: Request):
         return templates.TemplateResponse(request, "index.html", {"station": settings.station, "hname": settings.hname})
 
