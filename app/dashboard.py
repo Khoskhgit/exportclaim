@@ -24,6 +24,43 @@ ACCOUNTS = {"UCS": "บัตรทอง (UCS)", "OFC": "ข้าราชก�
 ORDER = list(ACCOUNTS)
 
 
+# Each menu's export / send history: the table, the date it is counted by, and what it adds up.
+MENUS = [
+    {"key": "ssop", "label": "SSOP ผู้ป่วยนอก", "href": "/ssop", "unit": "บิล", "what": "ไฟล์ส่งออก", "table": "exports",
+     "date": "created_at", "last": "created_at", "items": "SUM(bill_count)", "amount": "IFNULL(SUM(CAST(claim_total AS REAL)),0)"},
+    {"key": "aipn", "label": "AIPN ผู้ป่วยใน", "href": "/aipn", "unit": "AN", "what": "ไฟล์ส่งออก", "table": "aipn_exports",
+     "date": "created_at", "last": "created_at", "items": "SUM(an_count)", "amount": "IFNULL(SUM(CAST(total AS REAL)),0)"},
+    {"key": "dental", "label": "ทันตกรรม ปกส.", "href": "/dental", "unit": "รายการ", "what": "รายการขอเบิก", "table": "dental_claims",
+     "date": "service_date", "last": "updated_at", "items": "COUNT(*)", "amount": "IFNULL(SUM(CAST(claim_amount AS REAL)),0)",
+     "paid": "SUM(CAST(NULLIF(paid_amount,'') AS REAL))"},
+    {"key": "nhso18", "label": "18 แฟ้ม สปสช. (ZIP)", "href": "/nhso18", "unit": "visit", "what": "ไฟล์ ZIP", "table": "nhso18_exports",
+     "date": "created_at", "last": "created_at", "items": "SUM(visit_count)", "amount": "NULL"},
+    {"key": "fdh", "label": "ส่ง FDH (prod)", "href": "/nhso18", "unit": "visit", "what": "ครั้งที่ส่งสำเร็จ", "table": "fdh_sends",
+     "where": "ok=1 AND mode='send' AND zone='prod'", "date": "created_at", "last": "created_at", "items": "SUM(visit_count)",
+     "amount": "NULL"},
+    {"key": "eclaim", "label": "ส่ง e-Claim API", "href": "/nhso18", "unit": "visit", "what": "ครั้งที่ส่งสำเร็จ", "table": "eclaim_sends",
+     "where": "ok=1", "date": "created_at", "last": "created_at", "items": "SUM(visit_count)", "amount": "NULL"},
+    {"key": "ppfs", "label": "รายการ PPFS", "href": "/ppfs/summary", "unit": "รายการ", "what": "ไฟล์ / การส่ง", "table": "ppfs_exports",
+     "date": "created_at", "last": "created_at", "items": "SUM(item_count)", "amount": "IFNULL(SUM(CAST(total AS REAL)),0)"},
+    {"key": "ntip", "label": "NTIP (ไฟล์ NTIP Plus)", "href": "/ntip", "unit": "visit", "what": "visit ที่ส่งออก", "table": "ntip_exported",
+     "date": "exported_at", "last": "exported_at", "items": "COUNT(*)", "amount": "NULL"},
+]
+
+
+def month_keys(start: date, end: date) -> list[str]:
+    out, year, month = [], start.year, start.month
+    while (year, month) <= (end.year, end.month):
+        out.append(f"{year:04d}-{month:02d}")
+        year, month = (year + 1, 1) if month == 12 else (year, month + 1)
+    return out
+
+
+def fill_months(start: date, end: date, rows: list[dict]) -> list[dict]:
+    """Every month of the period, 0 where nothing was sent (long periods keep their last 24 months)."""
+    found = {r["month"]: r["items"] or 0 for r in rows}
+    return [{"month": m, "items": found.get(m, 0)} for m in month_keys(start, end)[-24:]]
+
+
 def fiscal_start(today: date) -> date:
     return date(today.year if today.month >= 10 else today.year - 1, 10, 1)
 
@@ -106,38 +143,21 @@ class DashboardStore:
                 GROUP BY f.account, b.invno""", (lo, hi))}
             names = {r["code"]: r["name"] for r in self._all(db, "SELECT code, name FROM rep_codes")}
 
-            def one(sql: str) -> dict:
-                rows = self._all(db, sql, (lo, hi))
-                return rows[0] if rows else {"n": 0, "items": 0, "amount": 0, "last": None}
-
-            menus = [
-                {"key": "ssop", "label": "SSOP ผู้ป่วยนอก", "href": "/ssop", "unit": "บิล", "what": "ไฟล์ส่งออก",
-                 **one("SELECT COUNT(*) n, IFNULL(SUM(bill_count),0) items, IFNULL(SUM(CAST(claim_total AS REAL)),0) amount, "
-                       "MAX(created_at) last FROM exports WHERE created_at >= ? AND created_at <= ?")},
-                {"key": "aipn", "label": "AIPN ผู้ป่วยใน", "href": "/aipn", "unit": "AN", "what": "ไฟล์ส่งออก",
-                 **one("SELECT COUNT(*) n, IFNULL(SUM(an_count),0) items, IFNULL(SUM(CAST(total AS REAL)),0) amount, "
-                       "MAX(created_at) last FROM aipn_exports WHERE created_at >= ? AND created_at <= ?")},
-                {"key": "nhso18", "label": "18 แฟ้ม สปสช. (ZIP)", "href": "/nhso18", "unit": "visit", "what": "ไฟล์ ZIP",
-                 **one("SELECT COUNT(*) n, IFNULL(SUM(visit_count),0) items, NULL amount, MAX(created_at) last "
-                       "FROM nhso18_exports WHERE created_at >= ? AND created_at <= ?")},
-                {"key": "fdh", "label": "ส่ง FDH (prod)", "href": "/nhso18", "unit": "visit", "what": "ครั้งที่ส่งสำเร็จ",
-                 **one("SELECT COUNT(*) n, IFNULL(SUM(visit_count),0) items, NULL amount, MAX(created_at) last FROM fdh_sends "
-                       "WHERE ok=1 AND mode='send' AND zone='prod' AND created_at >= ? AND created_at <= ?")},
-                {"key": "eclaim", "label": "ส่ง e-Claim API", "href": "/nhso18", "unit": "visit", "what": "ครั้งที่ส่งสำเร็จ",
-                 **one("SELECT COUNT(*) n, IFNULL(SUM(visit_count),0) items, NULL amount, MAX(created_at) last FROM eclaim_sends "
-                       "WHERE ok=1 AND created_at >= ? AND created_at <= ?")},
-                {"key": "ppfs", "label": "รายการ PPFS", "href": "/ppfs/summary", "unit": "รายการ", "what": "ไฟล์ / การส่ง",
-                 **one("SELECT COUNT(*) n, IFNULL(SUM(item_count),0) items, IFNULL(SUM(CAST(total AS REAL)),0) amount, "
-                       "MAX(created_at) last FROM ppfs_exports WHERE created_at >= ? AND created_at <= ?")},
-                {"key": "dental", "label": "ทันตกรรม ปกส.", "href": "/dental", "unit": "รายการ", "what": "รายการขอเบิก",
-                 **one("SELECT COUNT(*) n, COUNT(*) items, IFNULL(SUM(CAST(claim_amount AS REAL)),0) amount, MAX(updated_at) last "
-                       "FROM dental_claims WHERE service_date >= ? AND service_date <= ?"),
-                 "paid": (self._all(db, "SELECT IFNULL(SUM(CAST(NULLIF(paid_amount,'') AS REAL)),0) p FROM dental_claims "
-                                        "WHERE service_date >= ? AND service_date <= ?", (lo, hi)) or [{"p": 0}])[0]["p"]},
-                {"key": "ntip", "label": "NTIP (ไฟล์ NTIP Plus)", "href": "/ntip", "unit": "visit", "what": "visit ที่ส่งออก",
-                 **one("SELECT COUNT(*) n, COUNT(*) items, NULL amount, MAX(exported_at) last FROM ntip_exported "
-                       "WHERE exported_at >= ? AND exported_at <= ?")},
-            ]
+            menus = []
+            for m in MENUS:
+                where = f"{m['where']} AND " if m.get("where") else ""
+                date_col = m["date"]
+                head = self._all(db, f"SELECT COUNT(*) n, IFNULL({m['items']},0) items, {m['amount']} amount, "
+                                     f"MAX({m['last']}) last FROM {m['table']} WHERE {where}{date_col} >= ? AND {date_col} <= ?", (lo, hi))
+                months = self._all(db, f"SELECT substr({date_col},1,7) month, IFNULL({m['items']},0) items FROM {m['table']} "
+                                       f"WHERE {where}{date_col} >= ? AND {date_col} <= ? GROUP BY month ORDER BY month", (lo, hi))
+                row = {k: v for k, v in m.items() if k in ("key", "label", "href", "unit", "what")}
+                row.update(head[0] if head else {"n": 0, "items": 0, "amount": None, "last": None})
+                row["months"] = fill_months(start, end, months)
+                if m.get("paid"):
+                    paid_row = self._all(db, f"SELECT IFNULL({m['paid']},0) p FROM {m['table']} WHERE {date_col} >= ? AND {date_col} <= ?", (lo, hi))
+                    row["paid"] = paid_row[0]["p"] if paid_row else 0
+                menus.append(row)
             uploads = self._all(db, "SELECT at, name, summary FROM repstm_uploads ORDER BY id DESC LIMIT 6")
         reps = rep_summary(lines, paid)
         code_meanings(reps, names)

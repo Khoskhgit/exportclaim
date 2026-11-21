@@ -20,6 +20,23 @@
 
   <section id="cards" class="cards" aria-label="สรุปผล REP รวม"></section>
 
+  <section class="dash-charts" aria-label="กราฟผล REP ตามสิทธิ">
+    <div class="panel dash-panel viz">
+      <div class="dash-head"><h3>ผลตรวจ REP ตามสิทธิ</h3><span class="muted-note">สัดส่วน visit ที่ส่ง</span></div>
+      <div class="viz-legend" aria-hidden="true">
+        <span><i class="sw st-good"></i>✓ ผ่าน (A)</span><span><i class="sw st-warn"></i>! ติด C</span><span><i class="sw st-bad"></i>✕ Deny</span>
+      </div>
+      <div id="chart-status" class="viz-rows"></div>
+    </div>
+    <div class="panel dash-panel viz">
+      <div class="dash-head"><h3>ยอดเงินตามสิทธิ</h3><span class="muted-note">บาท</span></div>
+      <div class="viz-legend" aria-hidden="true">
+        <span><i class="sw s-1"></i>ยอดส่ง (REP)</span><span><i class="sw s-2"></i>ชดเชย (REP)</span><span><i class="sw s-3"></i>STM จ่าย</span>
+      </div>
+      <div id="chart-money" class="viz-rows"></div>
+    </div>
+  </section>
+
   <section class="panel dash-panel">
     <div class="dash-head"><h3>ผล REP / STM ตามสิทธิ</h3><a href="/repstm">นำเข้า REP / STM →</a></div>
     <p class="muted-note">นับ 1 ครั้งต่อ visit ต่อสิทธิ ใช้ผล REP ล่าสุด (ไม่นับการส่งซ้ำที่ถูกปฏิเสธเพราะซ้ำหลังผ่านแล้ว) · ช่วงวันที่ตามวันรับบริการใน REP (AIPN ใช้วันที่ออก REP) · ยอดส่ง = ยอดเรียกเก็บใน REP · ชดเชย (REP) มีเฉพาะ REP e-Claim ที่นำเข้าหลังรุ่นที่เก็บยอดชดเชย</p>
@@ -36,7 +53,7 @@
 
   <section class="panel dash-panel">
     <div class="dash-head"><h3>การส่งของแต่ละเมนู</h3></div>
-    <p class="muted-note">นับจากประวัติการสร้างไฟล์และการส่งในแอป ตามวันที่สร้างหรือส่ง (ทันตกรรมตามวันรับบริการ)</p>
+    <p class="muted-note">นับจากประวัติการสร้างไฟล์และการส่งในแอป ตามวันที่สร้างหรือส่ง (ทันตกรรมตามวันรับบริการ) · กราฟแท่งรายเดือนของแต่ละเมนูใช้สเกลของตัวเอง</p>
     <div id="menus" class="dash-menus"></div>
   </section>
 
@@ -45,6 +62,7 @@
     <ul id="uploads" class="dash-uploads"></ul>
   </section>
 </main>
+<div id="viz-tip" class="viz-tip" role="tooltip" hidden></div>
 <script src="/static/common.js?v={{ v }}"></script>
 <script src="/static/dashboard.js?v={{ v }}"></script>
 </body>

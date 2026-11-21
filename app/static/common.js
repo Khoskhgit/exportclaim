@@ -330,11 +330,9 @@ async function showUser() {
 }
 setupDateInputs();
 showUser();
-// The KHH LINK menu closes on a click elsewhere, Escape, or after a link is opened.
-(() => {
-  const menu = $("khh-links");
-  if (!menu) return;
+// The drop-down menus (SSO, KHH LINK) close on a click elsewhere, Escape, or after a link is opened; one is open at a time.
+document.querySelectorAll(".menu .menu-links").forEach((menu) => {
   document.addEventListener("click", (e) => { if (menu.open && !menu.contains(e.target)) menu.open = false; });
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && menu.open) { menu.open = false; menu.querySelector("summary").focus(); } });
   menu.querySelectorAll("a").forEach((a) => a.addEventListener("click", () => { menu.open = false; }));
-})();
+});
