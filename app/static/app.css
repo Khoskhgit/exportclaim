@@ -627,7 +627,7 @@ dialog{border-radius:18px}
 .dash-grid .viz-rows{gap:10px}
 .dash-grid .viz-row{grid-template-columns:118px minmax(0,1fr) 84px;gap:10px}
 .dash-grid .viz-bar-line{grid-template-columns:minmax(0,1fr) 84px;gap:10px}
-.dash-grid .dash-menus{grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.dash-grid .dash-menus{grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
 .dash-grid .dash-menu{padding:8px 10px;gap:0}
 .dash-menu-head{display:flex;align-items:baseline;justify-content:space-between;gap:6px}
 .dash-grid .dash-menu-label{font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

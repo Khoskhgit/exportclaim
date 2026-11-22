@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ทุพพลภาพ ปกส. · KHH Claim Sure</title>
+<link rel="stylesheet" href="/static/app.css?v={{ v }}">
+</head>
+<body class="no-footer">
+{% set active = "disabled" %}{% include "_top.html" %}
+<main>
+  <div class="page-head"><h2>ประกันสังคม กรณีทุพพลภาพ</h2><p>ค่าบริการทางการแพทย์ผู้ทุพพลภาพ (ผู้ป่วยนอก/ใน) · นำเข้ารายงานการส่งเบิกจากระบบ สปส. แล้วจับคู่กับ visit ใน HOSxP และหา visit สิทธิทุพพลภาพที่ยังไม่ส่งเบิก</p></div>
+
+  <section class="panel import-panel">
+    <label id="drop" class="drop" for="files">
+      <span class="drop-icon" aria-hidden="true">⇪</span>
+      <strong>ลากไฟล์ Excel มาวาง หรือคลิกเพื่อเลือกไฟล์</strong>
+      <span class="sub">RE_DISABLEDOPD_SEND.xlsx (รายงานการส่งเบิก) · รายงานการจ่ายถ้ามี · เลือกได้หลายไฟล์</span>
+      <input id="files" type="file" multiple accept=".xlsx" class="sr-only">
+    </label>
+    <ul id="import-log" class="import-log"></ul>
+  </section>
+
+  <form id="search" class="panel search search-inline">
+    <label>วันที่รับบริการตั้งแต่<input type="date" name="start"></label>
+    <label>ถึงวันที่<input type="date" name="end"></label>
+    <div class="actions-cell"><button class="primary" type="submit">แสดง</button><button type="button" id="show-all" class="ghost">ทั้งหมดที่นำเข้า</button></div>
+    <div class="presets"><span>ช่วงด่วน:</span><button type="button" data-preset="this">เดือนนี้</button><button type="button" data-preset="last">เดือนก่อน</button><button type="button" id="fiscal">ปีงบนี้</button></div>
+  </form>
+
+  <section id="summary" class="cards" aria-label="สรุปและกรองตามสถานะ"></section>
+
+  <section class="panel table-panel">
+    <div class="table-tools">
+      <div class="search-box"><input id="filter" type="search" placeholder="กรองจาก VN, AN, HN, ชื่อ หรือเลขใบสำคัญ" aria-label="กรองรายการ"></div>
+      <span id="result-count" class="result-count"></span>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead id="thead"><tr>
+          <th data-sort="state">สถานะ</th><th data-sort="admit_date">วันที่รับบริการ</th><th data-sort="kind">ประเภท</th><th data-sort="vn">VN / AN</th><th data-sort="hn">HN</th>
+          <th data-sort="ptname">ชื่อ (HOSxP)</th><th>เลขบัตร</th><th class="num" data-sort="right_money">ยอดสิทธิ (HOSxP)</th>
+          <th class="num" data-sort="claim_amount">ขอเบิก</th><th data-sort="claim_date">วันที่ส่งเบิก</th><th class="num" data-sort="paid_amount">จ่าย</th><th>หมายเหตุ</th>
+        </tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+      <div id="empty" class="empty"><div class="empty-icon" aria-hidden="true">⌕</div><div>เลือกช่วงวันที่แล้วกด "แสดง" หรือนำเข้ารายงาน</div></div>
+    </div>
+  </section>
+
+  <details class="panel history">
+    <summary>ประวัติการนำเข้า</summary>
+    <div class="history-body"><div id="history"></div></div>
+  </details>
+</main>
+<div id="drawer-backdrop" class="drawer-backdrop" hidden></div>
+<aside id="drawer" class="drawer" hidden aria-label="รายละเอียดรายการทุพพลภาพ">
+  <div class="drawer-head"><div><h2 id="drawer-title"></h2><span id="drawer-sub" class="sub"></span></div><button type="button" id="drawer-close" class="ghost">ปิด ✕</button></div>
+  <div id="drawer-body"></div>
+</aside>
+<script src="/static/common.js?v={{ v }}"></script>
+<script src="/static/disabled.js?v={{ v }}"></script>
+</body>
+</html>

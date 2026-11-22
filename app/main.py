@@ -17,7 +17,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
-from . import aipn_routes, approve_routes, auth, dashboard, dental_routes, labwalkin_routes, nhso18_routes, ntip_routes, ppfs_routes, repstm_routes
+from . import aipn_routes, approve_routes, auth, dashboard, dental_routes, disabled_routes, labwalkin_routes, nhso18_routes, ntip_routes, ppfs_routes, repstm_routes
 from .aipn_db import AipnDb
 from .config import Settings, load_settings
 from .export import ExportError, build_export, normalise_station, is_excluded, item_name, send_amounts, usage_fields
@@ -122,6 +122,7 @@ def create_app(settings: Settings | None = None, hosxp: Any = None, store: Store
     results = repstm_routes.register(app, settings, local, templates)
     nhso18_routes.register(app, settings, db, local, templates, approvals, results)
     dental_routes.register(app, settings, db, local, templates)
+    disabled_routes.register(app, settings, db, local, templates)
     ppfs_routes.register(app, settings, db, local, templates)
     labwalkin_routes.register(app, settings, db, local, templates)
     ntip_routes.register(app, settings, db, local, templates)

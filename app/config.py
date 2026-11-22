@@ -43,6 +43,7 @@ class Settings:
     hname: str = ""
     hosp_main: tuple[str, ...] = ()
     dental_pttypes: tuple[str, ...] = ("29",)
+    disabled_pttypes: tuple[str, ...] = ("33",)
     ofc_approve_pttypes: tuple[str, ...] = ("21",)
     # PPFS 27) child iron: fees 3004084 (6-12 months) and 3004023 (2-5 years), keyed under the placeholder ADP 10000
     # ("NONE"). The ZIP sends the code of the drug form given, as the user set: syrup 689697, tablets 776508.
@@ -147,6 +148,7 @@ def load_settings(env_file: Path | None = None) -> Settings:
         hname=get("HNAME", ""),
         hosp_main=_csv(get("HOSP_MAIN")),
         dental_pttypes=_csv(get("DENTAL_PTTYPES")) or ("29",),
+        disabled_pttypes=_csv(get("DISABLED_PTTYPES")) or ("33",),
         ofc_approve_pttypes=_csv(get("OFC_APPROVE_PTTYPES")) or ("21",),
         ppfs_iron_child_icodes=_csv(get("PPFS_IRON_CHILD_ICODES")) or ("3004084",),
         ppfs_iron_child2_icodes=_csv(get("PPFS_IRON_CHILD2_ICODES")) or ("3004023",),

@@ -416,6 +416,32 @@ class Hosxp:
             ORDER BY o.vstdate, o.vsttime""",
             [start, end, *pttypes])
 
+    def disabled_visits(self, start, end, pttypes: Iterable[str] = (), cids: Iterable[str] = ()) -> list[dict]:
+        """OPD visits and admissions between start and end (visit date / admit date) under these rights (the SSO
+        disability right) or of these patients, with the total charge and the part billed to the right."""
+        pttypes, cids = sorted({p for p in pttypes if p}), sorted({c for c in cids if c})
+        name = "CONCAT(IFNULL(p.pname,''), IFNULL(p.fname,''), ' ', IFNULL(p.lname,'')) AS ptname"
+        opd = f"""SELECT p.cid, o.hn, {name}, o.vn, '' AS an, o.vstdate AS admit_date, o.vstdate AS discharge_date,
+            o.vsttime, o.pttype, ptt.name AS pttype_name, v.income, v.uc_money AS right_money, 'OPD' AS kind
+            FROM ovst o JOIN patient p ON p.hn=o.hn LEFT JOIN pttype ptt ON ptt.pttype=o.pttype LEFT JOIN vn_stat v ON v.vn=o.vn
+            WHERE o.vstdate BETWEEN %s AND %s AND IFNULL(o.an,'')='' AND """
+        ipd = f"""SELECT p.cid, i.hn, {name}, i.vn, i.an, i.regdate AS admit_date, i.dchdate AS discharge_date,
+            i.regtime AS vsttime, i.pttype, ptt.name AS pttype_name, a.income, a.uc_money AS right_money, 'IPD' AS kind
+            FROM ipt i JOIN patient p ON p.hn=i.hn LEFT JOIN pttype ptt ON ptt.pttype=i.pttype LEFT JOIN an_stat a ON a.an=i.an
+            WHERE i.regdate BETWEEN %s AND %s AND """
+        parts = [opd] + ([ipd] if self._has("ipt") and self._has("an_stat") else [])
+        found: dict[tuple[str, str], dict] = {}
+        for base in parts:
+            column = "o.pttype" if base is opd else "i.pttype"
+            if pttypes:
+                for r in self._select(base + f"{column} IN ({','.join(['%s'] * len(pttypes))})", [start, end, *pttypes]):
+                    found[(r["kind"], str(r["an"] or r["vn"] or ""))] = r
+            for at in range(0, len(cids), 500):
+                part = cids[at:at + 500]
+                for r in self._select(base + f"p.cid IN ({','.join(['%s'] * len(part))})", [start, end, *part]):
+                    found[(r["kind"], str(r["an"] or r["vn"] or ""))] = r
+        return sorted(found.values(), key=lambda r: (str(r["admit_date"]), str(r.get("vsttime") or ""), str(r["vn"] or "")))
+
     def ofc_visits(self, start, end, cids: Iterable[str] = (), pttypes: Iterable[str] = ()) -> list[dict]:
         """OPD visits between start and end of these patients, or under these rights, with the cost and the
         claim code HOSxP holds (for tying the Krungthai Approve Codes to visits)."""

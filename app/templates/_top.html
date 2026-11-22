@@ -5,12 +5,13 @@
   </div>
   <nav class="menu" aria-label="เมนูหลัก">
     <a href="/"{% if active == "home" %} aria-current="page"{% endif %}>Dashboard</a>
-    <details class="menu-links menu-group{% if active in ("ssop", "aipn", "dental") %} is-current{% endif %}" id="sso-menu">
+    <details class="menu-links menu-group{% if active in ("ssop", "aipn", "dental", "disabled") %} is-current{% endif %}" id="sso-menu">
       <summary>SSO</summary>
       <div class="menu-links-list" role="list">
         <a href="/ssop"{% if active == "ssop" %} aria-current="page"{% endif %}>SSOP ผู้ป่วยนอก</a>
         <a href="/aipn"{% if active == "aipn" %} aria-current="page"{% endif %}>AIPN ผู้ป่วยใน</a>
         <a href="/dental"{% if active == "dental" %} aria-current="page"{% endif %}>ทันตกรรม ปกส.</a>
+        <a href="/disabled"{% if active == "disabled" %} aria-current="page"{% endif %}>ทุพพลภาพ ปกส.</a>
       </div>
     </details>
     <a href="/nhso18"{% if active == "nhso18" %} aria-current="page"{% endif %}>18 แฟ้ม สปสช.</a>
