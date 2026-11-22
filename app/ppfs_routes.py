@@ -17,7 +17,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from fastapi.templating import Jinja2Templates
 
 from . import (auth, fdh, nhso18, nhso18_service as svc, ppfs, ppfs_anemia, ppfs_fluoride, ppfs_fp, ppfs_iron, ppfs_ironchild,
-               ppfs_anemiachild, ppfs_cervix, ppfs_dmrem, ppfs_instrument,
+               ppfs_anemiachild, ppfs_cervix, ppfs_dmrem, ppfs_gdm, ppfs_instrument,
                ppfs_ncd, ppfs_pregtest, ppfs_summary)
 from .repstm_store import RepStmStore
 from . import dmrem_registry
@@ -217,6 +217,10 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
             for r in rows:
                 r.extra["project"] = projects.get(r.vn, "")
             return rows
+        if service.key in ppfs_gdm.KINDS:
+            kind = ppfs_gdm.KINDS[service.key]
+            data = ppfs_gdm.fetch(q, kind, start, end)
+            return ppfs_gdm.check(data, kind, start, end, store.sent(ppfs_gdm.all_vns(data)))
         if service.key == "dmrem":
             summary = registry.summary()
             imported = summary["n"] > 0
@@ -323,7 +327,7 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
         instrument = ppfs_instrument.instrument_icodes(q, [i for i, _ in items])
         out: dict[str, list[str]] = {}
         for icode, code in items:
-            found = [k for k, s in ppfs.SERVICES.items() if code and code in s.codes and k not in ("anemiachild", "ironchild", "dmrem", "cervix")]
+            found = [k for k, s in ppfs.SERVICES.items() if code and code in s.codes and k not in ("anemiachild", "ironchild", "dmrem", "cervix", "gdm", "pdm")]
             if icode in instrument:
                 found.append("instrument")
             if icode in cervix_icodes:
@@ -375,6 +379,16 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
                     "web": [{"code": w["code"], "name": w["name"], "amount": w["amount"], "request_price": w["request_price"],
                              "income": w["income"], "reg_date": w["reg_date"], "status": w["status"], "serial_no": w["serial_no"]}
                             for w in web]}
+        if _service(body.get("service")).key in ppfs_gdm.KINDS:
+            d = ppfs_gdm.detail(q, ppfs_gdm.KINDS[_service(body.get("service")).key], vn)
+            if not d:
+                raise HTTPException(404, "ไม่พบ visit นี้ใน HOSxP")
+            return {**common(d),
+                    "visits": [{"date": iso(v["vstdate"]), "vn": text(v["vn"]), "icd10": text(v["icd10"])} for v in d["visits"]],
+                    "labs": [{"date": iso(x["vstdate"]), "vn": text(x["vn"]), "name": text(x["name"]), "result": text(x["result"]),
+                              "tag": "OGTT" if int(x["code"]) in ppfs_gdm.OGTT_LABS else "HbA1c" if int(x["code"]) in ppfs_gdm.HBA1C_LABS else ""}
+                             for x in d["labs"]],
+                    "births": sorted(iso(b["labor_date"]) for b in d["births"])}
         if _service(body.get("service")).key == "dmrem":
             d = ppfs_dmrem.detail(q, vn)
             if not d:
@@ -675,6 +689,9 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
         if service.key == "dmrem":  # 6) sends the HbA1c visits of each stage, with no fee
             for vn in ppfs_dmrem.stage_visits(picked):
                 claimed.setdefault(vn, set())
+        elif service.key in ppfs_gdm.KINDS:  # 2) and 3) have no ADP code: the diagnosis visit goes with its ticked charges
+            for r in picked:
+                claimed.setdefault(r.vn, set())
         else:
             for r in picked:
                 claimed.setdefault(r.vn, set()).update(c for c, _ in ppfs_instrument.codes_of(r))
@@ -712,7 +729,7 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
         if service.key in ("ironchild", "anemiachild"):
             rate = ppfs_ironchild.RATE if service.key == "ironchild" else ppfs_anemiachild.RATE
             ppfs_ironchild.rewrite_adp(data, claimed, rate)  # 10000 -> the e-Claim code chosen for the visit
-        data = ppfs.only_claimed(data, {vn: claimed[vn] | ticked.get(vn, set()) for vn in vns}, keep_lab=service.key == "dmrem")
+        data = ppfs.only_claimed(data, {vn: claimed[vn] | ticked.get(vn, set()) for vn in vns}, keep_lab=service.key in ("dmrem", "gdm", "pdm"))
         data["ADP"] = [r for r in data["ADP"]
                        if (text(r.get("SEQ")), text(r.get("CODE")), Decimal(str(r.get("RATE") or 0)).quantize(Decimal("0.01"))) not in drug_adp]
         if service.key == "dmrem":
@@ -724,7 +741,7 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
             if missing:
                 raise HTTPException(400, f"ไม่พบผล HbA1c ของ VN {missing[0]} แล้ว ให้ค้นหาใหม่")
         found = {(text(r["SEQ"]), text(r["CODE"])) for r in data["ADP"]}
-        lost = [(r.vn, c) for r in picked if service.key != "dmrem" for c, _ in ppfs_instrument.codes_of(r) if (r.vn, c) not in found]
+        lost = [(r.vn, c) for r in picked if service.key not in ("dmrem", "gdm", "pdm") for c, _ in ppfs_instrument.codes_of(r) if (r.vn, c) not in found]
         if lost:
             raise HTTPException(400, f"สร้างแฟ้ม ADP ของ {lost[0][0]} รหัส {lost[0][1]} ไม่ได้ ตรวจรายการค่าบริการใน HOSxP")
         return service, picked, vns, data

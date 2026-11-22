@@ -19,7 +19,18 @@ const shortLabel = (label) => { const chars = [...label]; return chars.length > 
 const uptBadge = (v) => !v ? dash() : el("span", { class: `badge ${/pos/i.test(v) ? "b-warn" : "b-ok"}` }, v);
 const flag = (on, yes, no = "—", tone = "b-ok") => (on ? el("span", { class: `badge ${tone}` }, yes) : el("span", { class: "muted" }, no));
 const KTB_TONE = { "1B0046_0": "b-ok", "1B004N": "b-ok", "1B0046_1": "b-error", "1B0046_2": "b-warn", "1B004P": "b-error" };
+const labList = (list, none) => (list.length ? el("span", {}, ...list.slice(-3).map((x) => el("span", { class: "sub" }, `${toDmy(x.date)} · ${x.result}`)))
+  : el("span", { class: "badge b-warn" }, none));
 const COLUMNS = {
+  gdm: [
+    ["อายุ (ปี)", "age", true, (r) => (r.extra.age === null || r.extra.age === undefined ? dash() : String(r.extra.age))],
+    ["รหัสโรค", "", false, (r) => el("span", {}, el("span", { class: "mono" }, r.extra.icd10),
+      el("span", { class: "sub" }, `แรก ${toDmy(r.extra.first)}`))],
+    ["DTX", "", false, (r) => labList(r.extra.dtx, "ไม่พบ")],
+    ["คลอด / OGTT หลังคลอด", "labor_date", false, (r) => el("span", {}, r.labor_date ? `คลอด ${toDmy(r.labor_date)}` : el("span", { class: "muted" }, "ยังไม่คลอด"),
+      r.extra.ogtt.length ? el("span", { class: "sub" }, `OGTT ${toDmy(r.extra.ogtt[0].date)} · ${r.extra.ogtt[0].result}`) : el("span", { class: "badge b-warn" }, "ยังไม่มี OGTT"))],
+    ["สิทธิหลัก", "", false, (r) => r.extra.maininscl || dash()],
+  ],
   cervix: [
     ["อายุ (ปี)", "age", true, (r) => (r.extra.age === null || r.extra.age === undefined ? dash() : String(r.extra.age))],
     ["วิธี / ผล lab", "result", false, (r) => el("span", {}, r.extra.method, el("span", { class: "sub" }, r.extra.result || "ไม่มีผล"))],
@@ -73,6 +84,15 @@ const COLUMNS = {
     ["อายุ (ปี)", "age", true, (r) => (r.extra.age === null || r.extra.age === undefined ? dash() : String(r.extra.age))],
     ["หัตถการทันตกรรม", "", false, (r) => (r.extra.dental.length ? el("span", {}, ...r.extra.dental.map((d) => el("span", { class: "sub" }, d))) : el("span", { class: "badge b-warn" }, "ไม่พบ"))],
   ],
+  pdm: [
+    ["อายุ (ปี)", "age", true, (r) => (r.extra.age === null || r.extra.age === undefined ? dash() : String(r.extra.age))],
+    ["รหัสโรค", "", false, (r) => el("span", {}, el("span", { class: "mono" }, r.extra.icd10), el("span", { class: "sub" }, `แรก ${toDmy(r.extra.first)}`))],
+    ["อายุครรภ์ครั้งแรก", "", false, (r) => (r.extra.weeks === null || r.extra.weeks === undefined ? el("span", { class: "badge b-error" }, "ไม่พบ")
+      : el("span", {}, `${r.extra.weeks} สัปดาห์`, el("span", { class: "sub" }, r.extra.weeks_from)))],
+    ["HbA1c", "", false, (r) => el("span", { class: `badge ${r.extra.hba1c.length >= 4 ? "b-ok" : "b-warn"}` }, `${r.extra.hba1c.length} / 4`)],
+    ["DTX", "", false, (r) => labList(r.extra.dtx, "ไม่พบ")],
+    ["สิทธิหลัก", "", false, (r) => r.extra.maininscl || dash()],
+  ],
   dmrem: [
     ["อายุ (ปี)", "age", true, (r) => (r.extra.age === null || r.extra.age === undefined ? dash() : String(r.extra.age))],
     ["HbA1c ที่ใช้ (ห่าง วัน)", "", false, (r) => el("span", {}, ...r.extra.tests.map((t, i) => el("span", { class: "sub" },
@@ -94,7 +114,7 @@ const COLUMNS = {
     ["ช่วงอายุ / ชนิดยา / ADP", "", false, (r) => el("span", {}, r.extra.band, el("span", { class: "sub" }, r.extra.form ? `${r.extra.form} · ${r.extra.adp || "ไม่มีรหัส"}` : "ไม่ทราบชนิดยา"))],
   ],
 };
-const COUNT_LABEL = { cervix: "ครั้งที่", instrument: "จำนวน", postnatal: "ครั้งที่", pregtest: "ครั้งที่ในปีงบ", fp: "สะสมในปีงบ", ncd: "ครั้งที่", anemia: "ครั้งที่", iron: "ครั้งที่ในปีงบ", fluoride: "ครั้งที่ในปีงบ", ironchild: "ครั้งที่ในปีงบ", anemiachild: "ครั้งที่ในช่วงอายุ", dmrem: "ขั้น" };
+const COUNT_LABEL = { gdm: "ครั้งที่", pdm: "ครั้งที่", cervix: "ครั้งที่", instrument: "จำนวน", postnatal: "ครั้งที่", pregtest: "ครั้งที่ในปีงบ", fp: "สะสมในปีงบ", ncd: "ครั้งที่", anemia: "ครั้งที่", iron: "ครั้งที่ในปีงบ", fluoride: "ครั้งที่ในปีงบ", ironchild: "ครั้งที่ในปีงบ", anemiachild: "ครั้งที่ในช่วงอายุ", dmrem: "ขั้น" };
 function labText(labs) {
   const parts = Object.entries(labs || {});
   if (!parts.length) return dash();
@@ -344,6 +364,23 @@ async function openDrawer(r) {
         [`เว็บบันทึกอุปกรณ์ ${p.code}`, p.web ? `บันทึกแล้ว${p.web_reg ? ` ${toDmy(p.web_reg)}` : ""}${p.web_status ? ` · ${p.web_status}` : ""}${p.income ? ` · เงินพึงได้ ${money(p.income)} บาท` : ""}` : "ยังไม่พบ"],
       ]),
       ["REP e-Claim", r.extra.eclaim ? `${r.extra.eclaim}${r.extra.eclaim_paid ? ` · ชดเชย ${money(r.extra.eclaim_paid)} บาท` : ""}` : "ไม่มี"],
+    ] : kind === "gdm" ? [
+      ["อายุ", r.extra.age === null || r.extra.age === undefined ? "—" : `${r.extra.age} ปี`], ["สิทธิหลัก", r.extra.maininscl],
+      ["รหัสโรค", `${r.extra.icd10} · วินิจฉัยครั้งแรก ${toDmy(r.extra.first)} (${r.extra.visits} visit ในครรภ์นี้)`],
+      ["DTX ระหว่างตั้งครรภ์", r.extra.dtx.length ? `${r.extra.dtx.length} ครั้ง ล่าสุด ${toDmy(r.extra.dtx.at(-1).date)} · ${r.extra.dtx.at(-1).result}` : "ไม่พบ"],
+      ["วันคลอด", r.labor_date ? toDmy(r.labor_date) : "ยังไม่พบใน HOSxP"],
+      ["OGTT หลังคลอด", r.extra.ogtt.length ? r.extra.ogtt.map((x) => `${toDmy(x.date)} ${x.name} ${x.result}`).join(" · ") : "ยังไม่มี"],
+      ["สอนทักษะการดูแลตนเอง", "ตรวจเองใน HOSxP (ไม่มีที่บันทึกที่แน่นอน)"],
+      ["ลงทะเบียน e-Claim", "ตรวจในโปรแกรม e-Claim ก่อนส่ง"],
+    ] : kind === "pdm" ? [
+      ["อายุ", r.extra.age === null || r.extra.age === undefined ? "—" : `${r.extra.age} ปี`], ["สิทธิหลัก", r.extra.maininscl],
+      ["รหัสโรค", `${r.extra.icd10} · วินิจฉัยครั้งแรก ${toDmy(r.extra.first)} (${r.extra.visits} visit ในครรภ์นี้)`],
+      ["LMP", r.extra.lmp ? toDmy(r.extra.lmp) : "ไม่พบ"],
+      ["อายุครรภ์ visit แรก", r.extra.weeks === null || r.extra.weeks === undefined ? "ไม่พบ" : `${r.extra.weeks} สัปดาห์ (${r.extra.weeks_from})`],
+      ["HbA1c ระหว่างตั้งครรภ์", `${r.extra.hba1c.length} จาก 4 ครั้ง${r.extra.hba1c.length ? ` · ${r.extra.hba1c.map((x) => `${toDmy(x.date)} ${x.result}`).join(", ")}` : ""}`],
+      ["DTX ระหว่างตั้งครรภ์", r.extra.dtx.length ? `${r.extra.dtx.length} ครั้ง` : "ไม่พบ"],
+      ["สอนทักษะการดูแลตนเอง", "ตรวจเองใน HOSxP (ไม่มีที่บันทึกที่แน่นอน)"],
+      ["ลงทะเบียน e-Claim", "ตรวจในโปรแกรม e-Claim ก่อนส่ง"],
     ] : kind === "dmrem" ? [
       ["อายุ", r.extra.age === null || r.extra.age === undefined ? "—" : `${r.extra.age} ปี`], ["สิทธิหลัก", r.extra.maininscl],
       ["ขั้น", r.extra.stage === 0 ? "ครั้งที่ 1 ลงทะเบียน e-Claim (ยังไม่มีค่าบริการ)" : r.extra.stage === 1 ? "1 เข้าสู่ระยะสงบ (4,000 บาท)" : "2 ยังคงระยะสงบ (2,000 บาท)"],
@@ -400,12 +437,21 @@ async function openDrawer(r) {
       check.push(el("h3", {}, "ผลตรวจ"));
       check.push(el("ul", { class: "issues" }, ...issues.map((i) => el("li", { class: `issue ${i.level}` },
         el("div", { class: "issue-title" }, el("span", { class: `badge ${i.level === "error" ? "b-error" : "b-warn"}` }, i.level === "error" ? "Error" : "เตือน"), " ", i.message)))));
-      check.push(el("p", { class: "hint" }, kind === "cervix" ? "ลงผล HPV/Pap ใน HOSxP ให้แปลได้ (Negative / HPV Type … / NILM) แล้วค้นหาใหม่ คัดกรองซ้ำภายใน 5 ปีเบิกไม่ได้" : kind === "instrument" ? "คำเตือนไม่บล็อกการส่ง ตรวจรายการที่บันทึกในเว็บแล้วก่อนส่ง เพื่อไม่ให้เบิกซ้ำ" : kind === "dmrem" ? "ตรวจว่าลงทะเบียนผู้ป่วยในโปรแกรม e-Claim แล้ว และตั้งรหัส ADP ใน .env ก่อนส่ง" : kind === "anemiachild" ? "เบิกได้ช่วงอายุละ 1 ครั้ง (6–12 เดือน และ 3–5 ปี) รวมไม่เกิน 2 ครั้งต่อคน" : kind === "ironchild" ? "เบิกได้ช่วงละ 1 ครั้งต่อปีงบ ค่าบริการ 6–12 เดือนต้องให้เด็กอายุ 6–12 เดือน ค่าบริการ 2–5 ปีต้องให้เด็กอายุ 2–5 ปี" : kind === "fluoride" ? "เบิกได้อายุ 25–59 ปี ไม่เกิน 2 ครั้งต่อปีงบ ถ้ายังไม่คีย์ 15001 ให้คีย์ใน HOSxP แล้วค้นหาใหม่" : kind === "iron" ? "เบิกได้คนละ 1 ครั้งต่อปีงบ อายุ 13–45 ปี เฉพาะหญิงไทย รายที่ไม่ตรงเงื่อนไขไม่ต้องส่ง" : kind === "anemia" ? "เบิกได้คนละ 1 ครั้ง อายุ 13–24 ปี เฉพาะหญิงไทย รายที่ไม่ตรงเงื่อนไขไม่ต้องส่ง" : kind === "ncd" ? "ผู้ที่มีประวัติรักษาโรคมาก่อน หรือเบิกไปแล้วในรอบ ไม่ใช่กลุ่มที่เบิกได้ ไม่ต้องส่ง" : kind === "fp" ? "แก้ข้อมูลใน HOSxP (คีย์ค่าบริการ 18… ให้ตรงกับยาที่จ่าย) แล้วกดค้นหาอีกครั้ง" : kind === "pregtest" ? "แก้ข้อมูลใน HOSxP (รายการค่าบริการ / รหัสวินิจฉัย / ผล lab) แล้วกดค้นหาอีกครั้ง"
+      check.push(el("p", { class: "hint" }, kind === "cervix" ? "ลงผล HPV/Pap ใน HOSxP ให้แปลได้ (Negative / HPV Type … / NILM) แล้วค้นหาใหม่ คัดกรองซ้ำภายใน 5 ปีเบิกไม่ได้" : kind === "instrument" ? "คำเตือนไม่บล็อกการส่ง ตรวจรายการที่บันทึกในเว็บแล้วก่อนส่ง เพื่อไม่ให้เบิกซ้ำ" : kind === "dmrem" ? "ตรวจว่าลงทะเบียนผู้ป่วยในโปรแกรม e-Claim แล้ว และตั้งรหัส ADP ใน .env ก่อนส่ง" : kind === "gdm" ? "คำเตือนไม่บล็อกการส่ง ลงผล DTX / OGTT หลังคลอด / วันคลอด ใน HOSxP แล้วค้นหาใหม่ ตรวจว่าลงทะเบียนใน e-Claim แล้ว" : kind === "pdm" ? "อายุครรภ์ใช้คิดอัตราจ่าย ถ้าไม่พบให้ลงทะเบียนฝากครรภ์ (LMP) ใน HOSxP · คำเตือน DTX / HbA1c ไม่บล็อกการส่ง" : kind === "anemiachild" ? "เบิกได้ช่วงอายุละ 1 ครั้ง (6–12 เดือน และ 3–5 ปี) รวมไม่เกิน 2 ครั้งต่อคน" : kind === "ironchild" ? "เบิกได้ช่วงละ 1 ครั้งต่อปีงบ ค่าบริการ 6–12 เดือนต้องให้เด็กอายุ 6–12 เดือน ค่าบริการ 2–5 ปีต้องให้เด็กอายุ 2–5 ปี" : kind === "fluoride" ? "เบิกได้อายุ 25–59 ปี ไม่เกิน 2 ครั้งต่อปีงบ ถ้ายังไม่คีย์ 15001 ให้คีย์ใน HOSxP แล้วค้นหาใหม่" : kind === "iron" ? "เบิกได้คนละ 1 ครั้งต่อปีงบ อายุ 13–45 ปี เฉพาะหญิงไทย รายที่ไม่ตรงเงื่อนไขไม่ต้องส่ง" : kind === "anemia" ? "เบิกได้คนละ 1 ครั้ง อายุ 13–24 ปี เฉพาะหญิงไทย รายที่ไม่ตรงเงื่อนไขไม่ต้องส่ง" : kind === "ncd" ? "ผู้ที่มีประวัติรักษาโรคมาก่อน หรือเบิกไปแล้วในรอบ ไม่ใช่กลุ่มที่เบิกได้ ไม่ต้องส่ง" : kind === "fp" ? "แก้ข้อมูลใน HOSxP (คีย์ค่าบริการ 18… ให้ตรงกับยาที่จ่าย) แล้วกดค้นหาอีกครั้ง" : kind === "pregtest" ? "แก้ข้อมูลใน HOSxP (รายการค่าบริการ / รหัสวินิจฉัย / ผล lab) แล้วกดค้นหาอีกครั้ง"
         : "แก้ข้อมูลใน HOSxP (บันทึกหลังคลอด / วันคลอด / รายการค่าบริการ) แล้วกดค้นหาอีกครั้ง"));
     } else check.push(el("div", { class: "all-good" }, "✓ ผ่านการตรวจทั้งหมด พร้อมส่ง"));
 
     const post = [];
-    if (kind === "dmrem") {
+    if (kind === "gdm" || kind === "pdm") {
+      post.push(el("h3", {}, kind === "gdm" ? "visit ที่วินิจฉัย O24.4 / O24.9" : "visit ที่วินิจฉัย O24.0 / O24.1 / O24.3"));
+      post.push(table(["วันที่", "VN", "รหัส"], data.visits.map((v) => el("tr", { class: v.vn === r.vn ? "current" : "" },
+        el("td", { class: "mono" }, toDmy(v.date)), el("td", { class: "mono" }, v.vn), el("td", { class: "mono" }, v.icd10)))));
+      post.push(el("h3", {}, kind === "gdm" ? "DTX และ OGTT" : "DTX และ HbA1c"));
+      post.push(data.labs.length ? table(["วันที่", "VN", "รายการ", "ผล"], data.labs.map((x) => el("tr", {},
+        el("td", { class: "mono" }, toDmy(x.date)), el("td", { class: "mono" }, x.vn), el("td", {}, x.tag ? el("span", { class: "badge b-ok" }, x.tag) : null, " ", x.name),
+        el("td", {}, x.result)))) : el("p", { class: "muted" }, "ไม่มีผล"));
+      post.push(el("p", { class: "muted-note" }, data.births.length ? `วันคลอดใน HOSxP: ${data.births.map(toDmy).join(", ")}` : "ไม่พบวันคลอดใน HOSxP (person_anc.labor_date)"));
+    } else if (kind === "dmrem") {
       const used = new Set(r.extra.tests.map((t) => t.vn));
       post.push(el("h3", {}, "ผล HbA1c ทั้งหมด"));
       post.push(data.tests.length ? table(["วันที่", "VN", { label: "HbA1c (%)", num: true }, "ใช้กับ"],
@@ -562,7 +608,9 @@ async function openDrawer(r) {
       sentTotal.textContent = `ส่ง ${on.length} รายการ รวม ${money(on.reduce((s, i) => s + Number(i.amount), 0))} บาท (CHT/CHA ใน ZIP เท่ากับยอดนี้)`;
     };
     showTotal();
-    const costs = [el("p", { class: "muted-note" }, kind === "dmrem"
+    const costs = [el("p", { class: "muted-note" }, kind === "gdm" || kind === "pdm"
+      ? "ข้อนี้ไม่มีรหัส ADP ZIP ส่ง visit ที่วินิจฉัยพร้อมแฟ้ม LAB · รายการค่าใช้จ่ายติ๊กไว้ทั้งหมด ติ๊กออกรายการที่ไม่ต้องการส่ง ไม่แก้ข้อมูลใน HOSxP"
+      : kind === "dmrem"
       ? "ข้อนี้ไม่มีค่าบริการ ZIP ส่ง visit ที่ตรวจ HbA1c ของขั้นนี้พร้อมแฟ้ม LAB (HbA1c = LABTEST 05) · ติ๊กไว้ทุกรายการยกเว้นยาเบาหวาน ติ๊กออกรายการที่ไม่ต้องการส่ง ไม่แก้ข้อมูลใน HOSxP"
       : kind === "cervix" ? `ค่าตรวจ HPV/Pap ส่งเสมอด้วยรหัส ${[...claimed].join(" / ")} · รายการอื่นไม่ติ๊กไว้ (KTB จับคู่กิจกรรมด้วยรหัส ADP) ติ๊กเพิ่มถ้าต้องการส่ง`
       : `ค่าบริการ ${[...claimed].join(" / ")} ส่งเสมอ · รายการอื่นติ๊กไว้ทั้งหมด ติ๊กออกรายการที่ไม่ต้องการส่ง (ยาอยู่ในแฟ้ม DRU) ไม่แก้ข้อมูลใน HOSxP`),
@@ -590,6 +638,7 @@ async function openDrawer(r) {
       { id: "check", label: "สรุปและผลตรวจ", badge: issues.length || undefined, alert: r.errors.length > 0, content: check },
       kind === "cervix" ? { id: "cervix", label: "ประวัติคัดกรอง", badge: data.tests.length || undefined, content: post }
         : kind === "instrument" ? { id: "instrument", label: "อุปกรณ์และเว็บ", badge: data.history.length || undefined, content: post }
+        : kind === "gdm" || kind === "pdm" ? { id: kind, label: "วินิจฉัยและผลน้ำตาล", badge: data.labs.length || undefined, content: post }
         : kind === "dmrem" ? { id: "dmrem", label: "HbA1c และยา", badge: data.tests.length || undefined, content: post }
         : kind === "anemiachild" ? { id: "anemiachild", label: "ประวัติคัดกรอง", badge: data.claims.length || undefined, content: post }
         : kind === "ironchild" ? { id: "ironchild", label: "ประวัติรับยา", badge: data.claims.length || undefined, content: post }
