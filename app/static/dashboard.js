@@ -65,6 +65,40 @@ function monthChart(m) {
       el("span", {}, `สูงสุด ${count.format(max)}`), el("span", {}, monthName(values[values.length - 1].month))));
 }
 
+// Visits per month by REP result: one stacked column a month on one scale (the tallest month).
+function monthsChart(months) {
+  const total = (m) => m.passed + m.c + m.deny;
+  const max = Math.max(0, ...months.map(total));
+  if (!max) return [el("p", { class: "muted" }, "ยังไม่มี REP ในช่วงวันที่นี้")];
+  const every = months.length > 12 ? 3 : months.length > 6 ? 2 : 1;
+  const parts = [["good", "ผ่าน (A)", "passed"], ["warn", "ติด C", "c"], ["bad", "Deny", "deny"]];
+  return [el("div", { class: "viz-stack", role: "img",
+    "aria-label": `ผล REP รายเดือน: ${months.map((m) => `${monthName(m.month)} ผ่าน ${m.passed} ติด C ${m.c} Deny ${m.deny}`).join(", ")}` },
+    el("span", { class: "viz-stack-max" }, count.format(max)),
+    ...months.map((m, i) => el("div", { class: "viz-stack-col",
+      "data-tip": [`${monthName(m.month)} · ${count.format(total(m))} visit`, ...parts.map(([, l, k]) => `${l}: ${count.format(m[k])} (${share(m[k], total(m))})`)].join("\n") },
+      el("div", { class: "viz-stack-bar", style: `height:${100 * total(m) / max}%` },
+        ...parts.filter(([, , k]) => m[k]).map(([tone, , k]) => el("span", { class: `viz-stack-seg st-${tone}`, style: `flex-grow:${m[k]}` }))),
+      el("span", { class: "viz-stack-label" }, i % every === 0 || i === months.length - 1 ? monthName(m.month) : ""))))];
+}
+
+// The codes that stop visits most often, all rights together.
+function codesChart(reps) {
+  const found = new Map();
+  reps.forEach((a) => a.codes.forEach((c) => {
+    const x = found.get(c.code) || { code: c.code, n: 0, name: c.name, rights: [] };
+    x.n += c.n; x.rights.push(`${a.label} ${c.n}`); x.name = x.name || c.name; found.set(c.code, x);
+  }));
+  const list = [...found.values()].sort((a, b) => b.n - a.n).slice(0, 8);
+  if (!list.length) return [el("p", { class: "muted" }, "ไม่มีรายการที่ติด C หรือ Deny")];
+  const max = list[0].n;
+  return list.map((c) => el("div", { class: "viz-code" },
+    el("span", { class: "viz-code-label mono" }, c.code),
+    el("span", { class: "viz-bar-wrap" }, el("span", { class: "viz-bar s-1", style: `width:${Math.max(2, 100 * c.n / max)}%`,
+      "data-tip": [`รหัส ${c.code} · ${count.format(c.n)} visit`, c.name || "ไม่มีคำอธิบาย", ...c.rights].join("\n") })),
+    el("span", { class: "viz-num" }, count.format(c.n))));
+}
+
 // One tooltip for every mark with data-tip: it follows the pointer and stays inside the window.
 (() => {
   const tip = $("viz-tip");
@@ -88,6 +122,7 @@ function renderReps(reps) {
   $("rep-empty").hidden = reps.length > 0;
   $("chart-status").replaceChildren(...statusChart(reps));
   $("chart-money").replaceChildren(...moneyChart(reps));
+  $("chart-codes").replaceChildren(...codesChart(reps));
   const t = sum(reps);
   $("rep-foot").replaceChildren(reps.length > 1 ? el("tr", {}, el("td", {}, "รวมทุกสิทธิ"), part(t.sent), part(t.passed, "ok"),
     part(t.c, "warn"), part(t.deny, "bad"), el("td", { class: "num" }, pct(t)), money(t.paid, "ok", t.has_paid), money(t.stm_paid), el("td", {})) : "");
@@ -103,22 +138,22 @@ function renderReps(reps) {
 }
 
 function renderMenus(menus) {
-  $("menus").replaceChildren(...menus.map((m) => el("a", { class: "dash-menu", href: m.href },
-    el("span", { class: "dash-menu-label" }, m.label),
-    el("span", { class: "dash-menu-count" }, count.format(m.items || 0), el("small", {}, ` ${m.unit}`)),
+  $("menus").replaceChildren(...menus.map((m) => el("a", { class: "dash-menu", href: m.href,
+    title: m.last ? `${m.label} · ล่าสุด ${thaiDateTime(m.last)}` : `${m.label} · ยังไม่มีในช่วงนี้` },
+    el("span", { class: "dash-menu-head" }, el("span", { class: "dash-menu-label" }, m.label),
+      el("span", { class: "dash-menu-count" }, count.format(m.items || 0), el("small", {}, ` ${m.unit}`))),
     monthChart(m),
     el("span", { class: "sub" }, [
       `${m.what} ${count.format(m.n || 0)}`,
       m.amount != null ? `${baht.format(m.amount)} บาท` : "",
       m.paid ? `จ่ายแล้ว ${baht.format(m.paid)} บาท` : "",
-    ].filter(Boolean).join(" · ")),
-    el("span", { class: "sub" }, m.last ? `ล่าสุด ${thaiDateTime(m.last)}` : "ยังไม่มีในช่วงนี้"))));
+    ].filter(Boolean).join(" · ")))));
 }
 
 function renderUploads(list) {
-  $("uploads").replaceChildren(...(list.length ? list.map((u) => el("li", {},
-    el("span", { class: "dash-up-when" }, thaiDateTime(u.at)), el("span", { class: "mono" }, u.name), el("span", { class: "sub" }, u.summary || "")))
-    : [el("li", { class: "muted" }, "ยังไม่เคยนำเข้า")]));
+  const u = list[0];
+  $("last-upload").replaceChildren(u ? el("a", { href: "/repstm", title: list.map((x) => `${thaiDateTime(x.at)} ${x.name}`).join("\n") },
+    `นำเข้า REP/STM ล่าสุด ${thaiDateTime(u.at)}`) : el("a", { href: "/repstm" }, "ยังไม่เคยนำเข้า REP/STM"));
 }
 
 async function load() {
@@ -129,6 +164,7 @@ async function load() {
     const q = new URLSearchParams({ start: form.elements.start.value, end: form.elements.end.value });
     const data = await api(`/api/dashboard?${q}`);
     renderReps(data.reps);
+    $("chart-months").replaceChildren(...monthsChart(data.rep_months || []));
     renderMenus(data.menus);
     renderUploads(data.uploads);
   } catch (err) { notice(err.message); } finally { button.disabled = false; }

@@ -8,38 +8,49 @@
 </head>
 <body class="no-footer">
 {% set active = "home" %}{% include "_top.html" %}
-<main>
-  <div class="page-head"><h2>Dashboard ภาพรวม</h2><p>ผล REP / STM ตามสิทธิ และการส่งของแต่ละเมนู · ใช้ข้อมูลที่แอปเก็บไว้ (ไฟล์ที่นำเข้าและประวัติการส่ง) ไม่ได้ดึง HOSxP · รายการที่ยังไม่ส่งดูในแต่ละเมนู</p></div>
+<main class="dash-one">
+  <div class="dash-top">
+    <div class="dash-title"><h2>Dashboard ภาพรวม</h2>
+      <p>จากไฟล์ REP/STM ที่นำเข้าและประวัติการส่งในแอป (ไม่ดึง HOSxP) · <span id="last-upload">—</span></p></div>
+    <form id="search" class="dash-range">
+      <label>ตั้งแต่<input type="date" name="start" required></label>
+      <label>ถึง<input type="date" name="end" required></label>
+      <button class="primary" type="submit">แสดง</button>
+      <span class="presets"><button type="button" data-preset="this">เดือนนี้</button><button type="button" data-preset="last">เดือนก่อน</button><button type="button" id="fiscal">ปีงบนี้</button></span>
+    </form>
+  </div>
 
-  <form id="search" class="panel search search-inline">
-    <label>วันที่รับบริการตั้งแต่<input type="date" name="start" required></label>
-    <label>ถึงวันที่<input type="date" name="end" required></label>
-    <div class="actions-cell"><button class="primary" type="submit">แสดง</button></div>
-    <div class="presets"><span>ช่วงด่วน:</span><button type="button" data-preset="this">เดือนนี้</button><button type="button" data-preset="last">เดือนก่อน</button><button type="button" id="fiscal">ปีงบนี้</button></div>
-  </form>
+  <section id="cards" class="cards dash-cards" aria-label="สรุปผล REP รวม"></section>
 
-  <section id="cards" class="cards" aria-label="สรุปผล REP รวม"></section>
-
-  <section class="dash-charts" aria-label="กราฟผล REP ตามสิทธิ">
-    <div class="panel dash-panel viz">
-      <div class="dash-head"><h3>ผลตรวจ REP ตามสิทธิ</h3><span class="muted-note">สัดส่วน visit ที่ส่ง</span></div>
-      <div class="viz-legend" aria-hidden="true">
-        <span><i class="sw st-good"></i>✓ ผ่าน (A)</span><span><i class="sw st-warn"></i>! ติด C</span><span><i class="sw st-bad"></i>✕ Deny</span>
-      </div>
+  <section class="dash-grid viz" aria-label="กราฟ">
+    <div class="panel dash-panel">
+      <div class="dash-head"><h3>ผลตรวจ REP ตามสิทธิ</h3><span class="muted-note">สัดส่วน visit</span></div>
+      <div class="viz-legend" aria-hidden="true"><span><i class="sw st-good"></i>✓ ผ่าน (A)</span><span><i class="sw st-warn"></i>! ติด C</span><span><i class="sw st-bad"></i>✕ Deny</span></div>
       <div id="chart-status" class="viz-rows"></div>
     </div>
-    <div class="panel dash-panel viz">
+    <div class="panel dash-panel">
+      <div class="dash-head"><h3>ผล REP รายเดือน</h3><span class="muted-note">visit ตามเดือนรับบริการ</span></div>
+      <div class="viz-legend" aria-hidden="true"><span><i class="sw st-good"></i>✓ ผ่าน (A)</span><span><i class="sw st-warn"></i>! ติด C</span><span><i class="sw st-bad"></i>✕ Deny</span></div>
+      <div id="chart-months"></div>
+    </div>
+    <div class="panel dash-panel">
       <div class="dash-head"><h3>ยอดเงินตามสิทธิ</h3><span class="muted-note">บาท</span></div>
-      <div class="viz-legend" aria-hidden="true">
-        <span><i class="sw s-1"></i>ยอดส่ง (REP)</span><span><i class="sw s-2"></i>ชดเชย (REP)</span><span><i class="sw s-3"></i>STM จ่าย</span>
-      </div>
+      <div class="viz-legend" aria-hidden="true"><span><i class="sw s-1"></i>ยอดส่ง (REP)</span><span><i class="sw s-2"></i>ชดเชย (REP)</span><span><i class="sw s-3"></i>STM จ่าย</span></div>
       <div id="chart-money" class="viz-rows"></div>
+    </div>
+    <div class="panel dash-panel dash-wide">
+      <div class="dash-head"><h3>การส่งของแต่ละเมนู</h3><span class="muted-note">รายเดือน · แต่ละเมนูใช้สเกลของตัวเอง · กดเพื่อเปิดเมนู</span></div>
+      <div id="menus" class="dash-menus"></div>
+    </div>
+    <div class="panel dash-panel">
+      <div class="dash-head"><h3>รหัสที่ติดบ่อย</h3><span class="muted-note">visit ที่ไม่ผ่าน</span></div>
+      <div id="chart-codes" class="viz-rows"></div>
     </div>
   </section>
 
-  <section class="panel dash-panel">
-    <div class="dash-head"><h3>ผล REP / STM ตามสิทธิ</h3><a href="/repstm">นำเข้า REP / STM →</a></div>
-    <p class="muted-note">นับ 1 ครั้งต่อ visit ต่อสิทธิ ใช้ผล REP ล่าสุด (ไม่นับการส่งซ้ำที่ถูกปฏิเสธเพราะซ้ำหลังผ่านแล้ว) · ช่วงวันที่ตามวันรับบริการใน REP (AIPN ใช้วันที่ออก REP) · ยอดส่ง = ยอดเรียกเก็บใน REP · ชดเชย (REP) มีเฉพาะ REP e-Claim ที่นำเข้าหลังรุ่นที่เก็บยอดชดเชย</p>
+  <details class="panel dash-panel dash-table">
+    <summary>ดูเป็นตาราง: ผล REP / STM ตามสิทธิ</summary>
+    <p class="muted-note">นับ 1 ครั้งต่อ visit ต่อสิทธิ ใช้ผล REP ล่าสุด (ไม่นับการส่งซ้ำที่ถูกปฏิเสธเพราะซ้ำหลังผ่านแล้ว) · ช่วงวันที่ตามวันรับบริการใน REP (AIPN ใช้วันที่ออก REP) · ยอดส่ง = ยอดเรียกเก็บใน REP · ชดเชย (REP) มีเฉพาะ REP e-Claim ที่นำเข้าหลังรุ่นที่เก็บยอดชดเชย · <a href="/repstm">นำเข้า REP / STM →</a></p>
     <div class="table-wrap">
       <table class="dash-rep">
         <thead><tr><th>สิทธิ</th><th class="num">ส่ง (REP)</th><th class="num">ผ่าน (A)</th><th class="num">ติด C</th><th class="num">Deny</th>
@@ -49,18 +60,7 @@
       </table>
       <div id="rep-empty" class="empty" hidden><div class="empty-icon" aria-hidden="true">○</div><div>ยังไม่มี REP ในช่วงวันที่นี้ นำเข้าไฟล์ได้ที่หน้า REP / STM</div></div>
     </div>
-  </section>
-
-  <section class="panel dash-panel">
-    <div class="dash-head"><h3>การส่งของแต่ละเมนู</h3></div>
-    <p class="muted-note">นับจากประวัติการสร้างไฟล์และการส่งในแอป ตามวันที่สร้างหรือส่ง (ทันตกรรมตามวันรับบริการ) · กราฟแท่งรายเดือนของแต่ละเมนูใช้สเกลของตัวเอง</p>
-    <div id="menus" class="dash-menus"></div>
-  </section>
-
-  <section class="panel dash-panel">
-    <div class="dash-head"><h3>นำเข้า REP / STM ล่าสุด</h3><a href="/repstm">ดูทั้งหมด →</a></div>
-    <ul id="uploads" class="dash-uploads"></ul>
-  </section>
+  </details>
 </main>
 <div id="viz-tip" class="viz-tip" role="tooltip" hidden></div>
 <script src="/static/common.js?v={{ v }}"></script>

@@ -53,3 +53,17 @@ def test_home_is_the_dashboard_and_ssop_moved(tmp_path):
     months = data["menus"][0]["months"]
     assert [x["month"] for x in months][:2] == ["2025-10", "2025-11"] and len(months) == 12 and all(x["items"] == 0 for x in months)
     assert client.get("/api/dashboard?start=2026-10-01&end=2026-01-01").status_code == 400
+
+
+def test_rep_months_count_each_visit_once_by_its_newest_result():
+    from datetime import date
+
+    from app.dashboard import rep_months
+    line = lambda invno, stat, codes, issued, day, no=1: {"account": "UCS", "invno": invno, "stat": stat, "codes": codes,
+                                                          "issued_at": issued, "rep_no": f"R{issued}", "line": no, "day": day}
+    lines = [line("1", "C", "C438", "2026-10-02", "2026-10-01"), line("1", "A", "", "2026-10-20", "2026-10-01"),
+             line("2", "C", "DENY", "2026-11-03", "2026-11-01"), line("3", "C", "C438", "2026-11-03", "2026-11-02")]
+    months = rep_months(lines, date(2026, 10, 1), date(2026, 12, 5))
+    assert months == [{"month": "2026-10", "passed": 1, "c": 0, "deny": 0},
+                      {"month": "2026-11", "passed": 0, "c": 1, "deny": 1},
+                      {"month": "2026-12", "passed": 0, "c": 0, "deny": 0}]

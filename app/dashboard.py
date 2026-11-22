@@ -72,9 +72,8 @@ def _num(value) -> float:
         return 0.0
 
 
-def rep_summary(lines: list[dict], stm_paid: dict[tuple[str, str], float]) -> list[dict]:
-    """lines: REP lines (account, invno, stat, codes, claimamt, paid, issued_at, rep_no, line), any order.
-    stm_paid: (account, invno) -> paid by the STM."""
+def latest_lines(lines: list[dict]) -> dict[tuple[str, str], dict]:
+    """The newest REP line per (account, InvNo), skipping a resend refused only as a duplicate after an A."""
     latest: dict[tuple[str, str], dict] = {}
     accepted: set[tuple[str, str]] = set()
     for row in sorted(lines, key=lambda r: (r["issued_at"], r["rep_no"], r["line"])):
@@ -84,13 +83,34 @@ def rep_summary(lines: list[dict], stm_paid: dict[tuple[str, str], float]) -> li
         if row["stat"] == "A":
             accepted.add(key)
         latest[key] = row
+    return latest
+
+
+def rep_status(row: dict) -> str:
+    return "passed" if row["stat"] == "A" else "deny" if "DENY" in eclaim_codes.split(row["codes"]) else "c"
+
+
+def rep_months(lines: list[dict], start: date, end: date) -> list[dict]:
+    """Visits per month of the visit date (the file's date when a line has none) by REP result, every month of
+    the period (the last 24 of a long one)."""
+    found: dict[str, dict] = {}
+    for row in latest_lines(lines).values():
+        month = found.setdefault(str(row.get("day") or "")[:7], {"passed": 0, "c": 0, "deny": 0})
+        month[rep_status(row)] += 1
+    return [{"month": m, **found.get(m, {"passed": 0, "c": 0, "deny": 0})} for m in month_keys(start, end)[-24:]]
+
+
+def rep_summary(lines: list[dict], stm_paid: dict[tuple[str, str], float]) -> list[dict]:
+    """lines: REP lines (account, invno, stat, codes, claimamt, paid, issued_at, rep_no, line), any order.
+    stm_paid: (account, invno) -> paid by the STM."""
+    latest = latest_lines(lines)
     out: dict[str, dict] = {}
     for (account, invno), row in latest.items():
         a = out.setdefault(account, {"account": account, "label": ACCOUNTS.get(account, account), "codes": Counter(),
                                      **{k: {"n": 0, "amount": 0.0} for k in ("sent", "passed", "c", "deny")},
                                      "paid": 0.0, "stm_paid": 0.0, "has_paid": False})
         codes = eclaim_codes.split(row["codes"])
-        status = "passed" if row["stat"] == "A" else "deny" if "DENY" in codes else "c"
+        status = rep_status(row)
         claim = _num(row["claimamt"])
         for part in ("sent", status):
             a[part]["n"] += 1
@@ -134,7 +154,8 @@ class DashboardStore:
     def overview(self, start: date, end: date) -> dict:
         lo, hi = start.isoformat(), end.isoformat() + "T99"
         with self._db() as db:
-            lines = self._all(db, """SELECT f.account, b.invno, b.stat, b.codes, b.claimamt, b.paid, f.issued_at, b.rep_no, b.line
+            lines = self._all(db, """SELECT f.account, b.invno, b.stat, b.codes, b.claimamt, b.paid, f.issued_at, b.rep_no, b.line,
+                IFNULL(NULLIF(b.dttran,''), f.issued_at) day
                 FROM rep_bills b JOIN rep_files f ON f.rep_no=b.rep_no
                 WHERE IFNULL(NULLIF(b.dttran,''), f.issued_at) >= ? AND IFNULL(NULLIF(b.dttran,''), f.issued_at) <= ?""", (lo, hi))
             paid = {(r["account"], r["invno"]): _num(r["paid"]) for r in self._all(db, """SELECT f.account, b.invno,
@@ -161,7 +182,7 @@ class DashboardStore:
             uploads = self._all(db, "SELECT at, name, summary FROM repstm_uploads ORDER BY id DESC LIMIT 6")
         reps = rep_summary(lines, paid)
         code_meanings(reps, names)
-        return {"reps": reps, "menus": menus, "uploads": uploads}
+        return {"reps": reps, "rep_months": rep_months(lines, start, end), "menus": menus, "uploads": uploads}
 
 
 def register(app: FastAPI, settings: Settings, local: Store, templates: Jinja2Templates) -> None:
