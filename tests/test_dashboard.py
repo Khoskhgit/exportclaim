@@ -48,7 +48,7 @@ def test_home_is_the_dashboard_and_ssop_moved(tmp_path):
     assert "Dashboard ภาพรวม" in client.get("/").text
     assert "ส่งออก SSOP" in client.get("/ssop").text
     data = client.get("/api/dashboard?start=2025-10-01&end=2026-09-30").json()
-    assert data["reps"] == [] and {m["key"] for m in data["menus"]} >= {"ssop", "aipn", "ppfs", "ntip", "dental"}
+    assert data["reps"] == [] and {m["key"] for m in data["menus"]} >= {"ssop", "aipn", "ppfs", "ntip", "dental", "disabled", "approve"}
     assert all(m["items"] == 0 for m in data["menus"])
     months = data["menus"][0]["months"]
     assert [x["month"] for x in months][:2] == ["2025-10", "2025-11"] and len(months) == 12 and all(x["items"] == 0 for x in months)
@@ -67,3 +67,19 @@ def test_rep_months_count_each_visit_once_by_its_newest_result():
     assert months == [{"month": "2026-10", "passed": 1, "c": 0, "deny": 0},
                       {"month": "2026-11", "passed": 0, "c": 1, "deny": 1},
                       {"month": "2026-12", "passed": 0, "c": 0, "deny": 0}]
+
+
+def test_approve_tile_counts_payments_by_transaction_date(tmp_path):
+    store = Store(tmp_path / "s.sqlite3")
+    client = TestClient(create_app(settings(), hosxp=FakeHosxp(), store=store))
+    with store._db() as db:
+        db.executemany("INSERT INTO approve_codes (appr_code, trans_ref, kind, cid, txn_date, amount, updated_at)"
+                       " VALUES (?,?,?,?,?,?,?)", [
+                           ("1", "a", "PAYMENT", "1" * 13, "2026-10-05", "500.00", "2026-10-06T08:00:00"),
+                           ("2", "b", "PAYMENT", "1" * 13, "2026-11-02", "250.00", "2026-11-03T08:00:00"),
+                           ("3", "c", "REFUND", "1" * 13, "2026-11-02", "-250.00", "2026-11-03T08:00:00"),
+                           ("4", "d", "PAYMENT", "1" * 13, "2026-09-30", "999.00", "2026-10-01T08:00:00")])
+    data = client.get("/api/dashboard?start=2026-10-01&end=2026-11-30").json()
+    tile = next(m for m in data["menus"] if m["key"] == "approve")
+    assert (tile["items"], tile["amount"], tile["href"]) == (2, 750.0, "/approve")
+    assert [m["items"] for m in tile["months"]] == [1, 1]
