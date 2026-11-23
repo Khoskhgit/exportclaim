@@ -138,9 +138,20 @@ def test_store_adds_amount_columns_to_an_old_table(tmp_path):
         db.execute("CREATE TABLE seamless_reps (rep_no TEXT PRIMARY KEY, project_id TEXT NOT NULL, project TEXT NOT NULL, "
                    "period TEXT NOT NULL, rep_date TEXT NOT NULL, net TEXT NOT NULL, fiscal_year INTEGER NOT NULL, "
                    "file TEXT NOT NULL, downloaded_at TEXT NOT NULL, created_by TEXT NOT NULL DEFAULT '')")
-        db.execute("INSERT INTO seamless_reps VALUES ('R1','1','NAP','P','2026-10-31','0.00',2569,'f.xlsx','t','')")
+        db.execute("INSERT INTO seamless_reps VALUES ('R1','1','NAP','P','2026-10-31','0.00',2569,'10866_R1.xlsx','t','')")
     store = sm.SeamlessStore(Store(path))
     store.refresh([RepRow("1", "NAP", "0", "l", "P", "R1", "31/10/2569", {"paid": 9120.0, "appeal_recall": 20.0})])
     row = store.listing()[0]
     assert (row["paid"], row["appeal_recall"], row["net"]) == (9120.0, 20.0, "9100.00")
     assert store.forget(["R1"]) == 1 and store.listing() == []
+
+
+def test_rows_holding_another_reps_file_are_dropped_on_start(tmp_path):
+    store = sm.SeamlessStore(Store(tmp_path / "s.sqlite3"))
+    good = RepRow("9", "ดาวน์", "0", "l", "P", "DDOW69013100067", "31/01/2569", {"paid": 1.0})
+    bad = RepRow("13", "ฝากครรภ์", "0", "l", "P", "DANC65093000032", "30/09/2565", {"paid": 1.0})
+    store.save(good, "10866_DDOW69013100067.xlsx", b"PK", 2569, "")
+    store.save(bad, "10866_DDOW69013100067.xlsx", b"PK", 2569, "")  # what the first release did
+    again = sm.SeamlessStore(Store(tmp_path / "s.sqlite3"))
+    assert [r["rep_no"] for r in again.listing()] == ["DDOW69013100067"]
+    assert (again.folder / "10866_DDOW69013100067.xlsx").exists()

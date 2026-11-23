@@ -325,6 +325,11 @@ class SeamlessStore:
             for column in AMOUNT_FIELDS:  # added after the first release
                 if column not in have:
                     db.execute(f"ALTER TABLE seamless_reps ADD COLUMN {column} REAL NOT NULL DEFAULT 0")
+            # The first release could save another REP's file under a row; the files are named 10866_<REP NO.>,
+            # so such a row is dropped and the next pull tries it again (the file itself belongs to the other REP).
+            wrong = db.execute("DELETE FROM seamless_reps WHERE instr(file, rep_no) = 0").rowcount
+            if wrong:
+                log.warning("seamless: dropped %s rows whose file is another REP's", wrong)
 
     def refresh(self, rows: Iterable[RepRow]) -> None:
         """Update the amounts of REPs already downloaded (an appeal can change them); the file stays."""
