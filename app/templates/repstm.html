@@ -91,6 +91,21 @@
     </details>
   </section>
 
+  <section class="panel eclaim-pull" id="autopull-panel">
+    <div class="search">
+      <div class="wide"><strong>ดึง REP อัตโนมัติทุกวัน + ส่งสรุปทาง LINE</strong>
+        <span id="autopull-note" class="sub"></span></div>
+      <div class="actions-cell">
+        <button type="button" id="autopull-line-test">ส่ง LINE ทดสอบ</button>
+        <button type="button" id="autopull-run">ดึงอัตโนมัติตอนนี้</button>
+      </div>
+    </div>
+    <p class="hint">ดึง REP e-Claim ทุกสิทธิย้อนหลัง 2 เดือน แล้วดึง Seamless for DMIS ปีงบปัจจุบัน (เฉพาะ REP ที่ยังไม่มี) แล้วส่งสรุปเข้า LINE
+      ตั้งใน <code>.env</code>: <code>AUTO_PULL_TIME=06:00</code>, <code>LINE_CHANNEL_TOKEN</code> (LINE Official Account / Messaging API),
+      <code>LINE_TO</code> (User ID ขึ้นต้นด้วย U ว่างไว้ = ส่งถึงทุกคนที่เพิ่มบัญชีเป็นเพื่อน)</p>
+    <p id="autopull-last" class="sub"></p>
+  </section>
+
   <form id="vn-search" class="panel search vn-search">
     <label>ดูประวัติ VN / AN<input name="vn" inputmode="numeric" autocomplete="off" placeholder="เช่น 691015205653"></label>
     <div class="actions-cell"><button class="primary" type="submit">ดูประวัติ</button></div>

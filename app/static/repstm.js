@@ -398,7 +398,34 @@ async function setupPulls() {
   } catch (err) { $("seamless-note").textContent = err.message; }
 }
 
+async function setupAutoPull() {
+  const show = async () => {
+    try {
+      const s = await api("/api/autopull");
+      $("autopull-note").textContent = (s.time ? `ทุกวันเวลา ${s.time} น. · รอบถัดไป ${when(s.next_at)}` : "ปิดอยู่ (ยังไม่ได้ตั้ง AUTO_PULL_TIME)") +
+        ` · LINE: ${s.line_ready ? s.line_to : "ยังไม่ได้ตั้ง LINE_CHANNEL_TOKEN"}` + (s.running ? " · กำลังดึงอยู่" : "");
+      $("autopull-run").disabled = s.running;
+      $("autopull-line-test").disabled = !s.line_ready;
+      $("autopull-last").textContent = s.last && s.last.finished_at ? `ครั้งล่าสุด ${when(s.last.finished_at)} · ${s.last.line}` : "";
+      return s;
+    } catch (err) { $("autopull-note").textContent = err.message; return {}; }
+  };
+  $("autopull-line-test").onclick = async () => {
+    try { await api("/api/autopull/line-test", {}); notice("ส่ง LINE ทดสอบแล้ว", "ok"); } catch (err) { notice(err.message); }
+  };
+  $("autopull-run").onclick = async () => {
+    try {
+      await api("/api/autopull/run", {});
+      notice("เริ่มดึงอัตโนมัติแล้ว (รีเฟรชหน้าเพื่อดูความคืบหน้า) เสร็จแล้วส่งสรุปทาง LINE", "ok");
+      const timer = setInterval(async () => { const s = await show(); if (!s.running) { clearInterval(timer); load(); } }, 5000);
+    } catch (err) { notice(err.message); }
+    show();
+  };
+  show();
+}
+
 setupDrop();
 setupPulls();
+setupAutoPull();
 load();
 connection();

@@ -140,6 +140,12 @@ def register(app: FastAPI, settings: Settings, local: Store, templates: Jinja2Te
     def eclaim_status():
         return {"ready": ready(), "user": settings.eclaim_user, "job": eclaim_job.view()}
 
+    def start_eclaim(who: str, funds: list[str], months: int) -> dict:
+        """Start the e-Claim pull; {} if one is already running."""
+        return eclaim_job.start(who, lambda job: run_pull(job, funds, months, f"{who} · e-Claim"), funds=funds, months=months)
+
+    app.state.eclaim_job, app.state.start_eclaim = eclaim_job, start_eclaim
+
     @app.post("/api/repstm/eclaim")
     def eclaim_pull(request: Request, body: dict = Body(default={})):
         """Start pulling e-Claim REPs in the background (one pull at a time); poll GET /api/repstm/eclaim."""
@@ -151,7 +157,7 @@ def register(app: FastAPI, settings: Settings, local: Store, templates: Jinja2Te
         if not funds:
             raise HTTPException(400, "เลือกสิทธิอย่างน้อย 1 สิทธิ")
         who = auth.user_label(request) or "ระบบ"
-        started = eclaim_job.start(who, lambda job: run_pull(job, funds, months, f"{who} · e-Claim"), funds=funds, months=months)
+        started = start_eclaim(who, funds, months)
         if not started:
             raise HTTPException(409, f"กำลังดึง REP อยู่ (เริ่มโดย {eclaim_job.busy_by()}) รอให้เสร็จก่อน")
         return {"job": started}

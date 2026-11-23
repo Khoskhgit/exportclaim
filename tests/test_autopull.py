@@ -1,0 +1,100 @@
+import json
+import time
+import urllib.error
+from dataclasses import replace
+from datetime import date, datetime
+
+import pytest
+from fastapi.testclient import TestClient
+
+from app import autopull, line_push
+from app.main import create_app
+from app.store import Store
+from factories import settings
+from test_api import FakeHosxp
+from test_seamless import FakeSeamless
+
+
+def test_fiscal_year_and_schedule():
+    assert autopull.fiscal_year_be(date(2026, 9, 30)) == 2569 and autopull.fiscal_year_be(date(2026, 10, 1)) == 2570
+    assert autopull.parse_time("06:00") == (6, 0) and autopull.parse_time("6.30") == (6, 30)
+    assert autopull.parse_time("25:00") is None and autopull.parse_time("") is None
+    now = datetime(2026, 11, 24, 5, 59, tzinfo=autopull.TZ)
+    assert autopull.next_run(now, (6, 0)) == datetime(2026, 11, 24, 6, 0, tzinfo=autopull.TZ)
+    assert autopull.next_run(now.replace(hour=6), (6, 0)) == datetime(2026, 11, 25, 6, 0, tzinfo=autopull.TZ)
+
+
+def test_line_chunks_and_requests():
+    assert line_push.chunks("a\nb") == ["a\nb"]
+    long = "\n".join("x" * 3000 for _ in range(3))
+    assert [len(c) for c in line_push.chunks(long)] == [3000, 3000, 3000]
+    assert len(line_push.chunks("y" * 40000)) == 5
+    sent = []
+
+    class Reply:
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def read(self): return b"{}"
+
+    def opener(request, timeout):
+        sent.append((request.full_url, request.headers["Authorization"], json.loads(request.data)))
+        return Reply()
+
+    line_push.send("tok", "U123", "hi", opener=opener)
+    line_push.send("tok", "", "hi", opener=opener)
+    assert sent[0][0].endswith("/push") and sent[0][1] == "Bearer tok" and sent[0][2]["to"] == "U123"
+    assert sent[1][0].endswith("/broadcast") and "to" not in sent[1][2]
+    with pytest.raises(line_push.LineError, match="LINE_CHANNEL_TOKEN"):
+        line_push.send("", "U1", "hi", opener=opener)
+
+    def refuse(request, timeout):
+        raise urllib.error.HTTPError(request.full_url, 401, "x", {}, __import__("io").BytesIO(b'{"message":"bad token"}'))
+    with pytest.raises(line_push.LineError, match="401.*bad token"):
+        line_push.send("t", "U1", "hi", opener=refuse)
+
+
+class FakeEclaim:
+    def list_reps(self, fund, month, year):
+        return []
+
+
+def test_run_once_pulls_both_and_sends_a_summary(tmp_path):
+    messages = []
+    config = replace(settings(), export_dir=tmp_path / "e", eclaim_user="u", eclaim_password="p", eclaim_totp_secret="GEZDGNBV")
+    fake = FakeSeamless()
+    app = create_app(config, FakeHosxp(), Store(tmp_path / "s.sqlite3"), eclaim=FakeEclaim(), seamless=fake,
+                     line_send=messages.append)
+    client = TestClient(app)
+    assert client.get("/api/autopull").json()["time"] == ""
+    assert client.post("/api/autopull/run").json() == {"started": True}
+    for _ in range(300):
+        status = client.get("/api/autopull").json()
+        if status["last"] and not status["running"]:
+            break
+        time.sleep(0.02)
+    else:
+        raise AssertionError("auto pull did not finish")
+    text = messages[0]
+    year = autopull.fiscal_year_be(date.today())
+    assert "[e-Claim REP UCS, OFC, LGO ย้อนหลัง 2 เดือน]" in text and f"[Seamless for DMIS ปีงบ {year}]" in text
+    assert "ดาวน์โหลดแล้ว 3" in text and "- R1 NAP" in text and "อื่น: Seamless ตอบ HTTP 500" in text
+    assert status["last"]["line"] == "ส่ง LINE แล้ว"
+    assert ("1", year - 543) in fake.searches
+    assert client.post("/api/autopull/line-test").json() == {"sent": True} and "ทดสอบส่ง LINE" in messages[-1]
+
+
+def test_summary_when_a_pull_could_not_start():
+    text = autopull.summary(None, None, datetime(2026, 11, 25, 6, 0), 2570)
+    assert text.startswith("สรุปดึง REP อัตโนมัติ 25/11/2569 06:00") and "[e-Claim REP] ไม่ได้ดึง" in text
+
+
+def test_loop_runs_at_the_set_time():
+    from types import SimpleNamespace
+    times = iter([datetime(2026, 11, 25, 5, 59, 59, tzinfo=autopull.TZ)] + [datetime(2026, 11, 25, 6, 0, 1, tzinfo=autopull.TZ)] * 5)
+    auto = autopull.AutoPull(SimpleNamespace(state=None), replace(settings(), auto_pull_time="06:00"), send=lambda t: None,
+                             clock=lambda: next(times))
+    ran = []
+    auto._stop.wait = lambda seconds: None
+    auto.run_once = lambda: (ran.append(auto.next_at), auto.stop())
+    auto.loop()
+    assert ran == [datetime(2026, 11, 25, 6, 0, tzinfo=autopull.TZ)]

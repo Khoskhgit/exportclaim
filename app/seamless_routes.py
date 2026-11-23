@@ -91,6 +91,12 @@ def register(app: FastAPI, settings: Settings, local: Store, client: SeamlessWeb
             errors += 1
             job.update({"kind": "error", "ok": False, "text": str(exc)}, errors=errors)
 
+    def start_seamless(who: str, year: int) -> dict:
+        """Start the Seamless pull for a fiscal year (พ.ศ.); {} if one is already running."""
+        return job.start(who, lambda j: run(j, year, f"{who} · Seamless"), year=year)
+
+    app.state.seamless_job, app.state.start_seamless = job, start_seamless
+
     @app.get("/api/seamless")
     def status():
         return {"ready": bool(settings.eclaim_user and settings.eclaim_password and settings.eclaim_totp_secret),
@@ -105,7 +111,7 @@ def register(app: FastAPI, settings: Settings, local: Store, client: SeamlessWeb
         if year not in YEARS:
             raise HTTPException(400, "ปีงบไม่ถูกต้อง")
         who = auth.user_label(request) or "ระบบ"
-        started = job.start(who, lambda j: run(j, year, f"{who} · Seamless"), year=year)
+        started = start_seamless(who, year)
         if not started:
             raise HTTPException(409, f"กำลังดึง Seamless อยู่ (เริ่มโดย {job.busy_by()}) รอให้เสร็จก่อน")
         return {"job": started}

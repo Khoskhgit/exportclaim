@@ -96,6 +96,13 @@ class Settings:
     eclaim_user: str = ""
     eclaim_password: str = field(default="", repr=False)
     eclaim_totp_secret: str = field(default="", repr=False)
+    # Daily automatic REP pull (e-Claim + Seamless) at HH:MM (Asia/Bangkok); empty = off
+    auto_pull_time: str = ""
+    auto_pull_months: int = 2
+    # LINE Messaging API (LINE Official Account): the summary goes to LINE_TO (a user ID "U..."), or to every
+    # friend of the account (broadcast) when LINE_TO is empty
+    line_channel_token: str = field(default="", repr=False)
+    line_to: str = ""
 
     @property
     def allowed_hosts(self) -> list[str]:
@@ -198,4 +205,8 @@ def load_settings(env_file: Path | None = None) -> Settings:
         eclaim_user=(get("ECLAIM_USER") or get("NHSO_USER") or "").strip(),
         eclaim_password=get("ECLAIM_PASSWORD") or get("NHSO_PASSWORD") or "",
         eclaim_totp_secret=(get("ECLAIM_TOTP_SECRET") or "").strip(),
+        auto_pull_time=(get("AUTO_PULL_TIME") or "").strip(),
+        auto_pull_months=int(get("AUTO_PULL_MONTHS") or 2),
+        line_channel_token=(get("LINE_CHANNEL_TOKEN") or "").strip(),
+        line_to=(get("LINE_TO") or "").strip(),
     )
