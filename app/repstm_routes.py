@@ -12,6 +12,7 @@ from fastapi.templating import Jinja2Templates
 
 from . import auth, eclaim_codes, eclaim_web, fdh_claims
 from .config import Settings
+from .pull_job import PullJob
 from .repstm import RepStmError, parse_upload
 from .repstm_store import RepStmStore
 from .store import Store
@@ -88,21 +89,60 @@ def register(app: FastAPI, settings: Settings, local: Store, templates: Jinja2Te
             "name": name, "summary": summary, "skipped": parsed.skipped,
             "again": f"เคยนำเข้าไฟล์นี้แล้วเมื่อ {before['at'].replace('T', ' ')} ข้อมูลถูกแทนที่ด้วยชุดเดิม" if before else "",
             "reps": [r.rep_no for r in parsed.reps.values()], "stms": [s.stm_no for s in parsed.stms.values()],
+            "sent": sum(r.sent for r in parsed.reps.values()), "failed": sum(r.failed for r in parsed.reps.values()),
         }
 
     @app.post("/api/repstm/import")
     async def import_file(request: Request, name: str = ""):
         return import_bytes(name, await request.body(), auth.user_label(request))
 
+    eclaim_job = PullJob("eclaim-pull")
+
+    def run_pull(job: PullJob, funds: list[str], months: int, who: str) -> None:
+        """The e-Claim pull, in the job's thread: progress goes to the job, read by GET /api/repstm/eclaim."""
+        imported = failed = 0
+        try:
+            client = eclaim_client()
+            found: dict[str, eclaim_web.RepLink] = {}
+            job.update(phase="กำลังเชื่อมต่อ e-Claim")
+            for fund in funds:
+                for month, year in eclaim_web.months_back(months):
+                    job.update(phase=f"อ่านรายการ REP {fund.upper()} {month}/{year}")
+                    links = client.list_reps(fund, month, year)
+                    for link in links:
+                        found.setdefault(link.rep_no, link)
+                    job.update({"kind": "list", "text": f"{fund.upper()} {month}/{year}: {len(links)} REP"})
+            known = set(results.known_reps(found))
+            todo = [link for no, link in found.items() if no not in known]
+            job.update({"kind": "list", "text": f"พบ {len(found)} REP นำเข้าแล้ว {len(known)} ต้องดึงใหม่ {len(todo)}"},
+                       total=len(todo), found=len(found), known=len(known))
+            for n, link in enumerate(todo, 1):
+                job.update(phase=f"ดาวน์โหลดและนำเข้า REP {link.rep_no} ({n}/{len(todo)})")
+                try:
+                    done = import_bytes(link.name, client.download(link), who)
+                    imported += 1
+                    job.update({"kind": "rep", "ok": True, "rep_no": link.rep_no, "fund": link.fund, "name": link.name,
+                                "sent": done["sent"], "failed": done["failed"], "text": done["summary"]},
+                               done=n, imported=imported)
+                except (eclaim_web.EclaimWebError, HTTPException) as exc:
+                    failed += 1
+                    job.update({"kind": "rep", "ok": False, "rep_no": link.rep_no, "fund": link.fund, "name": link.name,
+                                "text": str(getattr(exc, "detail", None) or exc)}, done=n, errors=failed)
+                eclaim_pause()
+        except eclaim_web.EclaimWebError as exc:
+            failed += 1
+            job.update({"kind": "error", "ok": False, "text": str(exc)}, errors=failed)
+
+    def ready() -> bool:
+        return bool(settings.eclaim_user and settings.eclaim_password and settings.eclaim_totp_secret)
+
     @app.get("/api/repstm/eclaim")
-    def eclaim_ready():
-        return {"ready": bool(settings.eclaim_user and settings.eclaim_password and settings.eclaim_totp_secret),
-                "user": settings.eclaim_user}
+    def eclaim_status():
+        return {"ready": ready(), "user": settings.eclaim_user, "job": eclaim_job.view()}
 
     @app.post("/api/repstm/eclaim")
     def eclaim_pull(request: Request, body: dict = Body(default={})):
-        """Log in to e-Claim (password + TOTP), list the REPs of the chosen funds and months and import those not
-        imported yet. Runs one at a time; the files are fetched one by one with a short pause."""
+        """Start pulling e-Claim REPs in the background (one pull at a time); poll GET /api/repstm/eclaim."""
         funds = [f for f in (body.get("funds") or list(eclaim_web.FUNDS)) if f in eclaim_web.FUNDS]
         try:
             months = max(1, min(int(body.get("months") or 2), 12))
@@ -110,39 +150,11 @@ def register(app: FastAPI, settings: Settings, local: Store, templates: Jinja2Te
             raise HTTPException(400, "จำนวนเดือนไม่ถูกต้อง") from None
         if not funds:
             raise HTTPException(400, "เลือกสิทธิอย่างน้อย 1 สิทธิ")
-        client = eclaim_client()
-        if not client.lock.acquire(blocking=False):
-            raise HTTPException(409, "กำลังดึง REP อยู่ รอให้เสร็จก่อน")
-        lines: list[dict] = []
-        imported = failed = 0
-        try:
-            found: dict[str, eclaim_web.RepLink] = {}
-            for fund in funds:
-                for month, year in eclaim_web.months_back(months):
-                    links = client.list_reps(fund, month, year)
-                    for link in links:
-                        found.setdefault(link.rep_no, link)
-                    lines.append({"ok": True, "text": f"{fund.upper()} {month}/{year}: {len(links)} REP"})
-            known = set(results.known_reps(found))
-            todo = [link for no, link in found.items() if no not in known]
-            lines.append({"ok": True, "text": f"พบ {len(found)} REP นำเข้าแล้ว {len(known)} ต้องดึงใหม่ {len(todo)}"})
-            who = f"{auth.user_label(request) or 'ระบบ'} · e-Claim"
-            for link in todo:
-                try:
-                    done = import_bytes(link.name, client.download(link), who)
-                    imported += 1
-                    lines.append({"ok": True, "text": f"✓ {link.rep_no} {link.name}: {done['summary']}"})
-                except (eclaim_web.EclaimWebError, HTTPException) as exc:
-                    failed += 1
-                    lines.append({"ok": False, "text": f"✕ {link.rep_no} {link.name}: {getattr(exc, 'detail', None) or exc}"})
-                eclaim_pause()
-        except eclaim_web.EclaimWebError as exc:
-            lines.append({"ok": False, "text": f"✕ {exc}"})
-            failed += 1
-        finally:
-            client.lock.release()
-        log.info("eclaim pull funds=%s months=%s imported=%s failed=%s", funds, months, imported, failed)
-        return {"imported": imported, "failed": failed, "lines": lines}
+        who = auth.user_label(request) or "ระบบ"
+        started = eclaim_job.start(who, lambda job: run_pull(job, funds, months, f"{who} · e-Claim"), funds=funds, months=months)
+        if not started:
+            raise HTTPException(409, f"กำลังดึง REP อยู่ (เริ่มโดย {eclaim_job.busy_by()}) รอให้เสร็จก่อน")
+        return {"job": started}
 
     @app.get("/api/repstm/list")
     def listing():

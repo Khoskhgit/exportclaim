@@ -259,36 +259,137 @@ async function connection() {
     else setConnection(status.db_error ? `เชื่อมต่อไม่ได้ (${status.db_host})` : "ยังไม่ได้ตั้งค่าฐานข้อมูล", false);
   } catch (err) { setConnection("เชื่อมต่อไม่ได้", false); }
 }
-// -------------------------------------------------------------- e-Claim REP download (password + TOTP on the server)
-async function setupEclaim() {
-  const form = $("eclaim-form");
+// -------------------------------------------------------------- background pulls (e-Claim REP, Seamless for DMIS)
+// A pull runs on the server: the page polls its job and shows each file as it comes in. `p` is the element id prefix.
+function pullPanel({ p, url, body, line, after }) {
+  const st = { timer: null, shown: 0, imported: -1 };
+
+  function render(job) {
+    const box = $(`${p}-progress`);
+    if (!job || !job.started_at) { box.hidden = true; return; }
+    box.hidden = false;
+    const ok = job.lines.filter((l) => (l.kind === "rep" || l.kind === "seamless") && l.ok);
+    const sent = ok.reduce((n, l) => n + (l.sent || 0), 0);
+    const failed = ok.reduce((n, l) => n + (l.failed || 0), 0);
+    $(`${p}-phase`).textContent = job.running ? `${job.phase}…` : (job.errors ? "เสร็จ (มีบางรายการไม่สำเร็จ)" : "เสร็จแล้ว");
+    $(`${p}-count`).textContent = job.running
+      ? `เริ่ม ${when(job.started_at)} โดย ${job.by}`
+      : `${when(job.started_at)} – ${when(job.finished_at)} โดย ${job.by}`;
+    const bar = $(`${p}-bar`);
+    bar.max = Math.max(job.total, 1);
+    bar.value = job.total ? job.done : (job.running ? 0 : 1);
+    $(`${p}-tally`).replaceChildren(
+      el("span", { class: "badge" }, `พบ ${job.found} REP`),
+      el("span", { class: "badge" }, `มีอยู่แล้ว ${job.known}`),
+      el("span", { class: "badge b-ok" }, `ใหม่ ${job.imported} / ${job.total}`),
+      sent ? el("span", { class: "badge" }, `${sent.toLocaleString()} รายการ`) : null,
+      failed ? el("span", { class: "badge b-error" }, `ติด C ${failed.toLocaleString()} รายการ`) : null,
+      job.errors ? el("span", { class: "badge b-error" }, `ไม่สำเร็จ ${job.errors}`) : null);
+    const log = $(`${p}-log`);
+    if (job.lines.length < st.shown) { log.replaceChildren(); st.shown = 0; }
+    for (const l of job.lines.slice(st.shown)) log.prepend(line(l));
+    st.shown = job.lines.length;
+    $(`${p}-run`).disabled = job.running;
+  }
+
+  async function poll() {
+    clearTimeout(st.timer);
+    try {
+      const status = await api(url);
+      render(status.job);
+      if (status.job.imported !== st.imported) {  // refresh the lists as files come in
+        if (st.imported >= 0) await after(status);
+        st.imported = status.job.imported;
+      }
+      if (status.job.running) st.timer = setTimeout(poll, 2000);
+    } catch (err) {
+      st.timer = setTimeout(poll, 5000);  // the server may be restarting: keep asking
+    }
+  }
+
+  return {
+    async start(status) {  // the first status, from the page load
+      st.imported = status.job.imported ?? -1;
+      render(status.job);
+      if (status.job.running) poll();  // a pull started earlier (or by someone else) is still going
+    },
+    async run() {
+      $(`${p}-run`).disabled = true;
+      try {
+        const started = await api(url, body());
+        $(`${p}-log`).replaceChildren();
+        st.shown = 0;
+        st.imported = 0;
+        render(started.job);
+        poll();
+      } catch (err) {
+        notice(err.message);
+        $(`${p}-run`).disabled = false;
+      }
+    },
+  };
+}
+
+function plainLine(l) {
+  return el("li", { class: l.ok === false ? "error" : "" }, l.ok === false ? `✕ ${l.text}` : l.text);
+}
+
+function eclaimLine(l) {
+  if (l.kind !== "rep") return plainLine(l);
+  if (!l.ok) return el("li", { class: "error" }, el("strong", {}, `✕ REP ${l.rep_no}`), ` · ${l.text}`, el("span", { class: "sub" }, l.name));
+  const result = l.failed ? el("span", { class: "badge b-error" }, `ติด C ${l.failed}`) : el("span", { class: "badge b-ok" }, "ผ่านทั้งหมด");
+  return el("li", { class: `rep-line ${l.failed ? "warn" : "ok"}`, title: "กดเพื่อดูรายละเอียด REP", onclick: () => openRep(l.rep_no) },
+    el("strong", {}, `✓ REP ${l.rep_no}`), ` · ${l.fund.toUpperCase()} · ${l.sent} รายการ `, result, el("span", { class: "sub" }, l.name));
+}
+
+function seamlessLine(l) {
+  if (l.kind !== "seamless") return plainLine(l);
+  if (!l.ok) return el("li", { class: "error" }, el("strong", {}, `✕ ${l.rep_no}`), ` · ${l.project} · ${l.text}`);
+  return el("li", { class: "ok" }, el("strong", {}, `✓ ${l.rep_no}`), ` · ${l.project} · ${l.rep_date} · ชดเชยสุทธิ ${l.net} `,
+    el("a", { href: `/api/seamless/file/${encodeURIComponent(l.rep_no)}` }, "ดาวน์โหลด Excel"));
+}
+
+function renderSeamless(reps) {
+  const box = $("seamless-list");
+  if (!reps.length) { box.replaceChildren(el("p", { class: "hint" }, "ยังไม่มี REP Seamless ที่ดึงไว้")); return; }
+  const net = (v) => Number(String(v).replace(/,/g, "")) || 0;
+  box.replaceChildren(table(
+    [["โครงการ"], ["งวด/เลขที่เบิกจ่าย"], ["REP NO."], ["REP Date"], ["ชดเชยสุทธิ", "num"], ["ปีงบ"], ["ดึงเมื่อ"], ["ไฟล์"]],
+    reps.map((r) => el("tr", {},
+      el("td", {}, r.project), el("td", {}, r.period), el("td", {}, r.rep_no), el("td", {}, toDmy(r.rep_date) || r.rep_date),
+      el("td", { class: "num" }, money(net(r.net))), el("td", {}, String(r.fiscal_year)), el("td", {}, when(r.downloaded_at)),
+      el("td", {}, el("a", { href: `/api/seamless/file/${encodeURIComponent(r.rep_no)}` }, "Excel"))))));
+}
+
+async function setupPulls() {
+  const eclaim = pullPanel({
+    p: "eclaim", url: "/api/repstm/eclaim", line: eclaimLine, after: load,
+    body: () => { const d = new FormData($("eclaim-form")); return { months: Number(d.get("months")), funds: d.getAll("funds") }; },
+  });
+  const seamless = pullPanel({
+    p: "seamless", url: "/api/seamless", line: seamlessLine, after: async (status) => renderSeamless(status.reps),
+    body: () => ({ year: Number(new FormData($("seamless-form")).get("year")) }),
+  });
+  $("eclaim-form").addEventListener("submit", (e) => { e.preventDefault(); eclaim.run(); });
+  $("seamless-form").addEventListener("submit", (e) => { e.preventDefault(); seamless.run(); });
+  const missing = "ยังไม่ได้ตั้ง NHSO_USER / NHSO_PASSWORD / ECLAIM_TOTP_SECRET ใน .env";
   try {
     const status = await api("/api/repstm/eclaim");
-    if (!status.ready) {
-      $("eclaim-run").disabled = true;
-      $("eclaim-note").textContent = "ยังไม่ได้ตั้ง NHSO_USER / NHSO_PASSWORD / ECLAIM_TOTP_SECRET ใน .env";
-    } else $("eclaim-note").textContent = `บัญชี e-Claim: ${status.user}`;
+    $("eclaim-run").disabled = !status.ready;
+    $("eclaim-note").textContent = status.ready ? `บัญชี e-Claim: ${status.user}` : missing;
+    await eclaim.start(status);
   } catch (err) { $("eclaim-note").textContent = err.message; }
-  form.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const data = new FormData(form);
-    const log = $("eclaim-log");
-    const busy = el("li", { class: "busy" }, "กำลัง login e-Claim และดึง REP… ครั้งแรกอาจนาน 5–10 นาที อย่าปิดหน้านี้");
-    log.replaceChildren(busy);
-    $("eclaim-run").disabled = true;
-    try {
-      const result = await api("/api/repstm/eclaim", { months: Number(data.get("months")), funds: data.getAll("funds") });
-      log.replaceChildren(
-        el("li", { class: result.failed ? "error" : "ok" }, el("strong", {}, `นำเข้า ${result.imported} ไฟล์${result.failed ? ` · ไม่สำเร็จ ${result.failed}` : ""}`)),
-        ...result.lines.map((line) => el("li", { class: line.ok ? "ok" : "error" }, line.text)));
-      await load();
-    } catch (err) {
-      log.replaceChildren(el("li", { class: "error" }, `✕ ${err.message}`));
-    } finally { $("eclaim-run").disabled = false; }
-  });
+  try {
+    const status = await api("/api/seamless");
+    $("seamless-run").disabled = !status.ready;
+    $("seamless-note").textContent = status.ready ? "ใช้บัญชีเดียวกับ e-Claim" : missing;
+    $("seamless-year").replaceChildren(...status.years.map((y) => el("option", { value: y }, String(y))));
+    renderSeamless(status.reps);
+    await seamless.start(status);
+  } catch (err) { $("seamless-note").textContent = err.message; }
 }
 
 setupDrop();
-setupEclaim();
+setupPulls();
 load();
 connection();

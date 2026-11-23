@@ -140,30 +140,62 @@ def test_wrong_password_is_reported():
         EclaimWeb("u", "p", "", "10866", opener=FakeNhso(SECRET)).login()
 
 
-def test_pull_imports_only_new_reps(tmp_path, monkeypatch):
+def wait_job(app):
+    for _ in range(200):
+        job = app.get("/api/repstm/eclaim").json()["job"]
+        if not job["running"]:
+            return job
+        time.sleep(0.02)
+    raise AssertionError("the pull did not finish")
+
+
+def test_pull_imports_only_new_reps_in_the_background(tmp_path, monkeypatch):
     monkeypatch.setattr(eclaim_web, "months_back", lambda n: [(11, 2569), (10, 2569)][:n])
     nhso = FakeNhso(SECRET)
     config = replace(settings(), export_dir=tmp_path / "exports", eclaim_user="u", eclaim_password="p", eclaim_totp_secret=SECRET)
     app = TestClient(create_app(config, FakeHosxp(), Store(tmp_path / "s.sqlite3"), eclaim=client(nhso)))
-    assert app.get("/api/repstm/eclaim").json() == {"ready": True, "user": "u"}
+    status = app.get("/api/repstm/eclaim").json()
+    assert (status["ready"], status["user"], status["job"]["running"]) == (True, "u", False)
 
-    first = app.post("/api/repstm/eclaim", json={"months": 2, "funds": ["ucs", "ofc", "xxx"]}).json()
-    assert (first["imported"], first["failed"]) == (1, 0), first["lines"]
-    assert "พบ 1 REP นำเข้าแล้ว 0 ต้องดึงใหม่ 1" in [line["text"] for line in first["lines"]]
-    downloads = [u for u, _ in nhso.posts if "InvoiceReportExcelAction" in u]
-    assert len(downloads) == 1
+    started = app.post("/api/repstm/eclaim", json={"months": 2, "funds": ["ucs", "ofc", "xxx"]}).json()["job"]
+    assert started["funds"] == ["ucs", "ofc"] and started["months"] == 2
+    job = wait_job(app)
+    assert (job["found"], job["known"], job["total"], job["done"], job["imported"], job["errors"]) == (1, 0, 1, 1, 1, 0), job["lines"]
+    rep = [line for line in job["lines"] if line["kind"] == "rep"]
+    assert rep == [{"kind": "rep", "ok": True, "rep_no": "691100065", "fund": "ucs", "name": "eclaim_10866_OP_25691119_225004987.xls",
+                    "sent": 1, "failed": 0, "text": "REP 691100065 (1 รายการ, ไม่ผ่าน 0)"}]
+    assert job["phase"] == "เสร็จ" and job["finished_at"]
     assert [p["maininscl"] for u, p in nhso.posts if u == LIST_URL] == ["ucs", "ucs", "ofc", "ofc"]
     assert app.get("/api/repstm/list").json()["reps"][0]["rep_no"] == "691100065"
 
-    again = app.post("/api/repstm/eclaim", json={"months": 1, "funds": ["ucs"]}).json()
-    assert (again["imported"], again["failed"]) == (0, 0)
-    assert "พบ 1 REP นำเข้าแล้ว 1 ต้องดึงใหม่ 0" in [line["text"] for line in again["lines"]]
+    app.post("/api/repstm/eclaim", json={"months": 1, "funds": ["ucs"]})
+    again = wait_job(app)
+    assert (again["found"], again["known"], again["total"], again["imported"]) == (1, 1, 0, 0)
     assert sum(u == eclaim_web.LOGIN_URL for u, _ in nhso.posts) == 1  # the session is kept between pulls
+
+
+def test_a_second_pull_waits_for_the_first(tmp_path):
+    import threading
+    gate = threading.Event()
+
+    class Slow:
+        def list_reps(self, *a):
+            gate.wait(5)
+            return []
+
+    config = replace(settings(), export_dir=tmp_path / "exports", eclaim_user="u", eclaim_password="p", eclaim_totp_secret=SECRET)
+    app = TestClient(create_app(config, FakeHosxp(), Store(tmp_path / "s.sqlite3"), eclaim=Slow()))
+    assert app.post("/api/repstm/eclaim", json={"months": 1, "funds": ["ucs"]}).status_code == 200
+    busy = app.post("/api/repstm/eclaim", json={"months": 1, "funds": ["ucs"]})
+    assert busy.status_code == 409 and "กำลังดึง REP อยู่" in busy.json()["detail"]
+    gate.set()
+    assert wait_job(app)["running"] is False
 
 
 def test_pull_needs_settings(tmp_path):
     config = replace(settings(), export_dir=tmp_path / "exports")
     app = TestClient(create_app(config, FakeHosxp(), Store(tmp_path / "s.sqlite3")))
     assert app.get("/api/repstm/eclaim").json()["ready"] is False
-    result = app.post("/api/repstm/eclaim", json={"months": 1, "funds": ["ucs"]}).json()
-    assert result["failed"] == 1 and "ECLAIM_TOTP_SECRET" in result["lines"][-1]["text"]
+    app.post("/api/repstm/eclaim", json={"months": 1, "funds": ["ucs"]})
+    job = wait_job(app)
+    assert job["errors"] == 1 and "ECLAIM_TOTP_SECRET" in job["lines"][-1]["text"]

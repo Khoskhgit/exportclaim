@@ -252,6 +252,13 @@ th[aria-sort=descending] .sort-mark::after{content:"▼";opacity:1;color:var(--a
 .eclaim-funds{border:0;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:4px 14px;align-items:center}
 .eclaim-funds legend{padding:0;margin-bottom:4px;font-size:13px;color:var(--muted)}
 .eclaim-funds label{display:flex;gap:6px;align-items:center;font-weight:400}
+.eclaim-progress{margin:0 16px 10px;padding:10px 12px;border:1px solid var(--line);border-radius:var(--radius-sm)}
+.eclaim-progress-head{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:6px}
+.eclaim-progress progress{width:100%;height:10px;accent-color:var(--accent)}
+.eclaim-tally{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.eclaim-pull .import-log li.warn{background:var(--warn-bg)}
+.eclaim-pull .import-log li.rep-line{cursor:pointer}
+.eclaim-pull .import-log li.rep-line:hover{text-decoration:underline}
 .eclaim-help{box-shadow:none;border-top:1px solid var(--line);border-radius:0}
 .eclaim-help ol,.eclaim-help ul{margin:6px 0 10px;padding-left:22px;line-height:1.7}
 

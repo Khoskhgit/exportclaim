@@ -15,8 +15,8 @@ import http.cookiejar
 import logging
 import re
 import struct
-import threading
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass, field
@@ -167,15 +167,20 @@ class EclaimWeb:
         self.opener = opener or urllib.request.build_opener(urllib.request.HTTPCookieProcessor(self.jar))
         self.opener.addheaders = [("User-Agent", USER_AGENT)]
         self.logged_in = False
-        self.lock = threading.Lock()
 
     def _open(self, url: str, data: dict | None = None) -> tuple[str, bytes, str]:
         body = urllib.parse.urlencode(data).encode() if data is not None else None
-        try:
-            with self.opener.open(urllib.request.Request(url, data=body), timeout=self.timeout) as response:  # noqa: S310
-                return response.geturl(), response.read(), response.headers.get_content_charset() or "utf-8"
-        except OSError as exc:
-            raise EclaimWebError(f"ติดต่อ e-Claim ไม่ได้ ({exc})") from None
+        for attempt in range(2):
+            try:
+                with self.opener.open(urllib.request.Request(url, data=body), timeout=self.timeout) as response:  # noqa: S310
+                    return response.geturl(), response.read(), response.headers.get_content_charset() or "utf-8"
+            except urllib.error.HTTPError as exc:
+                raise EclaimWebError(f"ติดต่อ e-Claim ไม่ได้ (HTTP {exc.code})") from None
+            except OSError as exc:  # a dropped connection: try once more
+                if attempt:
+                    raise EclaimWebError(f"ติดต่อ e-Claim ไม่ได้ ({exc})") from None
+                self.sleep(3)
+        raise EclaimWebError("ติดต่อ e-Claim ไม่ได้")
 
     def _html(self, url: str, data: dict | None = None) -> tuple[str, str]:
         final, raw, charset = self._open(url, data)

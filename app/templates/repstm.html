@@ -60,7 +60,35 @@
           "login e-Claim ไม่ผ่าน" = ชื่อผู้ใช้/รหัสผ่านผิด · "กำลังดึง REP อยู่" = มีคนกดดึงอยู่ รอให้เสร็จก่อน</p>
       </div>
     </details>
+    <div id="eclaim-progress" class="eclaim-progress" hidden>
+      <div class="eclaim-progress-head"><strong id="eclaim-phase"></strong><span id="eclaim-count" class="sub"></span></div>
+      <progress id="eclaim-bar" max="1" value="0"></progress>
+      <div id="eclaim-tally" class="eclaim-tally"></div>
+    </div>
     <ul id="eclaim-log" class="import-log"></ul>
+  </section>
+
+  <section class="panel eclaim-pull">
+    <form id="seamless-form" class="search">
+      <div class="wide"><strong>ดึง REP Seamless for DMIS (โรคเฉพาะ)</strong>
+        <span id="seamless-note" class="sub"></span></div>
+      <label>ปีงบ<select name="year" id="seamless-year"></select></label>
+      <div class="sub">ทุกโครงการ · รอบ: ทั้งหมด</div>
+      <div class="actions-cell"><button class="primary" type="submit" id="seamless-run">ดึง REP Seamless</button></div>
+    </form>
+    <p class="hint">เหมือนที่ทำเองบนเว็บ Seamless: เลือกทุกโครงการ เลือกปีงบ รอบทั้งหมด แล้วกด Download รายงาน Excel (Unite report) ของทุก REP
+      ระบบดึงเฉพาะ REP ที่ยังไม่มี ครั้งแรกอาจนาน 10–20 นาที (ราว 5–15 วินาทีต่อไฟล์) ไฟล์เก็บไว้ในแอป กด "Excel" ในตารางเพื่อดาวน์โหลด
+      ไฟล์มีชื่อและเลขบัตรผู้ป่วย ใช้ภายใน รพ. เท่านั้น</p>
+    <div id="seamless-progress" class="eclaim-progress" hidden>
+      <div class="eclaim-progress-head"><strong id="seamless-phase"></strong><span id="seamless-count" class="sub"></span></div>
+      <progress id="seamless-bar" max="1" value="0"></progress>
+      <div id="seamless-tally" class="eclaim-tally"></div>
+    </div>
+    <ul id="seamless-log" class="import-log"></ul>
+    <details class="history eclaim-help">
+      <summary>REP Seamless ที่ดึงไว้</summary>
+      <div class="history-body" id="seamless-list"></div>
+    </details>
   </section>
 
   <form id="vn-search" class="panel search vn-search">

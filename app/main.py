@@ -17,7 +17,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
-from . import aipn_routes, approve_routes, auth, dashboard, dental_routes, disabled_routes, labwalkin_routes, nhso18_routes, ntip_routes, ppfs_routes, repstm_routes
+from . import aipn_routes, approve_routes, auth, dashboard, dental_routes, disabled_routes, labwalkin_routes, nhso18_routes, ntip_routes, ppfs_routes, repstm_routes, seamless_routes
 from .aipn_db import AipnDb
 from .config import Settings, load_settings
 from .export import ExportError, build_export, normalise_station, is_excluded, item_name, send_amounts, usage_fields
@@ -76,7 +76,7 @@ def asset_version() -> str:
 
 
 def create_app(settings: Settings | None = None, hosxp: Any = None, store: Store | None = None,
-               aipn_db: Any = None, moph_fetch: Any = None, eclaim: Any = None) -> FastAPI:
+               aipn_db: Any = None, moph_fetch: Any = None, eclaim: Any = None, seamless: Any = None) -> FastAPI:
     settings = settings or load_settings()
     db = hosxp or Hosxp(settings)
     local = store or Store(settings.data_dir / "ssop.sqlite3")
@@ -121,6 +121,7 @@ def create_app(settings: Settings | None = None, hosxp: Any = None, store: Store
     approvals = approve_routes.register(app, settings, db, local, templates)
     results = repstm_routes.register(app, settings, local, templates,
                                      **({"eclaim": eclaim, "eclaim_pause": lambda: None} if eclaim else {}))
+    seamless_routes.register(app, settings, local, **({"client": seamless, "pause": lambda: None} if seamless else {}))
     nhso18_routes.register(app, settings, db, local, templates, approvals, results)
     dental_routes.register(app, settings, db, local, templates)
     disabled_routes.register(app, settings, db, local, templates)
