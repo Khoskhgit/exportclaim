@@ -174,6 +174,15 @@ class RepStmStore:
             return [dict(r) for r in db.execute(
                 "SELECT * FROM stm_files ORDER BY period DESC, stm_no DESC LIMIT ?", (limit,))]
 
+    def known_reps(self, rep_nos) -> list[str]:
+        """Which of these REP numbers are already imported (the e-Claim userscript skips them)."""
+        wanted = sorted({str(r).strip() for r in rep_nos if str(r).strip()})[:2000]
+        if not wanted:
+            return []
+        with self._db() as db:
+            marks = ",".join("?" * len(wanted))
+            return [r[0] for r in db.execute(f"SELECT rep_no FROM rep_files WHERE rep_no IN ({marks}) ORDER BY rep_no", wanted)]
+
     def uploads(self, limit: int = 30) -> list[dict]:
         with self._db() as db:
             return [dict(r) for r in db.execute(

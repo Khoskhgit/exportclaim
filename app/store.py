@@ -44,6 +44,9 @@ CREATE TABLE IF NOT EXISTS sessions (
   token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL, name TEXT NOT NULL, method TEXT NOT NULL,
   created_at TEXT NOT NULL, expires_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS script_tokens (
+  token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL, name TEXT NOT NULL, created_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS login_states (
   state_hash TEXT PRIMARY KEY, created_at TEXT NOT NULL
 );
@@ -295,6 +298,19 @@ class Store:
                 (token_hash, user_id, name, method, now.isoformat(timespec="seconds"),
                  (now + timedelta(hours=hours)).isoformat(timespec="seconds")),
             )
+
+    def create_script_token(self, token_hash: str, user_id: str, name: str, keep: int = 5) -> None:
+        """A token for the e-Claim REP userscript; each user keeps their newest `keep` tokens."""
+        with self._db() as db:
+            db.execute("INSERT INTO script_tokens (token_hash, user_id, name, created_at) VALUES (?,?,?,?)",
+                       (token_hash, user_id, name, datetime.now().isoformat(timespec="seconds")))
+            db.execute("DELETE FROM script_tokens WHERE user_id=? AND token_hash NOT IN (SELECT token_hash FROM "
+                       "script_tokens WHERE user_id=? ORDER BY created_at DESC, rowid DESC LIMIT ?)", (user_id, user_id, keep))
+
+    def script_user(self, token_hash: str) -> dict | None:
+        with self._db() as db:
+            row = db.execute("SELECT user_id, name FROM script_tokens WHERE token_hash=?", (token_hash,)).fetchone()
+        return {**dict(row), "method": "script"} if row else None
 
     def session(self, token_hash: str, now: datetime | None = None) -> dict | None:
         now = (now or datetime.now()).isoformat(timespec="seconds")

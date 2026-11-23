@@ -400,3 +400,34 @@ def test_aipn_codes_are_not_explained_by_the_eclaim_document(client):
     assert client.post("/api/repstm/import?name=11111_SIGNREP_10117.ZIP", content=rep_zip).status_code == 200
     failed = client.post("/api/repstm/vn", json={"vn": "690001434"}).json()
     assert failed["c_codes"] == {}
+
+
+def test_eclaim_userscript_token_imports_and_lists_known(tmp_path):
+    from test_auth import login, make
+
+    client = make(tmp_path)
+    assert client.post("/api/repstm/known", json={"rep_nos": ["1"]}).status_code == 401
+    assert client.post("/api/repstm/known", json={"rep_nos": ["1"]}, headers={"X-KHH-Token": "bad"}).status_code == 401
+    assert login(client).status_code == 200
+    script = client.get("/repstm/eclaim-rep.user.js")
+    assert script.status_code == 200 and "__TOKEN__" not in script.text and "__APP_URL__" not in script.text
+    assert "@connect      testserver" in script.text
+    token = script.text.split("const TOKEN = '", 1)[1].split("'", 1)[0]
+
+    other = make(tmp_path)  # a browser without the session cookie: only the token
+    headers = {"X-KHH-Token": token}
+    assert other.post("/api/repstm/known", json={"rep_nos": ["9170006"]}, headers=headers).json() == {"known": []}
+    imported = other.post("/api/repstm/import?name=10866_SOCDBIL_9170006.ZIP", content=REP_ZIP, headers=headers)
+    assert imported.status_code == 200 and imported.json()["reps"] == ["9170006"]
+    assert other.post("/api/repstm/known", json={"rep_nos": ["9170006", "1"]}, headers=headers).json() == {"known": ["9170006"]}
+    # the token opens only the userscript's two paths
+    assert other.get("/api/repstm/list", headers=headers).status_code == 401
+    assert other.get("/repstm", headers=headers, follow_redirects=False).status_code == 303
+
+
+def test_script_tokens_keep_the_newest_five(tmp_path):
+    store = Store(tmp_path / "s.sqlite3")
+    for n in range(7):
+        store.create_script_token(f"h{n}", "u1", "User")
+    assert store.script_user("h0") is None and store.script_user("h1") is None
+    assert store.script_user("h6") == {"user_id": "u1", "name": "User", "method": "script"}
