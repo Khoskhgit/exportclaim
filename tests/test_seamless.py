@@ -57,9 +57,12 @@ def test_summary_page_controls():
     page = ('<form id="templateForm" action="/x"><input type="hidden" name="javax.faces.ViewState" value="v1"/>'
             '<label>โครงการ :</label><select id="templateForm:summaryForm:j_idt43_input" name="templateForm:summaryForm:j_idt43_input">'
             '<option value="">--- กรุณาเลือก ---</option><option value="1">NAP</option><option value="6">วัณโรค</option></select>'
+            '<select id="templateForm:summaryForm:yearSelectId_input" name="templateForm:summaryForm:yearSelectId_input">'
+            '<option value="2027">2570</option><option value="2026">2569</option></select>'
             '<button id="templateForm:summaryForm:j_idt96" name="b"><span>ค้นหา</span></button></form>')
     assert sm.projects(page) == ("templateForm:summaryForm:j_idt43", [Project("1", "NAP"), Project("6", "วัณโรค")])
     assert sm.button_id(page, "ค้นหา") == "templateForm:summaryForm:j_idt96"
+    assert sm.years(page) == {2027, 2026} and sm.years("<form></form>") == set()
     action, fields, _ = sm.form(page, "templateForm")
     assert action == "/x" and fields["javax.faces.ViewState"] == "v1" and fields[F + "j_idt43_input"] == ""
 
@@ -155,3 +158,17 @@ def test_rows_holding_another_reps_file_are_dropped_on_start(tmp_path):
     again = sm.SeamlessStore(Store(tmp_path / "s.sqlite3"))
     assert [r["rep_no"] for r in again.listing()] == ["DDOW69013100067"]
     assert (again.folder / "10866_DDOW69013100067.xlsx").exists()
+
+
+def test_pull_2570_and_a_year_the_site_does_not_offer(tmp_path):
+    fake = FakeSeamless()
+    config = replace(settings(), export_dir=tmp_path / "e", eclaim_user="u", eclaim_password="p", eclaim_totp_secret="GEZDGNBV")
+    app = TestClient(create_app(config, FakeHosxp(), Store(tmp_path / "s.sqlite3"), seamless=fake))
+    assert app.get("/api/seamless").json()["years"][0] == 2570
+    assert app.post("/api/seamless", json={"year": 2570}).status_code == 200
+    wait(app)
+    assert ("1", 2027) in fake.searches
+    fake.years, fake.searches = {2026}, []  # the site's drop-down has no 2570 yet
+    app.post("/api/seamless", json={"year": 2570})
+    job = wait(app)["job"]
+    assert fake.searches == [] and job["errors"] == 1 and "ยังไม่มีปีงบ 2570" in job["lines"][-1]["text"]

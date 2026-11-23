@@ -117,6 +117,12 @@ def projects(page: str) -> tuple[str, list[Project]]:
     return found.group(1), items
 
 
+def years(page: str) -> set[int]:
+    """The fiscal years (ค.ศ.) the year drop-down of the summary page offers; empty if it isn't found."""
+    found = re.search(rf'<select id="{re.escape(F)}yearSelectId_input"[^>]*>(.*?)</select>', page, re.S)
+    return {int(v) for v in re.findall(r'<option value="(\d{4})"', found.group(1))} if found else set()
+
+
 def button_id(page: str, caption: str) -> str:
     for b in re.finditer(r'<button id="([^"]+)"[^>]*>(.*?)</button>', page, re.S):
         if text(b.group(2)) == caption:
@@ -176,6 +182,7 @@ class SeamlessWeb:
         self.search_button = ""
         self.shown = (0, 20)  # (first row, rows) the REP table shows now; a row's link works only on its page
         self.year = 0
+        self.years: set[int] = set()
 
     def _post(self, url: str, data: dict, ajax: bool = False) -> tuple[str, bytes, dict]:
         headers = {"Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"}
@@ -245,6 +252,7 @@ class SeamlessWeb:
         _, self.dialog_fields, _ = form(self.page, "dialogsForm")
         self.project_select, items = projects(self.page)
         self.search_button = button_id(self.page, "ค้นหา")
+        self.years = years(self.page)
         log.info("seamless ready: %s projects", len(items))
         return items
 

@@ -15,7 +15,7 @@ from .seamless_web import SeamlessError, SeamlessStore, SeamlessWeb
 from .store import Store
 
 log = logging.getLogger("ssop.seamless")
-YEARS = (2569, 2568, 2567, 2566)  # what the Seamless year drop-down offers (พ.ศ.)
+YEARS = (2570, 2569, 2568, 2567, 2566)  # what the Seamless year drop-down offers (พ.ศ.)
 
 
 def register(app: FastAPI, settings: Settings, local: Store, client: SeamlessWeb | None = None,
@@ -38,6 +38,9 @@ def register(app: FastAPI, settings: Settings, local: Store, client: SeamlessWeb
         try:
             job.update(phase="กำลังเข้า Seamless for DMIS")
             projects = web.enter()
+            offered = getattr(web, "years", None)  # the site's own year drop-down (ค.ศ.)
+            if offered and year not in offered:
+                raise SeamlessError(f"เว็บ Seamless ยังไม่มีปีงบ {year_be} ให้เลือก (มี {', '.join(str(y + 543) for y in sorted(offered, reverse=True))})")
             todo_by_project = {}
             found = known = 0
             for p in projects:  # 1) list every project's REPs
