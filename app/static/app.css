@@ -246,6 +246,14 @@ th[aria-sort=descending] .sort-mark::after{content:"▼";opacity:1;color:var(--a
 .history-body{padding:0 16px 16px}
 .history table{min-width:640px}.history tbody tr{cursor:default}
 .zupload{margin-top:14px;max-width:460px}
+.eclaim-pull .search{padding-bottom:4px}
+.eclaim-pull .hint{margin:0 16px 12px}
+.eclaim-pull .import-log{margin:0 16px 14px}
+.eclaim-funds{border:0;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:4px 14px;align-items:center}
+.eclaim-funds legend{padding:0;margin-bottom:4px;font-size:13px;color:var(--muted)}
+.eclaim-funds label{display:flex;gap:6px;align-items:center;font-weight:400}
+.eclaim-help{box-shadow:none;border-top:1px solid var(--line);border-radius:0}
+.eclaim-help ol,.eclaim-help ul{margin:6px 0 10px;padding-left:22px;line-height:1.7}
 
 /* -------------------------------------------------------------- dialog */
 dialog{border:0;border-radius:14px;width:min(500px,92vw);padding:22px;box-shadow:var(--shadow-lg)}

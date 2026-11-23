@@ -2,17 +2,15 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import logging
 import re
-import secrets
-from pathlib import Path
+import time
 
 from fastapi import Body, FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse, Response
+from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
-from . import auth, eclaim_codes, fdh_claims
+from . import auth, eclaim_codes, eclaim_web, fdh_claims
 from .config import Settings
 from .repstm import RepStmError, parse_upload
 from .repstm_store import RepStmStore
@@ -21,7 +19,6 @@ from .validate import text
 
 log = logging.getLogger("ssop")
 MAX_UPLOAD = 30 * 1024 * 1024
-USERSCRIPT = Path(__file__).with_name("eclaim_rep.user.js")
 
 
 def safe_name(name: str) -> str:
@@ -36,8 +33,18 @@ def summary_text(parsed) -> str:
     return ", ".join(parts)
 
 
-def register(app: FastAPI, settings: Settings, local: Store, templates: Jinja2Templates) -> RepStmStore:
+def register(app: FastAPI, settings: Settings, local: Store, templates: Jinja2Templates,
+             eclaim: eclaim_web.EclaimWeb | None = None, eclaim_pause=lambda: time.sleep(1)) -> RepStmStore:
     results = RepStmStore(local)
+    shared: dict = {"client": eclaim}
+
+    def eclaim_client() -> eclaim_web.EclaimWeb:
+        """One e-Claim session for the app, kept between pulls (login again only when it runs out)."""
+        if shared["client"] is None:
+            shared["client"] = eclaim_web.EclaimWeb(settings.eclaim_user, settings.eclaim_password,
+                                                    settings.eclaim_totp_secret, settings.hcode)
+        return shared["client"]
+
     claims = fdh_claims.FdhClaimStore(local)
     folder = local.path.parent / "rep_stm"
 
@@ -45,9 +52,8 @@ def register(app: FastAPI, settings: Settings, local: Store, templates: Jinja2Te
     def page(request: Request):
         return templates.TemplateResponse(request, "repstm.html", {"hname": settings.hname})
 
-    @app.post("/api/repstm/import")
-    async def import_file(request: Request, name: str = ""):
-        data = await request.body()
+    def import_bytes(name: str, data: bytes, created_by: str) -> dict:
+        """Import one REP/STM (or FDH ClaimDetail) file: the drop zone, the userscript and the e-Claim download."""
         if not data:
             raise HTTPException(400, "ไม่ได้เลือกไฟล์")
         if len(data) > MAX_UPLOAD:
@@ -62,7 +68,7 @@ def register(app: FastAPI, settings: Settings, local: Store, templates: Jinja2Te
             funds = sorted({r["fund"] for r in rows if r["fund"]})
             summary = (f"FDH ClaimDetail {'/'.join(funds) or '-'} {saved['rows']} รายการ "
                        f"(ใหม่ {saved['added']}, อัปเดต {saved['updated']})")
-            results.log_upload(name, hashlib.sha256(data).hexdigest(), summary, auth.user_label(request))
+            results.log_upload(name, hashlib.sha256(data).hexdigest(), summary, created_by)
             log.info("fdh claim detail import %s rows=%s", name, saved["rows"])
             return {"name": name, "summary": summary, "skipped": [], "again": "", "reps": [], "stms": []}
         try:
@@ -76,7 +82,7 @@ def register(app: FastAPI, settings: Settings, local: Store, templates: Jinja2Te
         if not saved.exists():
             saved.write_bytes(data)
         summary = summary_text(parsed)
-        results.save(parsed, name, digest, saved.name, summary, created_by=auth.user_label(request))
+        results.save(parsed, name, digest, saved.name, summary, created_by=created_by)
         log.info("repstm import %s reps=%s stms=%s", name, len(parsed.reps), len(parsed.stms))
         return {
             "name": name, "summary": summary, "skipped": parsed.skipped,
@@ -84,27 +90,59 @@ def register(app: FastAPI, settings: Settings, local: Store, templates: Jinja2Te
             "reps": [r.rep_no for r in parsed.reps.values()], "stms": [s.stm_no for s in parsed.stms.values()],
         }
 
-    @app.post("/api/repstm/known")
-    def known(body: dict = Body(...)):
-        rep_nos = body.get("rep_nos") or []
-        if not isinstance(rep_nos, list):
-            raise HTTPException(400, "rep_nos ต้องเป็นรายการ")
-        return {"known": results.known_reps(rep_nos)}
+    @app.post("/api/repstm/import")
+    async def import_file(request: Request, name: str = ""):
+        return import_bytes(name, await request.body(), auth.user_label(request))
 
-    @app.get("/repstm/eclaim-rep.user.js")
-    def userscript(request: Request):
-        """The Tampermonkey script that pulls e-Claim REP Excel files into this app, with a new token of the
-        logged-in user built in (only its hash is stored)."""
-        user = request.state.user or {"user_id": "local", "name": "local"}
-        token = secrets.token_urlsafe(32)
-        local.create_script_token(auth.token_hash(token), user["user_id"], user["name"])
-        base = str(request.base_url).rstrip("/")
-        host = request.url.hostname or "localhost"
-        script = (USERSCRIPT.read_text(encoding="utf-8")
-                  .replace("__APP_URL__", json.dumps(base)[1:-1]).replace("__APP_HOST__", host)
-                  .replace("__TOKEN__", token).replace("__HCODE__", settings.hcode))
-        log.info("eclaim userscript token for %s", user["user_id"])
-        return Response(script, media_type="text/javascript; charset=utf-8", headers={"Cache-Control": "no-store"})
+    @app.get("/api/repstm/eclaim")
+    def eclaim_ready():
+        return {"ready": bool(settings.eclaim_user and settings.eclaim_password and settings.eclaim_totp_secret),
+                "user": settings.eclaim_user}
+
+    @app.post("/api/repstm/eclaim")
+    def eclaim_pull(request: Request, body: dict = Body(default={})):
+        """Log in to e-Claim (password + TOTP), list the REPs of the chosen funds and months and import those not
+        imported yet. Runs one at a time; the files are fetched one by one with a short pause."""
+        funds = [f for f in (body.get("funds") or list(eclaim_web.FUNDS)) if f in eclaim_web.FUNDS]
+        try:
+            months = max(1, min(int(body.get("months") or 2), 12))
+        except (TypeError, ValueError):
+            raise HTTPException(400, "จำนวนเดือนไม่ถูกต้อง") from None
+        if not funds:
+            raise HTTPException(400, "เลือกสิทธิอย่างน้อย 1 สิทธิ")
+        client = eclaim_client()
+        if not client.lock.acquire(blocking=False):
+            raise HTTPException(409, "กำลังดึง REP อยู่ รอให้เสร็จก่อน")
+        lines: list[dict] = []
+        imported = failed = 0
+        try:
+            found: dict[str, eclaim_web.RepLink] = {}
+            for fund in funds:
+                for month, year in eclaim_web.months_back(months):
+                    links = client.list_reps(fund, month, year)
+                    for link in links:
+                        found.setdefault(link.rep_no, link)
+                    lines.append({"ok": True, "text": f"{fund.upper()} {month}/{year}: {len(links)} REP"})
+            known = set(results.known_reps(found))
+            todo = [link for no, link in found.items() if no not in known]
+            lines.append({"ok": True, "text": f"พบ {len(found)} REP นำเข้าแล้ว {len(known)} ต้องดึงใหม่ {len(todo)}"})
+            who = f"{auth.user_label(request) or 'ระบบ'} · e-Claim"
+            for link in todo:
+                try:
+                    done = import_bytes(link.name, client.download(link), who)
+                    imported += 1
+                    lines.append({"ok": True, "text": f"✓ {link.rep_no} {link.name}: {done['summary']}"})
+                except (eclaim_web.EclaimWebError, HTTPException) as exc:
+                    failed += 1
+                    lines.append({"ok": False, "text": f"✕ {link.rep_no} {link.name}: {getattr(exc, 'detail', None) or exc}"})
+                eclaim_pause()
+        except eclaim_web.EclaimWebError as exc:
+            lines.append({"ok": False, "text": f"✕ {exc}"})
+            failed += 1
+        finally:
+            client.lock.release()
+        log.info("eclaim pull funds=%s months=%s imported=%s failed=%s", funds, months, imported, failed)
+        return {"imported": imported, "failed": failed, "lines": lines}
 
     @app.get("/api/repstm/list")
     def listing():

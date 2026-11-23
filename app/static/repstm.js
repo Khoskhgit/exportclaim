@@ -259,6 +259,36 @@ async function connection() {
     else setConnection(status.db_error ? `เชื่อมต่อไม่ได้ (${status.db_host})` : "ยังไม่ได้ตั้งค่าฐานข้อมูล", false);
   } catch (err) { setConnection("เชื่อมต่อไม่ได้", false); }
 }
+// -------------------------------------------------------------- e-Claim REP download (password + TOTP on the server)
+async function setupEclaim() {
+  const form = $("eclaim-form");
+  try {
+    const status = await api("/api/repstm/eclaim");
+    if (!status.ready) {
+      $("eclaim-run").disabled = true;
+      $("eclaim-note").textContent = "ยังไม่ได้ตั้ง NHSO_USER / NHSO_PASSWORD / ECLAIM_TOTP_SECRET ใน .env";
+    } else $("eclaim-note").textContent = `บัญชี e-Claim: ${status.user}`;
+  } catch (err) { $("eclaim-note").textContent = err.message; }
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const data = new FormData(form);
+    const log = $("eclaim-log");
+    const busy = el("li", { class: "busy" }, "กำลัง login e-Claim และดึง REP… ครั้งแรกอาจนาน 5–10 นาที อย่าปิดหน้านี้");
+    log.replaceChildren(busy);
+    $("eclaim-run").disabled = true;
+    try {
+      const result = await api("/api/repstm/eclaim", { months: Number(data.get("months")), funds: data.getAll("funds") });
+      log.replaceChildren(
+        el("li", { class: result.failed ? "error" : "ok" }, el("strong", {}, `นำเข้า ${result.imported} ไฟล์${result.failed ? ` · ไม่สำเร็จ ${result.failed}` : ""}`)),
+        ...result.lines.map((line) => el("li", { class: line.ok ? "ok" : "error" }, line.text)));
+      await load();
+    } catch (err) {
+      log.replaceChildren(el("li", { class: "error" }, `✕ ${err.message}`));
+    } finally { $("eclaim-run").disabled = false; }
+  });
+}
+
 setupDrop();
+setupEclaim();
 load();
 connection();

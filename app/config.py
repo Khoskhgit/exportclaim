@@ -92,6 +92,10 @@ class Settings:
     # New e-Claim API (nhsoapi.nhso.go.th ecimp)
     nhso_user: str = ""
     nhso_password: str = field(default="", repr=False)
+    # e-Claim web (ดึง REP): the same login with TOTP set on iam.nhso.go.th; ECLAIM_USER/PASSWORD override NHSO_*
+    eclaim_user: str = ""
+    eclaim_password: str = field(default="", repr=False)
+    eclaim_totp_secret: str = field(default="", repr=False)
 
     @property
     def allowed_hosts(self) -> list[str]:
@@ -191,4 +195,7 @@ def load_settings(env_file: Path | None = None) -> Settings:
         fdh_hash_key=get("FDH_HASH_KEY") or "$jwt@moph#",
         nhso_user=(get("NHSO_USER") or "").strip(),
         nhso_password=get("NHSO_PASSWORD") or "",
+        eclaim_user=(get("ECLAIM_USER") or get("NHSO_USER") or "").strip(),
+        eclaim_password=get("ECLAIM_PASSWORD") or get("NHSO_PASSWORD") or "",
+        eclaim_totp_secret=(get("ECLAIM_TOTP_SECRET") or "").strip(),
     )

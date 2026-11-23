@@ -31,9 +31,6 @@ COOKIE = "ssop_session"
 STATE_COOKIE = "ssop_moph_state"
 CALLBACK_PATHS = ("/auth/moph/callback", "/auth/healthid/callback")
 PUBLIC_PATHS = {"/login", "/auth/login", "/auth/moph/start", *CALLBACK_PATHS, "/static/app.css", "/static/login.js", "/static/moph-id.png"}
-# The e-Claim REP userscript sends files from Chrome with this header instead of the session cookie.
-SCRIPT_HEADER = "X-KHH-Token"
-SCRIPT_PATHS = {"/api/repstm/import", "/api/repstm/known"}
 MAX_FAILURES = 5
 # Paths under HEALTHID_BASE_URL (https://moph.id.th) and PROVIDERID_API_URL (https://provider.id.th).
 MOPH_AUTHORIZE = "https://moph.id.th/oauth/redirect"
@@ -151,9 +148,6 @@ def register(app: FastAPI, settings: Settings, db: Any, local: Store, templates:
         request.state.user = None
         if settings.login_required:
             user = current_user(request)
-            script_token = request.headers.get(SCRIPT_HEADER)
-            if user is None and script_token and request.url.path in SCRIPT_PATHS:
-                user = local.script_user(token_hash(script_token))
             public = request.url.path in PUBLIC_PATHS or request.url.path.startswith("/static/fonts/")
             if user is None and not public:
                 if request.url.path.startswith("/api/"):

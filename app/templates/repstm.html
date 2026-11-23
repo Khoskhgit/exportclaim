@@ -19,10 +19,48 @@
       <input id="files" type="file" multiple accept=".zip,.ZIP,.bil,.BIL,.rep,.REP,.xml,.XML,.xls,.XLS,.xlsx,.XLSX" class="sr-only">
     </label>
     <ul id="import-log" class="import-log"></ul>
-    <p class="sub">ดึง REP e-Claim (สปสช.) อัตโนมัติ: ติดตั้ง Tampermonkey ใน Chrome แล้วกด
-      <a href="/repstm/eclaim-rep.user.js">ติดตั้งสคริปต์ดึง REP e-Claim</a>
-      จากนั้น login e-Claim ตามปกติ เปิดหน้าตรวจสอบข้อมูล (สิทธิ UCS) แล้วกด "ส่ง REP เข้า KHH Claim Sure"
-      สคริปต์ดึงเฉพาะ REP ที่ยังไม่ได้นำเข้า · สคริปต์มีรหัสของคุณอยู่ข้างใน ห้ามส่งต่อให้คนอื่น</p>
+  </section>
+
+  <section class="panel eclaim-pull">
+    <form id="eclaim-form" class="search">
+      <div class="wide"><strong>ดึง REP e-Claim (สปสช.) อัตโนมัติ</strong>
+        <span id="eclaim-note" class="sub"></span></div>
+      <label>ย้อนหลัง<select name="months"><option value="1">เดือนนี้</option><option value="2" selected>2 เดือน</option>
+        <option value="3">3 เดือน</option><option value="6">6 เดือน</option><option value="12">12 เดือน</option></select></label>
+      <fieldset class="eclaim-funds"><legend>สิทธิ</legend>
+        <label><input type="checkbox" name="funds" value="ucs" checked> UCS บัตรทอง</label>
+        <label><input type="checkbox" name="funds" value="ofc" checked> OFC ข้าราชการ</label>
+        <label><input type="checkbox" name="funds" value="lgo" checked> LGO อปท.</label>
+      </fieldset>
+      <div class="actions-cell"><button class="primary" type="submit" id="eclaim-run">ดึง REP</button></div>
+    </form>
+    <p class="hint">กด "ดึง REP" แล้วรอจนขึ้นผล ไม่ต้องเปิดเว็บ e-Claim และไม่ต้องกรอก captcha หรือรหัส Google Authenticator เอง
+      ระบบดึงเฉพาะ REP ที่ยังไม่ได้นำเข้า ครั้งแรกอาจนาน 5–10 นาที (ราว 10 วินาทีต่อไฟล์) ครั้งต่อไปเร็วขึ้นเพราะดึงแค่ไฟล์ใหม่</p>
+    <details class="history eclaim-help">
+      <summary>วิธีใช้และการตั้งค่า</summary>
+      <div class="history-body">
+        <ol>
+          <li>เลือกช่วงย้อนหลัง (นับตามเดือนที่ สปสช. ออก REP) และสิทธิที่ต้องการ แล้วกด <b>ดึง REP</b></li>
+          <li>ระบบ login e-Claim ด้วยบัญชีของ รพ. ใช้รหัสผ่านและรหัส 6 หลักแบบเดียวกับ Google Authenticator ที่คำนวณเอง</li>
+          <li>เปิดหน้า "ตรวจสอบข้อมูล" ของแต่ละสิทธิและเดือน ข้าม REP ที่นำเข้าแล้ว แล้วดาวน์โหลดไฟล์ Excel ("download excel") ทีละไฟล์</li>
+          <li>นำเข้าเหมือนลากไฟล์มาวางด้านบน ผลขึ้นในรายการ REP ด้านล่าง และในหน้า 18 แฟ้ม / PPFS / Dashboard
+            (ผ่าน A, ติด C พร้อมรหัสและแนวทางแก้)</li>
+          <li>ถ้าบางไฟล์ไม่สำเร็จ กด "ดึง REP" ซ้ำได้ ไฟล์ที่นำเข้าแล้วจะไม่ถูกดึงซ้ำ</li>
+        </ol>
+        <p><b>การตั้งค่า (ผู้ดูแลระบบ ใน <code>.env</code> ของ server)</b></p>
+        <ul>
+          <li><code>NHSO_USER</code> / <code>NHSO_PASSWORD</code>: บัญชี e-Claim ของ รพ. (หรือ <code>ECLAIM_USER</code> / <code>ECLAIM_PASSWORD</code> ถ้าใช้บัญชีอื่น)</li>
+          <li><code>ECLAIM_TOTP_SECRET</code>: คีย์ 32 ตัวอักษรที่ได้ตอนตั้ง Mobile Authenticator ที่ iam.nhso.go.th
+            (หน้าตั้งค่า กด "สแกนบาร์โค้ดไม่ได้?" จะเห็น "ใส่คีย์") ไม่ใช่รหัส 6 หลักที่เปลี่ยนทุก 30 วินาที
+            สแกน QR เดียวกันเข้า Google Authenticator ในมือถือได้ ทั้งสองได้รหัสตรงกัน</li>
+          <li>บัญชีควรมี Authenticator อุปกรณ์เดียว และเวลาของ server ต้องตรง (รหัสคำนวณจากเวลา)</li>
+          <li>ถ้าลบหรือตั้ง Authenticator ใหม่ ต้องเปลี่ยน <code>ECLAIM_TOTP_SECRET</code> แล้ว restart โปรแกรม</li>
+        </ul>
+        <p class="sub">ข้อความผิดพลาดที่พบบ่อย: "รหัส TOTP ไม่ผ่าน" = คีย์ผิดหรือเวลาเครื่องไม่ตรง ·
+          "login e-Claim ไม่ผ่าน" = ชื่อผู้ใช้/รหัสผ่านผิด · "กำลังดึง REP อยู่" = มีคนกดดึงอยู่ รอให้เสร็จก่อน</p>
+      </div>
+    </details>
+    <ul id="eclaim-log" class="import-log"></ul>
   </section>
 
   <form id="vn-search" class="panel search vn-search">
