@@ -31,6 +31,15 @@ BASE = "https://seamlessfordmis.nhso.go.th/seamlessfordmis/faces/"
 SUMMARY_URL = BASE + "report/summary.jsf"
 F = "templateForm:summaryForm:"
 HEADS = ["Download รายงาน", "เขต", "จังหวัด", "รหัสหน่วยบริการ", "ชื่อหน่วยบริการ", "งวด/เลขที่เบิกจ่าย", "REP NO.", "REP Date"]
+# Cells 8-25 of a REP row are columns 8-25 of the report's Summary sheet. The table header is a generic 96-column
+# template, so the cells are read by position: (field, cell) of the baht amounts kept.
+AMOUNT_COLS = {
+    "claimed_items": 8, "claimed": 9,            # ข้อมูลปกติ / เรียกเก็บ  (รายการ, บาท)
+    "paid_items": 10, "paid": 11,                # ข้อมูลปกติ / ชดเชย
+    "denied_items": 12, "denied": 13,            # ข้อมูลปกติ / ไม่ชดเชย
+    "appeal_add": 23, "appeal_recall": 25,       # ข้อมูลอุทธรณ์ / ชดเชยสุทธิ / จ่ายเพิ่ม, เรียกคืน (บาท)
+}
+ROW_CELLS = 26
 
 
 class SeamlessError(Exception):
@@ -52,7 +61,13 @@ class RepRow:
     period: str
     rep_no: str
     rep_date: str
-    net: str
+    amounts: dict  # AMOUNT_COLS: the REP's totals as the table row shows them
+
+    @property
+    def net(self) -> float:
+        """ชดเชยสุทธิ of the REP: compensated, plus what an appeal adds, less what it takes back."""
+        a = self.amounts
+        return round(a.get("paid", 0) + a.get("appeal_add", 0) - a.get("appeal_recall", 0), 2)
 
 
 # ----------------------------------------------------------------- HTML helpers
@@ -122,8 +137,11 @@ def rep_rows(table: str, project: Project, whole_table: bool = True) -> tuple[in
         link = re.search(r'<a id="([^"]+:dtb01:\d+:[^"]+)"[^>]*title="[^"]*Excel"', cells[0]) if cells else None
         if not link or len(cells) < len(HEADS):
             continue
+        if len(cells) != ROW_CELLS:
+            raise SeamlessError(f"แถว REP ของ Seamless มี {len(cells)} ช่อง ไม่ใช่ {ROW_CELLS} (เว็บเปลี่ยนรูปแบบ)")
+        amounts = {field: number(text(cells[i])) for field, i in AMOUNT_COLS.items()}
         rows.append(RepRow(project.id, project.name, tr.group(1), link.group(1), text(cells[5]), text(cells[6]),
-                           text(cells[7]), text(cells[-1])))
+                           text(cells[7]), amounts))
     return int(total.group(1)) if total else len(rows), rows
 
 
@@ -132,6 +150,13 @@ def excel_buttons(dialog: str) -> list[tuple[str, str, str]]:
     return [(text(label).rstrip(" :"), name, text(file)) for label, name, file in re.findall(
         r'<label[^>]*>([^<]+)</label></td><td[^>]*><input type="submit" name="([^"]+)"[^>]*class="btn-icon-excel"[^>]*/>'
         r'<label[^>]*>([^<]+)</label>', dialog)]
+
+
+def number(value: str) -> float:
+    try:
+        return float(value.replace(",", "")) if value.strip() else 0.0
+    except ValueError:
+        return 0.0
 
 
 def be_date(value: str) -> str:
@@ -150,6 +175,7 @@ class SeamlessWeb:
         self.project_select = ""
         self.search_button = ""
         self.shown = (0, 20)  # (first row, rows) the REP table shows now; a row's link works only on its page
+        self.year = 0
 
     def _post(self, url: str, data: dict, ajax: bool = False) -> tuple[str, bytes, dict]:
         headers = {"Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"}
@@ -224,6 +250,7 @@ class SeamlessWeb:
 
     def reps(self, project: Project, year: int) -> list[RepRow]:
         """Every REP row of one project for a fiscal year (ค.ศ., the value of the year drop-down), round ทั้งหมด."""
+        self.year = year
         self.fields.update({self.project_select + "_input": project.id, F + "yearSelectId_input": str(year),
                             F + "roundSelectId_input": ""})
         change = {"javax.faces.behavior.event": "change", "javax.faces.partial.event": "change"}
@@ -248,7 +275,24 @@ class SeamlessWeb:
             F + "dtb01_skipChildren": "true", F + "dtb01_encodeFeature": "true"}), F + "dtb01")
 
     def download(self, row: RepRow) -> tuple[str, bytes]:
-        """The "Unite report" Excel of one REP row (the table must still show the row's page)."""
+        """The "Unite report" Excel of one REP row, checked to be that REP's own file."""
+        unite = self._unite_button(row)
+        if unite is None:  # the dialog still showed another REP: search the project again and press once more
+            self.reps(Project(row.project_id, row.project), self.year)
+            unite = self._unite_button(row)
+        if unite is None:
+            raise SeamlessError(f"REP {row.rep_no}: หน้าต่าง Download รายงานแสดงไฟล์ของ REP อื่น (ไม่ได้บันทึก)")
+        _, data, headers = self._post(SUMMARY_URL, {**self.dialog_fields, unite[1]: ""})
+        disposition = headers.get("Content-Disposition", "")
+        name = re.search(r'filename="?([^";]+)', disposition)
+        if not name or not data.startswith(b"PK"):
+            raise SeamlessError(f"REP {row.rep_no}: ไม่ได้ไฟล์ Excel (session หมดอายุ?)")
+        if row.rep_no not in name.group(1):
+            raise SeamlessError(f"REP {row.rep_no}: ได้ไฟล์ {name.group(1)} ของ REP อื่น (ไม่ได้บันทึก)")
+        return re.sub(r"[^\w.-]", "_", name.group(1)), data
+
+    def _unite_button(self, row: RepRow) -> tuple[str, str, str] | None:
+        """Press the row's Download link and read the dialog: its "Unite report" button, if the dialog is this REP's."""
         first, count = self.shown
         if not first <= int(row.ri) < first + count:  # bring the row's page back so its link can be pressed
             self._page(int(row.ri) // 100 * 100)
@@ -256,16 +300,8 @@ class SeamlessWeb:
         dialog = update(self._ajax("dialogsForm:summaryDialog", "dialogsForm:summaryDialog", "dialogsForm:summaryDialog",
                                    fields=self.dialog_fields, extra={"dialogsForm:summaryDialog_contentLoad": "true"}),
                         "dialogsForm:summaryDialog")
-        buttons = excel_buttons(dialog)
-        unite = next((b for b in buttons if b[0].lower().startswith("unite")), buttons[0] if buttons else None)
-        if not unite:
-            raise SeamlessError(f"REP {row.rep_no}: ไม่มีปุ่ม Excel ในหน้าต่าง Download รายงาน")
-        _, data, headers = self._post(SUMMARY_URL, {**self.dialog_fields, unite[1]: ""})
-        disposition = headers.get("Content-Disposition", "")
-        name = re.search(r'filename="?([^";]+)', disposition)
-        if not name or not data.startswith(b"PK"):
-            raise SeamlessError(f"REP {row.rep_no}: ไม่ได้ไฟล์ Excel (session หมดอายุ?)")
-        return re.sub(r"[^\w.-]", "_", name.group(1)), data
+        buttons = [b for b in excel_buttons(dialog) if row.rep_no in b[2]]  # the files are named 10866_<REP NO.>
+        return next((b for b in buttons if b[0].lower().startswith("unite")), buttons[0] if buttons else None)
 
 
 # ----------------------------------------------------------------- store
@@ -276,6 +312,7 @@ CREATE TABLE IF NOT EXISTS seamless_reps (
   downloaded_at TEXT NOT NULL, created_by TEXT NOT NULL DEFAULT ''
 );
 """
+AMOUNT_FIELDS = tuple(AMOUNT_COLS)
 
 
 class SeamlessStore:
@@ -284,6 +321,23 @@ class SeamlessStore:
         self.folder = Path(store.path).parent / "seamless"
         with self._db() as db:
             db.executescript(SCHEMA)
+            have = {r[1] for r in db.execute("PRAGMA table_info(seamless_reps)")}
+            for column in AMOUNT_FIELDS:  # added after the first release
+                if column not in have:
+                    db.execute(f"ALTER TABLE seamless_reps ADD COLUMN {column} REAL NOT NULL DEFAULT 0")
+
+    def refresh(self, rows: Iterable[RepRow]) -> None:
+        """Update the amounts of REPs already downloaded (an appeal can change them); the file stays."""
+        with self._db() as db:
+            for row in rows:
+                db.execute(f"UPDATE seamless_reps SET net=?, {', '.join(f'{c}=?' for c in AMOUNT_FIELDS)} WHERE rep_no=?",
+                           (f"{row.net:.2f}", *(row.amounts.get(c, 0) for c in AMOUNT_FIELDS), row.rep_no))
+
+    def forget(self, rep_nos: Iterable[str]) -> int:
+        """Drop REP rows so the next pull downloads them again (their files are left alone)."""
+        nos = list(rep_nos)
+        with self._db() as db:
+            return db.execute(f"DELETE FROM seamless_reps WHERE rep_no IN ({','.join('?' * len(nos))})", nos).rowcount if nos else 0
 
     def known(self, rep_nos: Iterable[str]) -> set[str]:
         wanted = sorted(set(rep_nos))
@@ -297,17 +351,18 @@ class SeamlessStore:
         saved = self.folder / name
         saved.write_bytes(data)
         with self._db() as db:
-            db.execute("INSERT OR REPLACE INTO seamless_reps (rep_no, project_id, project, period, rep_date, net, fiscal_year, "
-                       "file, downloaded_at, created_by) VALUES (?,?,?,?,?,?,?,?,?,?)",
-                       (row.rep_no, row.project_id, row.project, row.period, be_date(row.rep_date) or row.rep_date, row.net,
-                        fiscal_year, name, datetime.now().isoformat(timespec="seconds"), created_by))
+            db.execute(f"INSERT OR REPLACE INTO seamless_reps (rep_no, project_id, project, period, rep_date, net, fiscal_year, "
+                       f"file, downloaded_at, created_by, {', '.join(AMOUNT_FIELDS)}) VALUES ({','.join('?' * (10 + len(AMOUNT_FIELDS)))})",
+                       (row.rep_no, row.project_id, row.project, row.period, be_date(row.rep_date) or row.rep_date, f"{row.net:.2f}",
+                        fiscal_year, name, datetime.now().isoformat(timespec="seconds"), created_by,
+                        *(row.amounts.get(c, 0) for c in AMOUNT_FIELDS)))
         return name
 
     def listing(self, limit: int = 500) -> list[dict]:
         with self._db() as db:
             return [dict(r) for r in db.execute(
-                "SELECT rep_no, project_id, project, period, rep_date, net, fiscal_year, file, downloaded_at, created_by "
-                "FROM seamless_reps ORDER BY rep_date DESC, rep_no DESC LIMIT ?", (limit,))]
+                f"SELECT rep_no, project_id, project, period, rep_date, net, fiscal_year, file, downloaded_at, created_by, "
+                f"{', '.join(AMOUNT_FIELDS)} FROM seamless_reps ORDER BY rep_date DESC, rep_no DESC LIMIT ?", (limit,))]
 
     def file(self, rep_no: str) -> Path | None:
         with self._db() as db:

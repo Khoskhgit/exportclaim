@@ -11,21 +11,27 @@ from factories import settings
 from test_api import FakeHosxp
 
 F = sm.F
-HEAD = "".join(f'<th rowspan="6"><span>{h}</span></th>' for h in sm.HEADS + ["ชดเชยสุทธิ"])
+HEAD = "".join(f'<th rowspan="6"><span>{h}</span></th>' for h in sm.HEADS)
 
 
-def row(ri, rep_no, net="1,234.50"):
+def row(ri, rep_no, paid="9,120.00"):
     link = f'<a id="{F}dtb01:{ri}:j_idt236" href="#" aria-label="x" onclick="PrimeFaces.ab({{}});return false;" title="รายงานในรูปแบบ Excel"><img/></a>'
-    cells = [link, "เขต 6 ระยอง", "สระแก้ว", "10866", "รพ.คลองหาด", f"DNAP70{ri}", rep_no, "31/10/2569", "1", "0", net]
+    amounts = ["371", "9,590.00", "352", paid, "19", "470.00"] + ["0", "0.00"] * 4 + ["2", "100.00", "1", "30.00"]
+    cells = [link, "เขต 6 ระยอง", "สระแก้ว", "10866", "รพ.คลองหาด", f"DNAP70{ri}", rep_no, "31/10/2569", *amounts]
     return f'<tr data-ri="{ri}" class="ui-widget-content">' + "".join(f"<td>{c}</td>" for c in cells) + "</tr>"
 
 
 def test_rep_rows_and_dialog_buttons():
     table = f'<div id="{F}dtb01"><span class="ui-paginator-current">(1 - 2 of 23)</span><table><thead><tr>{HEAD}</tr></thead>' \
-            f'<tbody>{row(0, "DNAP69103100120")}{row(1, "DNAP69100100119", "0.00")}</tbody></table></div>'
+            f'<tbody>{row(0, "DNAP69103100120")}{row(1, "DNAP69100100119", "20.00")}</tbody></table></div>'
     total, rows = sm.rep_rows(table, Project("1", "NAP"))
     assert total == 23 and [r.rep_no for r in rows] == ["DNAP69103100120", "DNAP69100100119"]
-    assert rows[0] == RepRow("1", "NAP", "0", f"{F}dtb01:0:j_idt236", "DNAP700", "DNAP69103100120", "31/10/2569", "1,234.50")
+    first = rows[0]
+    assert (first.ri, first.link, first.period, first.rep_no, first.rep_date) == (
+        "0", f"{F}dtb01:0:j_idt236", "DNAP700", "DNAP69103100120", "31/10/2569")
+    assert first.amounts == {"claimed_items": 371, "claimed": 9590, "paid_items": 352, "paid": 9120, "denied_items": 19,
+                             "denied": 470, "appeal_add": 100, "appeal_recall": 30}
+    assert first.net == 9190.0 and rows[1].net == 90.0  # ชดเชย + จ่ายเพิ่ม - เรียกคืน
     # a paginator reply carries rows only, sometimes with the Thai title as "?"
     paged = row(20, "X").replace("รายงานในรูปแบบ Excel", "?????? Excel")
     assert sm.rep_rows(paged, Project("1", "NAP"), whole_table=False)[1][0].ri == "20"
@@ -61,7 +67,7 @@ def test_summary_page_controls():
 class FakeSeamless:
     def __init__(self, fail_project=None):
         self.data = {"1": ["R1", "R2"], "6": ["R3"], "13": []}
-        self.fail_project, self.downloads, self.searches = fail_project, [], []
+        self.fail_project, self.downloads, self.searches, self.bump = fail_project, [], [], 0
 
     def enter(self):
         return [Project("1", "NAP"), Project("6", "วัณโรค"), Project("13", "ฝากครรภ์"), Project("28", "อื่น")]
@@ -70,7 +76,8 @@ class FakeSeamless:
         self.searches.append((project.id, year))
         if project.id == "28":
             raise SeamlessError("Seamless ตอบ HTTP 500")
-        return [RepRow(project.id, project.name, str(i), f"l{i}", "P", no, "31/10/2569", "10.00")
+        return [RepRow(project.id, project.name, str(i), f"l{i}", "P", no, "31/10/2569",
+                       {"claimed": 12.0 + self.bump, "paid": 10.0 + self.bump, "denied": 2.0})
                 for i, no in enumerate(self.data[project.id])]
 
     def download(self, row):
@@ -100,13 +107,17 @@ def test_pull_downloads_new_reps_and_serves_the_files(tmp_path):
     assert any("อื่น: Seamless ตอบ HTTP 500" in line["text"] for line in job["lines"] if line["kind"] == "error")
     reps = {r["rep_no"]: r for r in status["reps"]}
     assert reps["R1"]["project"] == "NAP" and reps["R1"]["rep_date"] == "2026-10-31" and reps["R1"]["fiscal_year"] == 2569
+    assert (reps["R1"]["claimed"], reps["R1"]["paid"], reps["R1"]["denied"], reps["R1"]["net"]) == (12.0, 10.0, 2.0, "10.00")
     got = app.get("/api/seamless/file/R1")
     assert got.status_code == 200 and got.content == b"PKR1" and "10866_R1.xlsx" in got.headers["content-disposition"]
     assert app.get("/api/seamless/file/nope").status_code == 404
 
     fake.data["6"].append("R4")
+    fake.bump = 5  # an appeal changed the amounts of REPs already downloaded
     app.post("/api/seamless", json={"year": 2569})
-    again = wait(app)["job"]
+    status = wait(app)
+    again = status["job"]
+    assert {r["rep_no"]: r["net"] for r in status["reps"]}["R1"] == "15.00"
     assert (again["found"], again["known"], again["total"], again["imported"]) == (4, 3, 1, 1)
     assert fake.downloads.count("R1") == 1 and fake.downloads[-1] == "R4"
 
@@ -118,3 +129,18 @@ def test_pull_needs_settings(tmp_path):
     app.post("/api/seamless", json={"year": 2569})
     job = wait(app)["job"]
     assert job["errors"] == 1 and "ECLAIM_TOTP_SECRET" in job["lines"][-1]["text"]
+
+
+def test_store_adds_amount_columns_to_an_old_table(tmp_path):
+    import sqlite3
+    path = tmp_path / "s.sqlite3"
+    with sqlite3.connect(path) as db:
+        db.execute("CREATE TABLE seamless_reps (rep_no TEXT PRIMARY KEY, project_id TEXT NOT NULL, project TEXT NOT NULL, "
+                   "period TEXT NOT NULL, rep_date TEXT NOT NULL, net TEXT NOT NULL, fiscal_year INTEGER NOT NULL, "
+                   "file TEXT NOT NULL, downloaded_at TEXT NOT NULL, created_by TEXT NOT NULL DEFAULT '')")
+        db.execute("INSERT INTO seamless_reps VALUES ('R1','1','NAP','P','2026-10-31','0.00',2569,'f.xlsx','t','')")
+    store = sm.SeamlessStore(Store(path))
+    store.refresh([RepRow("1", "NAP", "0", "l", "P", "R1", "31/10/2569", {"paid": 9120.0, "appeal_recall": 20.0})])
+    row = store.listing()[0]
+    assert (row["paid"], row["appeal_recall"], row["net"]) == (9120.0, 20.0, "9100.00")
+    assert store.forget(["R1"]) == 1 and store.listing() == []

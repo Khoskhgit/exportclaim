@@ -49,6 +49,7 @@ def register(app: FastAPI, settings: Settings, local: Store, client: SeamlessWeb
                     job.update({"kind": "error", "ok": False, "text": f"{p.name}: {exc}"}, errors=errors)
                     continue
                 have = store.known(r.rep_no for r in rows)
+                store.refresh(r for r in rows if r.rep_no in have)
                 new = [r for r in rows if r.rep_no not in have]
                 found, known = found + len(rows), known + len(have)
                 if rows:
@@ -76,7 +77,8 @@ def register(app: FastAPI, settings: Settings, local: Store, client: SeamlessWeb
                         store.save(row, name, data, year_be, who)
                         imported += 1
                         job.update({"kind": "seamless", "ok": True, "rep_no": row.rep_no, "project": p.name, "period": row.period,
-                                    "rep_date": row.rep_date, "net": row.net, "name": name}, done=done, imported=imported)
+                                    "rep_date": row.rep_date, "net": row.net, "paid": row.amounts.get("paid", 0),
+                                    "denied": row.amounts.get("denied", 0), "name": name}, done=done, imported=imported)
                     except SeamlessError as exc:
                         errors += 1
                         job.update({"kind": "seamless", "ok": False, "rep_no": row.rep_no, "project": p.name, "text": str(exc)},

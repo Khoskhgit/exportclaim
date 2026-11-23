@@ -345,7 +345,9 @@ function eclaimLine(l) {
 function seamlessLine(l) {
   if (l.kind !== "seamless") return plainLine(l);
   if (!l.ok) return el("li", { class: "error" }, el("strong", {}, `✕ ${l.rep_no}`), ` · ${l.project} · ${l.text}`);
-  return el("li", { class: "ok" }, el("strong", {}, `✓ ${l.rep_no}`), ` · ${l.project} · ${l.rep_date} · ชดเชยสุทธิ ${l.net} `,
+  return el("li", { class: l.denied ? "warn" : "ok" }, el("strong", {}, `✓ ${l.rep_no}`),
+    ` · ${l.project} · ${l.rep_date} · ชดเชยสุทธิ ${money(l.net)} `,
+    l.denied ? el("span", { class: "badge b-error" }, `ไม่ชดเชย ${money(l.denied)}`) : null, " ",
     el("a", { href: `/api/seamless/file/${encodeURIComponent(l.rep_no)}` }, "ดาวน์โหลด Excel"));
 }
 
@@ -353,11 +355,18 @@ function renderSeamless(reps) {
   const box = $("seamless-list");
   if (!reps.length) { box.replaceChildren(el("p", { class: "hint" }, "ยังไม่มี REP Seamless ที่ดึงไว้")); return; }
   const net = (v) => Number(String(v).replace(/,/g, "")) || 0;
-  box.replaceChildren(table(
-    [["โครงการ"], ["งวด/เลขที่เบิกจ่าย"], ["REP NO."], ["REP Date"], ["ชดเชยสุทธิ", "num"], ["ปีงบ"], ["ดึงเมื่อ"], ["ไฟล์"]],
+  const sum = (key) => reps.reduce((n, r) => n + net(r[key]), 0);
+  box.replaceChildren(
+    el("p", { class: "sub" }, `${reps.length} REP · เรียกเก็บ ${money(sum("claimed"))} · ชดเชย ${money(sum("paid"))} · ไม่ชดเชย ${money(sum("denied"))}` +
+      ` · ชดเชยสุทธิ (รวมอุทธรณ์) ${money(sum("net"))} บาท`),
+    table(
+    [["โครงการ"], ["งวด/เลขที่เบิกจ่าย"], ["REP NO."], ["REP Date"], ["เรียกเก็บ", "num"], ["ชดเชย", "num"], ["ไม่ชดเชย", "num"],
+      ["ชดเชยสุทธิ", "num"], ["ปีงบ"], ["ดึงเมื่อ"], ["ไฟล์"]],
     reps.map((r) => el("tr", {},
       el("td", {}, r.project), el("td", {}, r.period), el("td", {}, r.rep_no), el("td", {}, toDmy(r.rep_date) || r.rep_date),
-      el("td", { class: "num" }, money(net(r.net))), el("td", {}, String(r.fiscal_year)), el("td", {}, when(r.downloaded_at)),
+      el("td", { class: "num" }, money(net(r.claimed))), el("td", { class: "num" }, money(net(r.paid))),
+      el("td", { class: "num" }, net(r.denied) ? el("span", { class: "badge b-error" }, money(net(r.denied))) : money(0)),
+      el("td", { class: "num" }, el("strong", {}, money(net(r.net)))), el("td", {}, String(r.fiscal_year)), el("td", {}, when(r.downloaded_at)),
       el("td", {}, el("a", { href: `/api/seamless/file/${encodeURIComponent(r.rep_no)}` }, "Excel"))))));
 }
 
