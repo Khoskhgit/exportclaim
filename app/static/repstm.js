@@ -430,7 +430,7 @@ function renderSteps(s) {
   box.replaceChildren(...steps.map((st) => {
     const counts = st.key === "line" ? (st.text || "")
       : st.state === "running"
-        ? `${st.phase || ""}${st.total ? ` (${st.done}/${st.total})` : ""}`
+        ? `${st.phase || ""}${st.total && !/\(\d+\/\d+\)/.test(st.phase || "") ? ` (${st.done}/${st.total})` : ""}`  // phases that count already say (n/total)
         : (st.state === "done" || st.state === "error") ? `พบ ${st.found || 0} · ใหม่ ${st.imported || 0}/${st.total || 0}` +
           (st.errors ? ` · ผิดพลาด ${st.errors}` : "") + (st.text ? ` · ${st.text}` : "") : "";
     return el("li", { class: { done: "ok", error: "error", running: "warn" }[st.state] || "" },
