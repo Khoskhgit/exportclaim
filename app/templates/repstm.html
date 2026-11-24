@@ -114,15 +114,20 @@
 
   <section class="panel eclaim-pull">
     <form id="mms-form" class="search">
-      <div class="wide"><strong>ดึง REP / STM ทันตกรรม ประกันสังคม (MMS)</strong>
+      <div class="wide"><strong>ดึง REP / STM ประกันสังคม (MMS)</strong>
         <span id="mms-note" class="sub"></span></div>
       <label>ย้อนหลัง<select name="months">
         <option value="1">เดือนนี้</option><option value="2" selected>2 เดือน</option><option value="3">3 เดือน</option>
         <option value="6">6 เดือน</option><option value="12">12 เดือน</option></select></label>
+      <fieldset class="eclaim-funds"><legend>งาน</legend>
+        <label><input type="checkbox" name="programs" value="dental" checked> ทันตกรรม</label>
+        <label><input type="checkbox" name="programs" value="disabled" checked> ผู้ทุพพลภาพ (ผู้ป่วยนอก/อุปกรณ์อวัยวะเทียม)</label>
+        <label><input type="checkbox" name="programs" value="er72" checked> เจ็บป่วยฉุกเฉิน 72 ชั่วโมง</label>
+      </fieldset>
       <div class="sub">รายงานการส่งเบิก (REP) + รายงานการจ่าย (STM)</div>
-      <div class="actions-cell"><button class="primary" type="submit" id="mms-run">ดึงรายงานทันตกรรม</button></div>
+      <div class="actions-cell"><button class="primary" type="submit" id="mms-run">ดึงรายงาน MMS</button></div>
     </form>
-    <p class="hint">login mms.sso.go.th ด้วยบัญชีของ รพ. (ใช้เบราว์เซอร์เบื้องหลัง) ดึงรายงานทันตกรรมทีละเดือน (เว็บให้เลือกได้ไม่เกิน 1 เดือนและถึงเมื่อวาน)
+    <p class="hint">login mms.sso.go.th ด้วยบัญชีของ รพ. (ใช้เบราว์เซอร์เบื้องหลัง) ดึงรายงานทีละเดือน งานละ 2 รายงาน (เว็บให้เลือกได้ไม่เกิน 1 เดือนและถึงเมื่อวาน · รายงานละประมาณ 1 นาที)
       เก็บไฟล์ Excel และสรุปต่อเดือน ดึงเดือนเดิมซ้ำจะแทนที่ข้อมูลเดิม (สถานะและการจ่ายเปลี่ยนได้)
       ตั้งใน <code>.env</code>: <code>MMS_USER</code>, <code>MMS_PASSWORD</code> · ต้องติดตั้ง <code>playwright</code> + <code>playwright install chromium</code></p>
     <div id="mms-progress" class="eclaim-progress" hidden>

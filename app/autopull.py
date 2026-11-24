@@ -1,5 +1,5 @@
 """Daily automatic REP pull: e-Claim REPs (every fund), Seamless for DMIS (this fiscal year), AIPN REP/STM (when
-AIPN_USER is set) and the SSO dental REP/STM from MMS (when MMS_USER is set), then a summary to LINE: through MOPH Alert (a LINE group) when its keys are set, else the LINE
+AIPN_USER is set) and the SSO REP/STM (dental, disabled, emergency 72 h) from MMS (when MMS_USER is set), then a summary to LINE: through MOPH Alert (a LINE group) when its keys are set, else the LINE
 Messaging API.
 
 AUTO_PULL_TIME=06:00 turns it on (Asia/Bangkok). It reuses the page's background pulls, so a pull someone started by
@@ -49,6 +49,15 @@ def money(value) -> str:
         return str(value or "0")
 
 
+MMS_TITLE = "ประกันสังคม MMS (ทันตกรรม / ทุพพลภาพ / ฉุกเฉิน 72 ชม.)"
+
+
+def _mms_lines(mms: dict) -> tuple[list[dict], int]:
+    """The pulled MMS reports that have items, and how many came back empty (most months, for the smaller programs)."""
+    ok = [l for l in mms["lines"] if l.get("kind") == "mms" and l.get("ok")]
+    return [l for l in ok if l.get("rows", 1)], sum(1 for l in ok if not l.get("rows", 1))
+
+
 def summary(eclaim: dict | None, seamless: dict | None, started: datetime, year_be: int, aipn: dict | None = None,
             mms: dict | None = None) -> str:
     """The LINE message: what each pull found, what was new, and what failed."""
@@ -88,11 +97,13 @@ def summary(eclaim: dict | None, seamless: dict | None, started: datetime, year_
         for l in ok[:20]:
             out.append(f"- {'REP' if l.get('type') == 'rep' else 'STM'} {l['rep_no']}: {l.get('text', '')}"[:200])
     if mms is not None:
-        ok = [l for l in mms["lines"] if l.get("kind") == "mms" and l.get("ok")]
-        out.append(f"\n[ทันตกรรม ประกันสังคม (MMS) ย้อนหลัง {mms.get('months', '')} เดือน]")
+        ok, empty = _mms_lines(mms)
+        out.append(f"\n[{MMS_TITLE} ย้อนหลัง {mms.get('months', '')} เดือน]")
         out.append(f"ดึง {mms.get('imported', 0)}/{mms.get('total', 0)} รายงาน · ผิดพลาด {mms.get('errors', 0)}")
         for l in ok:
             out.append(f"- {l['rep_no']}: {l.get('text', '')}")
+        if empty:
+            out.append(f"- ไม่มีรายการ {empty} รายงาน")
     errors = [l for job in (eclaim, seamless, aipn, mms) if job for l in job["lines"] if l.get("ok") is False]
     if errors:
         out.append("\nข้อผิดพลาด")
@@ -159,10 +170,11 @@ def flex(eclaim: dict | None, seamless: dict | None, started: datetime, year_be:
             f"AIPN ผู้ป่วยใน ปกส. ย้อนหลัง {aipn.get('months', '')} เดือน", aipn,
             [_row(f"{'REP' if l.get('type') == 'rep' else 'STM'} {l['rep_no']}", str(l.get("text", ""))[:60]) for l in ok]))
     if mms is not None:
-        ok = [l for l in mms["lines"] if l.get("kind") == "mms" and l.get("ok")]
+        ok, empty = _mms_lines(mms)
         sections.append(_section(
-            f"ทันตกรรม ประกันสังคม (MMS) ย้อนหลัง {mms.get('months', '')} เดือน", {**mms, "found": mms.get("total", 0)},
-            [_row(l["rep_no"], l.get("text", "")) for l in ok], "", "ดึงแล้ว"))
+            f"{MMS_TITLE} ย้อนหลัง {mms.get('months', '')} เดือน", {**mms, "found": mms.get("total", 0)},
+            [_row(l["rep_no"], l.get("text", "")) for l in ok], f"ไม่มีรายการ {empty} รายงาน" if empty else "",
+            "ดึงแล้ว"))
     errors = [l for job in (eclaim, seamless, aipn, mms) if job for l in job["lines"] if l.get("ok") is False]
     if errors:
         rows = [_text(f"• {(l.get('rep_no') + ': ') if l.get('rep_no') else ''}{l.get('text', '')}"[:160], size="xxs",
@@ -256,7 +268,7 @@ class AutoPull:
             ("eclaim", f"REP e-Claim (UCS/OFC/LGO ย้อนหลัง {self.settings.auto_pull_months} เดือน)", True),
             ("seamless", f"Seamless for DMIS ปีงบ {year_be}", True),
             ("aipn", f"REP / STM AIPN (ย้อนหลัง {self.settings.auto_pull_months} เดือน)", use_aipn),
-            ("mms", f"REP / STM ทันตกรรม ประกันสังคม MMS (ย้อนหลัง {self.settings.auto_pull_months} เดือน)", use_mms),
+            ("mms", f"REP / STM ประกันสังคม MMS: ทันตกรรม ทุพพลภาพ ฉุกเฉิน 72 ชม. (ย้อนหลัง {self.settings.auto_pull_months} เดือน)", use_mms),
             ("line", "ส่งสรุปทาง LINE", True))]
         self.last = {"started_at": started.isoformat(timespec="seconds")}
         try:

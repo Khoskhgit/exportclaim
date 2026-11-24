@@ -1,4 +1,4 @@
-"""Pull the SSO dental REP / STM reports from MMS (mms_web) in the background and keep them per month."""
+"""Pull the SSO REP / STM reports (dental, disabled, emergency 72 h) from MMS (mms_web) in the background, per month."""
 from __future__ import annotations
 
 import logging
@@ -26,10 +26,11 @@ def register(app: FastAPI, settings: Settings, local: Store, client: Callable | 
     def ready() -> bool:
         return bool(settings.mms_user and settings.mms_password)
 
-    def run(job: PullJob, months: int, who: str) -> None:
+    def run(job: PullJob, months: int, programs: list[str], who: str) -> None:
         ranges = mms_web.month_ranges(today(), months)
-        todo = [(kind, start, end) for start, end in ranges for kind in ("rep", "stm")]
-        job.update({"kind": "list", "text": f"ดึงรายงานทันตกรรม {len(ranges)} เดือน (REP + STM) {len(todo)} รายงาน"},
+        todo = [(kind, start, end) for start, end in ranges for program in programs for kind in mms_web.KINDS[program]]
+        names = " / ".join(mms_web.PROGRAMS[p] for p in programs)
+        job.update({"kind": "list", "text": f"ดึงรายงาน {names} {len(ranges)} เดือน (REP + STM) {len(todo)} รายงาน"},
                    total=len(todo), found=len(todo))
         imported = failed = 0
         job.update(phase="กำลังเข้า MMS ประกันสังคม")
@@ -50,7 +51,7 @@ def register(app: FastAPI, settings: Settings, local: Store, client: Callable | 
                         saved.write_bytes(report.data)
                         store.save(parsed, month, saved.name, who)
                         imported += 1
-                        money = f"จ่าย {parsed['paid']:,.2f}" if kind == "stm" else f"ขอเบิก {parsed['claim']:,.2f}"
+                        money = f"จ่าย {parsed['paid']:,.2f}" if mms_web.side(kind) == "stm" else f"ขอเบิก {parsed['claim']:,.2f}"
                         job.update({"kind": "mms", "ok": True, "type": kind, "rep_no": label, "month": month,
                                     "rows": len(parsed["rows"]), "claim": parsed["claim"], "paid": parsed["paid"],
                                     "text": f"{len(parsed['rows'])} รายการ {money} บาท"}, done=n, imported=imported)
@@ -62,14 +63,16 @@ def register(app: FastAPI, settings: Settings, local: Store, client: Callable | 
             failed += 1
             job.update({"kind": "error", "ok": False, "text": str(exc)}, errors=failed)
 
-    def start(who: str, months: int) -> dict:
-        return job.start(who, lambda j: run(j, months, f"{who} · MMS"), months=months)
+    def start(who: str, months: int, programs: list[str] | None = None) -> dict:
+        chosen = [p for p in mms_web.PROGRAMS if p in (programs or mms_web.PROGRAMS)]
+        return job.start(who, lambda j: run(j, months, chosen, f"{who} · MMS"), months=months, programs=chosen)
 
     app.state.mms_job, app.state.start_mms, app.state.mms_ready = job, start, ready
 
     @app.get("/api/repstm/mms")
     def status():
-        return {"ready": ready(), "user": settings.mms_user, "job": job.view(), "months": store.months()}
+        return {"ready": ready(), "user": settings.mms_user, "job": job.view(), "months": store.months(),
+                "programs": mms_web.PROGRAMS}
 
     @app.post("/api/repstm/mms")
     def pull(request: Request, body: dict = Body(default={})):
@@ -79,9 +82,12 @@ def register(app: FastAPI, settings: Settings, local: Store, client: Callable | 
             months = max(1, min(int(body.get("months") or 2), 12))
         except (TypeError, ValueError):
             raise HTTPException(400, "จำนวนเดือนไม่ถูกต้อง") from None
-        started = start(auth.user_label(request) or "ระบบ", months)
+        programs = body.get("programs") or list(mms_web.PROGRAMS)
+        if not isinstance(programs, list) or not set(programs) <= set(mms_web.PROGRAMS):
+            raise HTTPException(400, "เลือกรายงานไม่ถูกต้อง")
+        started = start(auth.user_label(request) or "ระบบ", months, programs)
         if not started:
-            raise HTTPException(409, f"กำลังดึงรายงานทันตกรรม MMS อยู่ (เริ่มโดย {job.busy_by()}) รอให้เสร็จก่อน")
+            raise HTTPException(409, f"กำลังดึงรายงาน MMS อยู่ (เริ่มโดย {job.busy_by()}) รอให้เสร็จก่อน")
         return {"job": started}
 
     @app.get("/api/repstm/mms/file")

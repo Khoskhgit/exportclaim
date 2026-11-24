@@ -19,7 +19,36 @@ STM_HEAD = ["ลำดับ", "เลขประจำตัว\nประช�
             "จำนวนเงินที่\nขอเบิก", "จำนวนเงินจ่าย", "เลขที่ใบสำคัญรับเงิน", "วันที่โอนเข้าบัญชี"]
 
 
+ER72_HEAD = ["ลำดับ", "เลขประจำตัวประชาชน", "ชื่อ-นามสกุล", "Admit Date", "Discharge Date", "วันที่ส่งเบิก", "กรณี", "ประเภท",
+             "จำนวนชั่วโมง\nตามการรักษาจริง", "จำนวนเงิน\nที่จ่าย", "เลขที่ใบสำคัญ\nรับเงิน", "วันที่โอน\nเข้าบัญชี"]
+
+
+def newer_xlsx(kind: str, start: date, end: date) -> bytes:
+    """The disabled / 72-hour layout: d/m/yyyy dates, Admit/Discharge columns, an empty report has a lone "0" row."""
+    def th(d):
+        return f"{d.day:02d}/{d.month:02d}/{d.year + 543}"
+    book = openpyxl.Workbook()
+    ws = book.active
+    what = "ผู้ทุพพลภาพ (ผู้ป่วยนอก/ใน)" if kind.startswith("dis") else "เจ็บป่วยฉุกเฉิน 72 ชั่วโมง/อุปกรณ์อวัยวะเทียม"
+    ws.append(["สำนักงานประกันสังคม", None, "หน้าที่", "1/1"])
+    ws.append([f"{'รายงานการจ่าย' if kind.endswith('stm') else 'รายงานการส่งเบิก'}ค่าบริการทางการแพทย์{what}"])
+    ws.append([f"ตั้งแต่วันที่ {th(start)} ถึงวันที่ {th(end)}"])
+    ws.append(ER72_HEAD)
+    if end.day == 2:
+        ws.append(["0"])
+    else:
+        ws.append(["1", "4444444444444", "ทดสอบ สี่", th(start) + " 10:30", th(start), th(end), "ฉุกเฉิน", "ผู้ป่วยใน", "48",
+                   "12,500.50", "V9", th(end)])
+    ws.append(["รวมทั้งสิ้น"])
+    out = io.BytesIO()
+    book.save(out)
+    return out.getvalue()
+
+
 def report_xlsx(kind: str, start: date, end: date) -> bytes:
+    if kind not in ("rep", "stm"):
+        return newer_xlsx(kind, start, end)
+
     def th(d):
         return f"{d.day:02d} {mms_web.THAI_MONTHS[d.month - 1]} {d.year + 543}"
     book = openpyxl.Workbook()
@@ -56,20 +85,33 @@ def test_month_ranges_and_codes():
     assert mms_web.month_ranges(date(2026, 3, 15), 2)[1] == (date(2026, 2, 1), date(2026, 2, 28))
     assert mms_web.hosp_code9("10866") == "001086600"
     assert mms_web.thai_date("01 ตุลาคม 2569") == "2026-10-01" and mms_web.thai_date("รวม") == ""
+    assert mms_web.thai_date("5/10/2569 10:30") == "2026-10-05" and mms_web.thai_date("31/02/2569") == ""
+    assert mms_web.LABELS["er72_stm"] == "ฉุกเฉิน 72 ชม. STM การจ่าย"
+    q = mms_web.report_query("dis_rep", "001086600", "001086600.u", date(2026, 10, 1), date(2026, 10, 31))
+    assert "ReportName=RE_DISABLEDOPD_SEND&username=001086600.u&" in q and "start_date=2026-10-01&end_date=2026-10-31" in q
+    assert "HOSP_CODE=001086600" in mms_web.report_query("stm", "001086600", "x", date(2026, 10, 1), date(2026, 10, 31))
+    assert mms_web.MmsWeb("u", "p", "001086600").username == "001086600.u"
+    assert mms_web.MmsWeb("001086600.u", "p", "001086600").username == "001086600.u"
 
 
 def test_parse_rep_and_stm():
     rep = mms_web.parse_report(report_xlsx("rep", date(2026, 10, 1), date(2026, 10, 31)))
     assert rep["kind"] == "rep" and (rep["start"], rep["end"]) == ("2026-10-01", "2026-10-31")
     assert [r["seq"] for r in rep["rows"]] == [1, 2, 3] and rep["claim"] == 2200
-    assert rep["rows"][0] == {"seq": 1, "pid": "1111111111111", "service_date": "2026-10-01", "submit_date": "2026-10-01",
-                              "service_type": "อุด ขูด ถอน", "status": "จ่ายแล้ว", "claim": 700.0, "paid": 0.0,
-                              "voucher": "", "transfer_date": ""}
+    assert rep["rows"][0] == {"seq": 1, "pid": "1111111111111", "service_date": "2026-10-01", "discharge_date": "",
+                              "submit_date": "2026-10-01", "service_type": "อุด ขูด ถอน", "case_type": "", "hours": 0.0,
+                              "status": "จ่ายแล้ว", "claim": 700.0, "paid": 0.0, "voucher": "", "transfer_date": ""}
     assert all("name" not in r for r in rep["rows"])  # the patient name is not kept
     stm = mms_web.parse_report(report_xlsx("stm", date(2026, 10, 1), date(2026, 10, 31)))
     assert stm["kind"] == "stm" and stm["paid"] == 1000 and stm["rows"][1]["transfer_date"] == "2026-10-31"
     empty = mms_web.parse_report(report_xlsx("stm", date(2026, 11, 1), date(2026, 11, 2)))
     assert empty["rows"] == [] and empty["paid"] == 0
+    er = mms_web.parse_report(report_xlsx("er72_stm", date(2026, 10, 1), date(2026, 10, 31)))
+    assert er["kind"] == "er72_stm" and (er["start"], er["end"]) == ("2026-10-01", "2026-10-31") and er["paid"] == 12500.5
+    assert er["rows"][0]["service_date"] == "2026-10-01" and er["rows"][0]["hours"] == 48
+    assert er["rows"][0]["case_type"] == "ฉุกเฉิน" and er["rows"][0]["service_type"] == "ผู้ป่วยใน"
+    assert mms_web.parse_report(report_xlsx("dis_rep", date(2026, 10, 1), date(2026, 10, 31)))["kind"] == "dis_rep"
+    assert mms_web.parse_report(report_xlsx("dis_stm", date(2026, 11, 1), date(2026, 11, 2)))["rows"] == []  # lone "0"
     with pytest.raises(mms_web.MmsWebError, match="อ่านไฟล์"):
         mms_web.parse_report(b"not a workbook")
 
@@ -108,13 +150,17 @@ def test_pull_keeps_each_month_and_replaces_it(tmp_path):
     config = replace(settings(), mms_user="u", mms_password="p", mms_hosp_code="001086600")
     client = TestClient(create_app(config, FakeHosxp(), Store(tmp_path / "s.sqlite3"), mms=lambda: fake))
     assert client.get("/api/repstm/mms").json()["ready"] is True
-    assert client.post("/api/repstm/mms", json={"months": 2}).status_code == 200
+    assert client.post("/api/repstm/mms", json={"months": 2, "programs": ["x"]}).status_code == 400
+    assert client.post("/api/repstm/mms", json={"months": 2, "programs": ["er72", "dental"]}).status_code == 200
     status = wait(client, "/api/repstm/mms")
     job = status["job"]
     ranges = mms_web.month_ranges(date.today(), 2)
-    assert fake.logins == 1 and len(fake.asked) == 2 * len(ranges)
-    assert job["imported"] == 2 * len(ranges) - (len(ranges) > 1) and job["errors"] == (len(ranges) > 1)
-    months = {m["month"]: m for m in status["months"]}
+    assert fake.logins == 1 and len(fake.asked) == 4 * len(ranges) and job["programs"] == ["dental", "er72"]
+    assert fake.asked[:4] == [(k, *ranges[0]) for k in ("rep", "stm", "er72_rep", "er72_stm")]
+    assert job["imported"] == 4 * len(ranges) - (len(ranges) > 1) and job["errors"] == (len(ranges) > 1)
+    er = [m for m in status["months"] if m["program"] == "er72"]
+    assert len(er) == len(ranges) and er[0]["label"] == "ฉุกเฉิน 72 ชม." and er[0]["stm"]["kind"] == "er72_stm"
+    months = {m["month"]: m for m in status["months"] if m["program"] == "dental"}
     assert set(months) == {start.strftime("%Y-%m") for start, _ in ranges}
     assert all(m["rep"]["rows"] == 3 and m["rep"]["claim"] == 2200 for m in months.values())
     newest = months[ranges[0][0].strftime("%Y-%m")]
@@ -123,8 +169,8 @@ def test_pull_keeps_each_month_and_replaces_it(tmp_path):
     got = client.get(f"/api/repstm/mms/file?kind={kind_month[0]}&month={kind_month[1]}")
     assert got.status_code == 200 and got.content.startswith(b"PK")
     assert client.get("/api/repstm/mms/file?kind=rep&month=1999-01").status_code == 404
-    assert client.post("/api/repstm/mms", json={"months": 2}).status_code == 200  # again: same months, replaced
-    wait(client, "/api/repstm/mms")
+    assert client.post("/api/repstm/mms", json={"months": 2}).status_code == 200  # again, all programs: replaced
+    assert len(wait(client, "/api/repstm/mms")["months"]) == 3 * len(ranges)
     with Store(tmp_path / "s.sqlite3")._db() as db:
         assert db.execute("SELECT COUNT(*) FROM mms_dental_files WHERE kind='rep'").fetchone()[0] == len(ranges)
         assert db.execute("SELECT COUNT(*) FROM mms_dental_rows WHERE kind='rep'").fetchone()[0] == 3 * len(ranges)
@@ -145,7 +191,12 @@ def test_summary_and_flex_include_mms():
         {"kind": "mms", "ok": True, "type": "rep", "rep_no": "REP ส่งเบิก 11/2569", "text": "3 รายการ ขอเบิก 2,200.00 บาท"},
         {"kind": "mms", "ok": False, "type": "stm", "rep_no": "STM การจ่าย 10/2569", "text": "หมดเวลา"}]}
     text = autopull.summary(None, None, datetime(2026, 11, 25, 6, 0), 2570, None, mms)
-    assert "[ทันตกรรม ประกันสังคม (MMS) ย้อนหลัง 2 เดือน]" in text and "ดึง 3/4 รายงาน" in text
+    assert "[ประกันสังคม MMS (ทันตกรรม / ทุพพลภาพ / ฉุกเฉิน 72 ชม.) ย้อนหลัง 2 เดือน]" in text and "ดึง 3/4 รายงาน" in text
     assert "- REP ส่งเบิก 11/2569: 3 รายการ ขอเบิก 2,200.00 บาท" in text and "STM การจ่าย 10/2569: หมดเวลา" in text
     card = str(autopull.flex(None, None, datetime(2026, 11, 25, 6, 0), 2570, None, mms))
-    assert "ทันตกรรม ประกันสังคม (MMS)" in card and "REP ส่งเบิก 11/2569" in card
+    assert "ประกันสังคม MMS" in card and "REP ส่งเบิก 11/2569" in card
+    mms["lines"].append({"kind": "mms", "ok": True, "type": "er72_rep", "rep_no": "ฉุกเฉิน 72 ชม. REP ส่งเบิก 11/2569",
+                         "rows": 0, "text": "0 รายการ ขอเบิก 0.00 บาท"})
+    text = autopull.summary(None, None, datetime(2026, 11, 25, 6, 0), 2570, None, mms)
+    assert "- ฉุกเฉิน 72 ชม. REP" not in text  # empty reports are only counted
+    assert "- ไม่มีรายการ 1 รายงาน" in text

@@ -1,9 +1,10 @@
-"""SSO MMS (mms.sso.go.th, สำนักงานประกันสังคม) dental reports: REP "รายงานการส่งเบิกค่าบริการทางการแพทย์ทันตกรรม"
-and STM "รายงานการจ่ายค่าบริการทางการแพทย์ทันตกรรม" of the hospital, one month at a time, as XLSX.
+"""SSO MMS (mms.sso.go.th, สำนักงานประกันสังคม) reports of the hospital, one month at a time, as XLSX:
+REP "รายงานการส่งเบิก..." and STM "รายงานการจ่าย..." of three programs: dental (ทันตกรรม), disabled
+(ผู้ทุพพลภาพ ผู้ป่วยนอก/อุปกรณ์อวัยวะเทียม) and emergency 72 hours (เจ็บป่วยฉุกเฉิน 72 ชั่วโมง).
 
 The site is Blazor Server (pages are drawn over a WebSocket), so this drives a headless Chromium with Playwright:
 log in with MMS_USER / MMS_PASSWORD (no captcha or OTP), then open the report viewer
-(/mmsrpt/report?ReportName=...&HOSP_CODE=...&DATE_START=...&DATE_END=..., the page the "รายงาน" menu opens) and
+(/mmsrpt/report?ReportName=..., the page each program's "รายงาน" menu opens) and
 export it as XLSX. The web lets a range cover at most one month and end yesterday at the latest; this module asks the
 same. Playwright is imported only when a pull runs, so the app works without it.
 """
@@ -20,8 +21,15 @@ from .store import Store
 log = logging.getLogger("ssop.mms_web")
 LOGIN_URL = "https://mms.sso.go.th/login/"
 REPORT_URL = "https://mms.sso.go.th/mmsrpt/report"
-REPORTS = {"rep": "REPORT_01_DENTAL_CLAIM_SUBMISSION", "stm": "REPORT_02_DENTAL_CLAIM_PAYMENT"}
-LABELS = {"rep": "REP ส่งเบิก", "stm": "STM การจ่าย"}
+# kind -> report name; dental keeps its old kinds "rep" / "stm"
+REPORTS = {"rep": "REPORT_01_DENTAL_CLAIM_SUBMISSION", "stm": "REPORT_02_DENTAL_CLAIM_PAYMENT",
+           "dis_rep": "RE_DISABLEDOPD_SEND", "dis_stm": "RE_DISABLEDOPD_PAID",
+           "er72_rep": "RE_72HR_SEND", "er72_stm": "RE_72HR_PAID"}
+PROGRAMS = {"dental": "ทันตกรรม", "disabled": "ผู้ทุพพลภาพ", "er72": "ฉุกเฉิน 72 ชม."}
+KINDS = {"dental": ("rep", "stm"), "disabled": ("dis_rep", "dis_stm"), "er72": ("er72_rep", "er72_stm")}
+PROGRAM_OF = {kind: program for program, kinds in KINDS.items() for kind in kinds}
+LABELS = {kind: f"{PROGRAMS[PROGRAM_OF[kind]]} {'STM การจ่าย' if kind.endswith('stm') else 'REP ส่งเบิก'}"
+          for kind in REPORTS}
 THAI_MONTHS = ("มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน",
                "ตุลาคม", "พฤศจิกายน", "ธันวาคม")
 
@@ -47,8 +55,19 @@ def month_ranges(today: date, months: int) -> list[tuple[date, date]]:
     return out
 
 
+def side(kind: str) -> str:
+    """'dis_stm' -> 'stm'."""
+    return "stm" if kind.endswith("stm") else "rep"
+
+
 def thai_date(text) -> str:
-    """'01 ตุลาคม 2569' -> '2026-10-01'; '' if it isn't one."""
+    """'01 ตุลาคม 2569' or '01/10/2569' (Buddhist year, maybe with a time) -> '2026-10-01'; '' if it isn't one."""
+    numeric = re.match(r"\s*(\d{1,2})/(\d{1,2})/(\d{4})(?:\s|$)", str(text or ""))
+    if numeric:
+        try:
+            return date(int(numeric[3]) - 543, int(numeric[2]), int(numeric[1])).isoformat()
+        except ValueError:
+            return ""
     found = re.fullmatch(r"\s*(\d{1,2})\s+(\S+)\s+(\d{4})\s*", str(text or ""))
     if not found or found[2] not in THAI_MONTHS:
         return ""
@@ -62,9 +81,13 @@ def money(value) -> float:
         return 0.0
 
 
-HEADERS = {"ลำดับ": "seq", "เลขประจำตัวประชาชน": "pid", "วันที่ใช้สิทธิ": "service_date", "วันที่ส่งเบิก": "submit_date",
-           "ประเภทค่าบริการ": "service_type", "สถานะรับแจ้ง": "status", "จำนวนเงินที่ขอเบิก": "claim",
-           "จำนวนเงินจ่าย": "paid", "เลขที่ใบสำคัญรับเงิน": "voucher", "วันที่โอนเข้าบัญชี": "transfer_date"}
+HEADERS = {"ลำดับ": "seq", "เลขประจำตัวประชาชน": "pid", "วันที่ใช้สิทธิ": "service_date", "AdmitDate": "service_date",
+           "DischargeDate": "discharge_date", "วันที่ส่งเบิก": "submit_date", "ประเภทค่าบริการ": "service_type",
+           "ประเภท": "service_type", "กรณี": "case_type", "จำนวนชั่วโมงตามการรักษาจริง": "hours",
+           "สถานะรับแจ้ง": "status", "สถานะ": "status", "จำนวนเงินที่ขอเบิก": "claim", "จำนวนเงินรวมที่ขอเบิก": "claim",
+           "จำนวนเงินจ่าย": "paid", "จำนวนเงินที่จ่าย": "paid", "เลขที่ใบสำคัญรับเงิน": "voucher",
+           "วันที่โอนเข้าบัญชี": "transfer_date"}
+PREFIX = (("ทุพพลภาพ", "dis_"), ("72 ชั่วโมง", "er72_"))  # title words -> kind prefix (none: dental)
 
 
 def parse_report(data: bytes) -> dict:
@@ -79,7 +102,8 @@ def parse_report(data: bytes) -> dict:
     title = next((str(c) for r in rows for c in r if c and "รายงานการ" in str(c)), "")
     kind = "stm" if "รายงานการจ่าย" in title else "rep" if "รายงานการส่งเบิก" in title else ""
     if not kind:
-        raise MmsWebError("ไม่ใช่รายงานทันตกรรมของ MMS (ไม่พบหัวรายงาน)")
+        raise MmsWebError("ไม่ใช่รายงานของ MMS (ไม่พบหัวรายงาน)")
+    kind = next((prefix for word, prefix in PREFIX if word in title), "") + kind
     period = next((str(c) for r in rows for c in r if c and str(c).startswith("ตั้งแต่วันที่")), "")
     found = re.search(r"ตั้งแต่วันที่\s+(.+?)\s+ถึงวันที่\s+(.+)$", period)
     start, end = (thai_date(found[1]), thai_date(found[2])) if found else ("", "")
@@ -94,8 +118,10 @@ def parse_report(data: bytes) -> dict:
             continue  # an empty report still has a lone "1" row
         items.append({"seq": int(str(values["seq"]).strip()), "pid": str(values.get("pid") or "").strip(),
                       "service_date": thai_date(values.get("service_date")),
+                      "discharge_date": thai_date(values.get("discharge_date")),
                       "submit_date": thai_date(values.get("submit_date")),
                       "service_type": str(values.get("service_type") or "").strip(),
+                      "case_type": str(values.get("case_type") or "").strip(), "hours": money(values.get("hours")),
                       "status": str(values.get("status") or "").strip(), "claim": money(values.get("claim")),
                       "paid": money(values.get("paid")), "voucher": str(values.get("voucher") or "").strip(),
                       "transfer_date": thai_date(values.get("transfer_date"))})
@@ -117,8 +143,11 @@ CREATE TABLE IF NOT EXISTS mms_dental_rows (
 );
 CREATE INDEX IF NOT EXISTS mms_dental_rows_pid ON mms_dental_rows(pid, service_date);
 """
-ROW_COLS = ("seq", "pid", "service_date", "submit_date", "service_type", "status", "claim", "paid", "voucher",
-            "transfer_date")
+# added with the disabled / 72-hour reports; the tables keep their first (dental) name
+EXTRA_COLS = {"discharge_date": "TEXT NOT NULL DEFAULT ''", "case_type": "TEXT NOT NULL DEFAULT ''",
+              "hours": "REAL NOT NULL DEFAULT 0"}
+ROW_COLS = ("seq", "pid", "service_date", "discharge_date", "submit_date", "service_type", "case_type", "hours",
+            "status", "claim", "paid", "voucher", "transfer_date")
 
 
 class MmsStore:
@@ -128,6 +157,10 @@ class MmsStore:
         self._db = store._db
         with self._db() as db:
             db.executescript(SCHEMA)
+            have = {r[1] for r in db.execute("PRAGMA table_info(mms_dental_rows)")}
+            for col, spec in EXTRA_COLS.items():
+                if col not in have:
+                    db.execute(f"ALTER TABLE mms_dental_rows ADD COLUMN {col} {spec}")
 
     def save(self, parsed: dict, month: str, saved_as: str, who: str) -> None:
         with self._db() as db:
@@ -140,16 +173,21 @@ class MmsStore:
                         parsed["paid"], saved_as, datetime.now().isoformat(timespec="seconds"), who))
 
     def months(self) -> list[dict]:
-        """One row per month: REP and STM counts and money side by side."""
+        """One row per program and month (newest first): REP and STM counts and money side by side."""
         with self._db() as db:
             found = db.execute("SELECT kind, month, date_start, date_end, rows, claim, paid, fetched_at "
                                "FROM mms_dental_files ORDER BY month DESC").fetchall()
-        out: dict[str, dict] = {}
+        order = list(PROGRAMS)
+        out: dict[tuple, dict] = {}
         for kind, month, start, end, rows, claim, paid, at in found:
-            row = out.setdefault(month, {"month": month, "date_start": start, "date_end": end})
-            row[kind] = {"rows": rows, "claim": claim, "paid": paid, "fetched_at": at}
+            program = PROGRAM_OF.get(kind)
+            if not program:
+                continue
+            row = out.setdefault((month, program), {"month": month, "program": program, "label": PROGRAMS[program],
+                                                    "date_start": start, "date_end": end})
+            row[side(kind)] = {"kind": kind, "rows": rows, "claim": claim, "paid": paid, "fetched_at": at}
             row["date_end"] = max(row["date_end"], end)
-        return list(out.values())
+        return sorted(out.values(), key=lambda r: (-int(r["month"].replace("-", "")), order.index(r["program"])))
 
     def file(self, kind: str, month: str) -> str:
         with self._db() as db:
@@ -158,6 +196,15 @@ class MmsStore:
 
 
 # ----------------------------------------------------------------- client
+def report_query(kind: str, hcode9: str, username: str, start: date, end: date) -> str:
+    """The viewer's query string: the dental reports and the newer ones take different parameters."""
+    if PROGRAM_OF[kind] == "dental":
+        return (f"?ReportName={REPORTS[kind]}&HOSP_CODE={hcode9}&PORTAL_PORT=H"
+                f"&DATE_START={start.isoformat()}&DATE_END={end.isoformat()}")
+    return (f"?ReportName={REPORTS[kind]}&username={username}&HOSPITAL_CODE="
+            f"&start_date={start.isoformat()}&end_date={end.isoformat()}&PAY_CASE_TYPE=")
+
+
 @dataclass
 class Report:
     kind: str
@@ -172,6 +219,8 @@ class MmsWeb:
 
     def __init__(self, user: str, password: str, hcode9: str, timeout: int = 120, headless: bool = True):
         self.user, self.password, self.hcode9 = user, password, hcode9
+        # the newer report pages name the user "<hospital code 9>.<user>", as the site shows it after login
+        self.username = user if "." in user else f"{hcode9}.{user}"
         self.timeout, self.headless = timeout * 1000, headless
         self._pw = self._browser = self._ctx = None
 
@@ -238,7 +287,7 @@ class MmsWeb:
             page.close()
 
     def report(self, kind: str, start: date, end: date) -> Report:
-        """Export one report (REP or STM) for start..end as XLSX."""
+        """Export one report (a kind of REPORTS) for start..end as XLSX."""
         for attempt in range(2):  # the viewer sometimes stalls: open it once more
             try:
                 return self._report(kind, start, end)
@@ -252,11 +301,10 @@ class MmsWeb:
         raise MmsWebError("unreachable")
 
     def _report(self, kind: str, start: date, end: date) -> Report:
-        query = (f"?ReportName={REPORTS[kind]}&HOSP_CODE={self.hcode9}&PORTAL_PORT=H"
-                 f"&DATE_START={start.isoformat()}&DATE_END={end.isoformat()}")
         page = self._ctx.new_page()
         try:
-            page.goto(REPORT_URL + query, wait_until="load")  # the viewer keeps polling: never "networkidle"
+            # the viewer keeps polling (never "networkidle") and can be slow to "load": wait for its status instead
+            page.goto(REPORT_URL + report_query(kind, self.hcode9, self.username, start, end), wait_until="commit")
             for _ in range(self.timeout // 2000):
                 page.wait_for_timeout(2000)
                 try:
@@ -267,12 +315,13 @@ class MmsWeb:
                     break
             else:
                 raise MmsWebError(f"{LABELS[kind]} {start.month:02d}/{start.year + 543}: รายงานสร้างไม่เสร็จในเวลา")
-            menu = page.locator(".dxrd-toolbar-item-exportTo, [title*='ส่งออก'], [title*='Export']")
+            menu = page.locator(".dxrd-preview-export-toolbar-item, .dxrd-toolbar-item-exportTo")
             if menu.count():
                 menu.first.click()
-                page.wait_for_timeout(800)
+                page.wait_for_timeout(1000)
+            choice = page.locator(".dx-menu-item:visible").get_by_text("XLSX", exact=True)
             with page.expect_download() as done:
-                page.get_by_text("XLSX", exact=True).first.click()
+                (choice if choice.count() else page.get_by_text("XLSX", exact=True)).first.click()
             download = done.value
             path = download.path()
             data = open(path, "rb").read() if path else b""

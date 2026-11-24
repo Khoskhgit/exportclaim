@@ -362,19 +362,21 @@ function mmsLine(l) {
 
 function renderMms(months) {
   const box = $("mms-list");
-  if (!months || !months.length) { box.replaceChildren(el("p", { class: "hint" }, "ยังไม่มีรายงานทันตกรรมที่ดึงไว้")); return; }
-  const file = (kind, m) => el("a", { href: `/api/repstm/mms/file?kind=${kind}&month=${m.month}` }, "Excel");
+  if (!months || !months.length) { box.replaceChildren(el("p", { class: "hint" }, "ยังไม่มีรายงาน MMS ที่ดึงไว้")); return; }
+  const file = (x, m) => el("a", { href: `/api/repstm/mms/file?kind=${x.kind}&month=${m.month}` }, "Excel");
   const cell = (x, key) => el("td", { class: "num" }, x ? money(x[key]) : "—");
   box.replaceChildren(table(
-    [["เดือน"], ["ช่วงวันที่"], ["REP รายการ", "num"], ["ขอเบิก", "num"], ["STM รายการ", "num"], ["จ่าย", "num"], ["ส่วนต่าง", "num"], ["ไฟล์"], ["ดึงเมื่อ"]],
+    [["เดือน"], ["งาน"], ["ช่วงวันที่"], ["REP รายการ", "num"], ["ขอเบิก", "num"], ["STM รายการ", "num"], ["จ่าย", "num"], ["ส่วนต่าง", "num"], ["ไฟล์"], ["ดึงเมื่อ"]],
     months.map((m) => {
       const diff = m.rep && m.stm ? m.rep.claim - m.stm.paid : null;
-      return el("tr", {},
-        el("td", {}, m.month), el("td", {}, `${toDmy(m.date_start) || m.date_start} – ${toDmy(m.date_end) || m.date_end}`),
+      const empty = !(m.rep && m.rep.rows) && !(m.stm && m.stm.rows);
+      return el("tr", { class: empty ? "sub" : "" },
+        el("td", {}, m.month), el("td", {}, m.label || m.program),
+        el("td", {}, `${toDmy(m.date_start) || m.date_start} – ${toDmy(m.date_end) || m.date_end}`),
         el("td", { class: "num" }, m.rep ? String(m.rep.rows) : "—"), cell(m.rep, "claim"),
         el("td", { class: "num" }, m.stm ? String(m.stm.rows) : "—"), cell(m.stm, "paid"),
         el("td", { class: "num" }, diff === null ? "—" : (diff ? el("span", { class: "badge b-error" }, money(diff)) : money(0))),
-        el("td", {}, m.rep ? file("rep", m) : null, " ", m.stm ? file("stm", m) : null),
+        el("td", {}, m.rep ? file(m.rep, m) : null, " ", m.stm ? file(m.stm, m) : null),
         el("td", {}, when((m.stm || m.rep).fetched_at)));
     })));
 }
@@ -425,7 +427,7 @@ async function setupPulls() {
   $("aipn-form").addEventListener("submit", (e) => { e.preventDefault(); aipn.run(); });
   const mms = pullPanel({
     p: "mms", url: "/api/repstm/mms", line: mmsLine, after: async (status) => renderMms(status.months),
-    body: () => ({ months: Number(new FormData($("mms-form")).get("months")) }),
+    body: () => { const d = new FormData($("mms-form")); return { months: Number(d.get("months")), programs: d.getAll("programs") }; },
   });
   $("mms-form").addEventListener("submit", (e) => { e.preventDefault(); mms.run(); });
   try {
