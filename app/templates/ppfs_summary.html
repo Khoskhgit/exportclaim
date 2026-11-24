@@ -19,7 +19,7 @@
     <ul class="service-rules">
       <li><strong>ส่งแล้ว</strong> = อยู่ใน ZIP ที่สร้างจากหน้ารายการ PPFS หรือส่ง FDH จริง (prod) · <strong>ยังไม่ส่ง</strong> แยกเป็นพร้อมส่ง และมี Error</li>
       <li>ผล REP และ STM ใช้ไฟล์ที่นำเข้าในหน้า REP / STM จับตาม VN · REP ที่ออกก่อนวันส่งไม่นับ (เป็นของการส่งครั้งก่อน) · <strong>Deny</strong> = REP ขึ้นรหัส DENY</li>
-      <li><strong>ชดเชย (REP)</strong> = ชดเชยสุทธิ สปสช. + ต้นสังกัด ใน REP e-Claim (REP ที่นำเข้าก่อนรุ่นนี้ต้องนำเข้าใหม่จึงมียอด) · <strong>STM</strong> = ยอดที่ Statement จ่าย · visit ที่ส่งหลายกองทุน แบ่งยอดตามยอดที่ส่ง</li>
+      <li><strong>ตอบกลับ (REP)</strong> = ชดเชยสุทธิ สปสช. + ต้นสังกัด ใน REP e-Claim (REP ที่นำเข้าก่อนรุ่นนี้ต้องนำเข้าใหม่จึงมียอด) · <strong>STM</strong> = ยอดที่ Statement จ่าย · visit ที่ส่งหลายกองทุน แบ่งยอดตามยอดที่ส่ง</li>
     </ul>
   </form>
 
@@ -31,7 +31,7 @@
       <table class="ppfs-dash">
         <thead><tr>
           <th>กองทุน / ประเภทบริการ</th><th class="num">ทั้งหมด</th><th class="num">ส่งแล้ว</th><th class="num">ผ่าน (A)</th>
-          <th class="num">ติด C</th><th class="num">Deny</th><th class="num">รอ REP</th><th class="num">ชดเชย (REP)</th><th class="num">STM จ่าย</th>
+          <th class="num">ติด C</th><th class="num">Deny</th><th class="num">รอ REP</th><th class="num">ตอบกลับ (REP)</th><th class="num">STM จ่าย</th>
           <th class="num">ยังไม่ส่ง พร้อมส่ง</th><th class="num">ยังไม่ส่ง มี Error</th><th>รหัส C ที่พบ</th>
         </tr></thead>
         <tbody id="rows"></tbody>

@@ -41,7 +41,7 @@ function statusChart(reps) {
 
 function moneyChart(reps) {
   if (!reps.length) return [el("p", { class: "muted" }, "ยังไม่มี REP ในช่วงวันที่นี้")];
-  const series = (a) => [["s-1", "ยอดส่ง (REP)", a.sent.amount], ["s-2", "ชดเชย (REP)", a.has_paid ? a.paid : null], ["s-3", "STM จ่าย", a.stm_paid]];
+  const series = (a) => [["s-1", "ยอดส่ง (REP)", a.sent.amount], ["s-2", "ตอบกลับ (REP)", a.has_paid ? a.paid : null], ["s-3", "STM จ่าย", a.stm_paid]];
   const max = Math.max(1, ...reps.flatMap((a) => series(a).map(([, , v]) => v || 0)));
   return reps.map((a) => el("div", { class: "viz-row viz-row-group" },
     el("span", { class: "viz-label" }, a.label),
@@ -133,7 +133,7 @@ function renderReps(reps) {
     card("ผ่าน (A)", count.format(t.passed.n), "visit", `${pct(t)} · ${baht.format(t.passed.amount)} บาท`, "ok"),
     card("ติด C", count.format(t.c.n), "visit", `${baht.format(t.c.amount)} บาท`, "warn"),
     card("Deny", count.format(t.deny.n), "visit", `${baht.format(t.deny.amount)} บาท`, "error"),
-    card("ชดเชย (REP)", t.has_paid ? baht.format(t.paid) : "—", "บาท", "e-Claim ที่มียอดชดเชยใน REP", "paid"),
+    card("ตอบกลับ (REP)", t.has_paid ? baht.format(t.paid) : "—", "บาท", "e-Claim ที่มียอดชดเชยใน REP", "paid"),
     card("STM จ่าย", baht.format(t.stm_paid), "บาท", "ตาม Statement ที่นำเข้า", "paid"));
 }
 

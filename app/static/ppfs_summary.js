@@ -47,7 +47,7 @@ function render() {
     el("span", { class: "card-amount" }, `${baht.format(amount ?? part.amount)} บาท`));
   $("cards").replaceChildren(...(ready ? [
     card("ส่งแล้ว", t.sent, "sent"), card("ผ่าน (A)", t.passed, "ok"),
-    el("div", { class: "card tone-paid" }, el("span", { class: "card-label" }, "ชดเชย (REP)"),
+    el("div", { class: "card tone-paid" }, el("span", { class: "card-label" }, "ตอบกลับ (REP)"),
       el("span", { class: "card-count" }, baht.format(t.paid), el("small", {}, " บาท")),
       el("span", { class: "card-amount" }, `STM จ่ายแล้ว ${baht.format(t.stm_paid)} บาท`)),
     card("ติด C", t.c, "warn"), card("Deny", t.deny, "error"), card("รอ REP", t.waiting, "all"),
