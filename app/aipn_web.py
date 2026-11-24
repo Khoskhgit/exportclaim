@@ -77,8 +77,10 @@ class AipnWeb:
             raise AipnWebError(f"เชื่อมต่อ AIPN ไม่ได้: {exc}") from None
 
     def login(self) -> None:
-        if not (self.hcode and self.user and self.password):
+        if not (self.user and self.password):
             raise AipnWebError("ยังไม่ได้ตั้งค่า AIPN_USER / AIPN_PASSWORD ใน .env")
+        if not self.hcode:
+            raise AipnWebError("ยังไม่ได้ตั้งค่า HCODE (หรือ AIPN_HCODE) ใน .env")
         self._new_session()
         _, raw, _ = self._open("")
         url, raw, _ = self._open("", {"Token": "", "hcode": self.hcode, "username": self.user, "password": self.password,
