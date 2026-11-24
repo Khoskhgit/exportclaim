@@ -9,7 +9,7 @@ import json
 import urllib.error
 import urllib.request
 
-from .line_push import LineError, chunks
+from .line_push import LineError, messages
 
 URL = "https://morpromt2f.moph.go.th/api/notify/send?messages=yes"
 
@@ -19,10 +19,10 @@ class MophAlertError(LineError):
 
 
 def send(client_key: str, secret_key: str, message: str, url: str = URL, opener=urllib.request.urlopen,
-         timeout: int = 20) -> None:
+         timeout: int = 20, flex: dict | None = None) -> None:
     if not (client_key and secret_key):
         raise MophAlertError("ยังไม่ได้ตั้งค่า MOPH_ALERT_CLIENT_KEY / MOPH_ALERT_SECRET_KEY")
-    body = {"messages": [{"type": "text", "text": t} for t in chunks(message)]}
+    body = {"messages": messages(message, flex)}
     request = urllib.request.Request(url or URL, data=json.dumps(body).encode(), method="POST", headers={
         "client-key": client_key, "secret-key": secret_key, "Content-Type": "application/json"})
     try:

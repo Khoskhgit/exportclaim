@@ -95,13 +95,91 @@ def summary(eclaim: dict | None, seamless: dict | None, started: datetime, year_
     return "\n".join(out)
 
 
+GREEN, RED, GREY, INK = "#0E7C66", "#C62828", "#8A8A8A", "#222222"
+
+
+def _text(text, **kw) -> dict:
+    return {"type": "text", "text": str(text) if str(text) else "-", **kw}
+
+
+def _stats(job: dict, done_label: str) -> dict:
+    cells = (("พบ", job.get("found", 0), INK), ("ใหม่", job.get("total", 0), INK),
+             (done_label, job.get("imported", 0), GREEN), ("ผิดพลาด", job.get("errors", 0), RED if job.get("errors") else INK))
+    return {"type": "box", "layout": "horizontal", "margin": "sm", "contents": [
+        {"type": "box", "layout": "vertical", "flex": 1, "contents": [
+            _text(value, size="lg", weight="bold", align="center", color=color),
+            _text(label, size="xxs", align="center", color=GREY)]} for label, value, color in cells]}
+
+
+def _row(left: str, right: str, color: str = INK) -> dict:
+    return {"type": "box", "layout": "baseline", "spacing": "sm", "contents": [
+        _text(left, size="xs", color=INK, flex=5), _text(right, size="xs", color=color, flex=5, align="end")]}
+
+
+def _section(title: str, job: dict | None, rows: list[dict], foot: str = "", done_label: str = "นำเข้า",
+             show: int = 8) -> list[dict]:
+    if job is None:
+        return [_text(title, weight="bold", size="sm", color=INK), _text("ไม่ได้ดึง", size="xs", color=GREY)]
+    icon = "⚠️" if job.get("errors") else "✅"
+    out = [_text(f"{icon} {title}", weight="bold", size="sm", color=INK, wrap=True), _stats(job, done_label)]
+    out += rows[:show]
+    if len(rows) > show:
+        out.append(_text(f"… และอีก {len(rows) - show} รายการ", size="xxs", color=GREY))
+    if foot:
+        out.append(_text(foot, size="xs", weight="bold", color=INK, align="end"))
+    return out
+
+
+def flex(eclaim: dict | None, seamless: dict | None, started: datetime, year_be: int, aipn: dict | None = None) -> dict:
+    """The summary as a LINE flex bubble: a box per pull with its counts and the new REPs."""
+    sections = []
+    ok = [l for l in (eclaim or {}).get("lines", []) if l.get("kind") == "rep" and l.get("ok")]
+    sections.append(_section(
+        f"e-Claim REP {', '.join(f.upper() for f in (eclaim or {}).get('funds') or [])} ย้อนหลัง {(eclaim or {}).get('months', '')} เดือน",
+        eclaim, [_row(f"{l['rep_no']} {str(l.get('fund', '')).upper()}",
+                      f"ผ่าน {l.get('sent', 0) - l.get('failed', 0)} · ไม่ผ่าน {l.get('failed', 0)}",
+                      RED if l.get("failed") else GREEN) for l in ok],
+        f"รวมไม่ผ่าน {sum(l.get('failed', 0) for l in ok)} รายการ" if ok else ""))
+    ok = [l for l in (seamless or {}).get("lines", []) if l.get("kind") == "seamless" and l.get("ok")]
+    sections.append(_section(
+        f"Seamless for DMIS ปีงบ {year_be}", seamless,
+        [_row(f"{l['rep_no']} {l.get('project', '')}", f"{money(l.get('net'))} บาท") for l in ok],
+        f"รวมชดเชยสุทธิ {money(sum(float(l.get('net') or 0) for l in ok))} บาท" if ok else "", "ดาวน์โหลด"))
+    if aipn is not None:
+        ok = [l for l in aipn["lines"] if l.get("kind") == "aipn" and l.get("ok")]
+        sections.append(_section(
+            f"AIPN ผู้ป่วยใน ปกส. ย้อนหลัง {aipn.get('months', '')} เดือน", aipn,
+            [_row(f"{'REP' if l.get('type') == 'rep' else 'STM'} {l['rep_no']}", str(l.get("text", ""))[:60]) for l in ok]))
+    errors = [l for job in (eclaim, seamless, aipn) if job for l in job["lines"] if l.get("ok") is False]
+    if errors:
+        rows = [_text(f"• {(l.get('rep_no') + ': ') if l.get('rep_no') else ''}{l.get('text', '')}"[:160], size="xxs",
+                      color=RED, wrap=True) for l in errors[:5]]
+        if len(errors) > 5:
+            rows.append(_text(f"… และอีก {len(errors) - 5} รายการ", size="xxs", color=GREY))
+        sections.append([_text("ข้อผิดพลาด", weight="bold", size="sm", color=RED)] + rows)
+    body = []
+    for i, section in enumerate(sections):
+        if i:
+            body.append({"type": "separator", "margin": "lg"})
+        body.append({"type": "box", "layout": "vertical", "spacing": "xs", "margin": "lg", "contents": section})
+    trouble = bool(errors) or eclaim is None or seamless is None
+    return {"type": "bubble", "size": "mega",
+            "header": {"type": "box", "layout": "vertical", "backgroundColor": "#E65100" if trouble else GREEN,
+                       "paddingAll": "lg", "contents": [
+                _text("สรุปดึง REP อัตโนมัติ", weight="bold", size="lg", color="#FFFFFF"),
+                _text(f"{started:%d/%m/}{started.year + 543} {started:%H:%M} น.", size="xs", color="#E0F2EE")]},
+            "body": {"type": "box", "layout": "vertical", "contents": body}}
+
+
 class AutoPull:
     def __init__(self, app: FastAPI, settings: Settings, send: Callable[[str], None] | None = None,
                  clock: Callable[[], datetime] = lambda: datetime.now(TZ), poll: float = 5.0):
         self.app, self.settings, self.clock, self.poll = app, settings, clock, poll
         self.moph = bool(settings.moph_alert_client_key and settings.moph_alert_secret_key)
+        self.flex = send is None  # the real senders take a flex card; a test's sender gets the text only
         self.send = send or (self._moph_send if self.moph else
-                             lambda text: line_push.send(settings.line_channel_token, settings.line_to, text))
+                             lambda text, flex=None: line_push.send(settings.line_channel_token, settings.line_to,
+                                                                    text, flex=flex))
         self.at = parse_time(settings.auto_pull_time)
         self._lock = threading.Lock()
         self.running = False
@@ -110,9 +188,21 @@ class AutoPull:
         self.next_at: datetime | None = None
         self._stop = threading.Event()
 
-    def _moph_send(self, text: str) -> None:
+    def _moph_send(self, text: str, flex: dict | None = None) -> None:
         s = self.settings
-        moph_alert.send(s.moph_alert_client_key, s.moph_alert_secret_key, text, s.moph_alert_url or moph_alert.URL)
+        moph_alert.send(s.moph_alert_client_key, s.moph_alert_secret_key, text, s.moph_alert_url or moph_alert.URL,
+                        flex=flex)
+
+    def deliver(self, text: str, card: dict | None) -> None:
+        """Send the flex card; if LINE / MOPH Alert refuses it, send the plain text instead."""
+        if not (self.flex and card):
+            self.send(text)
+            return
+        try:
+            self.send(text, card)
+        except line_push.LineError as exc:
+            log.warning("flex summary refused (%s); sending text", exc)
+            self.send(text)
 
     def _wait(self, job) -> dict:
         while job.view()["running"]:
@@ -163,7 +253,7 @@ class AutoPull:
             text = summary(eclaim, seamless, started, year_be, aipn)
             self._mark("line", "running")
             try:
-                self.send(text)
+                self.deliver(text, flex(eclaim, seamless, started, year_be, aipn))
                 sent = "ส่ง LINE แล้ว"
                 self._mark("line", "done", {"text": sent})
             except line_push.LineError as exc:

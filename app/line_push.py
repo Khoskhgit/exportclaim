@@ -42,10 +42,18 @@ def chunks(message: str, size: int = MAX_TEXT) -> list[str]:
     return parts
 
 
-def send(token: str, to: str, message: str, opener=urllib.request.urlopen, timeout: int = 20) -> None:
+def messages(message: str, flex: dict | None = None) -> list[dict]:
+    """A flex bubble (with the first lines of the text as its notification text), or the text in chunks."""
+    if flex:
+        return [{"type": "flex", "altText": message[:400] or "สรุป", "contents": flex}]
+    return [{"type": "text", "text": t} for t in chunks(message)]
+
+
+def send(token: str, to: str, message: str, opener=urllib.request.urlopen, timeout: int = 20,
+         flex: dict | None = None) -> None:
     if not token:
         raise LineError("ยังไม่ได้ตั้งค่า LINE_CHANNEL_TOKEN")
-    body: dict = {"messages": [{"type": "text", "text": t} for t in chunks(message)]}
+    body: dict = {"messages": messages(message, flex)}
     if to:
         body["to"] = to
     request = urllib.request.Request(API + ("push" if to else "broadcast"), data=json.dumps(body).encode(),

@@ -142,3 +142,35 @@ def test_autopull_uses_moph_alert_when_its_keys_are_set(tmp_path):
     app = create_app(config, FakeHosxp(), Store(tmp_path / "s.sqlite3"))
     status = TestClient(app).get("/api/autopull").json()
     assert status["line_ready"] and status["line_to"] == "กลุ่ม LINE ของ MOPH Alert"
+
+
+def test_flex_summary_card():
+    import json
+    eclaim = {"funds": ["ucs"], "months": 2, "found": 3, "total": 2, "imported": 2, "errors": 1, "lines": [
+        {"kind": "rep", "ok": True, "rep_no": "691000043", "fund": "ucs", "sent": 10, "failed": 4},
+        {"kind": "rep", "ok": False, "rep_no": "691000044", "text": "หมดเวลา"}]}
+    seamless = {"found": 1, "total": 1, "imported": 1, "errors": 0, "lines": [
+        {"kind": "seamless", "ok": True, "rep_no": "R1", "project": "NAP", "net": "1200.5", "denied": "0"}]}
+    card = autopull.flex(eclaim, seamless, datetime(2026, 11, 25, 6, 0), 2570)
+    dumped = json.dumps(card, ensure_ascii=False)
+    assert card["type"] == "bubble" and "25/11/2569 06:00" in dumped
+    assert "691000043 UCS" in dumped and "ผ่าน 6 · ไม่ผ่าน 4" in dumped and "1,200.50 บาท" in dumped
+    assert "691000044: หมดเวลา" in dumped and card["header"]["backgroundColor"] == "#E65100"
+    texts = [n for n in json.loads(dumped, object_hook=lambda d: d).get("body", {}).get("contents", [])]
+    assert texts and len(dumped) < 30000
+    message = line_push.messages("สรุป\nบรรทัด", card)
+    assert message == [{"type": "flex", "altText": "สรุป\nบรรทัด", "contents": card}]
+
+
+def test_deliver_falls_back_to_text_when_flex_is_refused(tmp_path):
+    from fastapi import FastAPI
+    auto = autopull.AutoPull(FastAPI(), settings())
+    sent = []
+
+    def picky(text, flex=None):
+        if flex:
+            raise line_push.LineError("flex not allowed")
+        sent.append(text)
+    auto.send = picky
+    auto.deliver("ข้อความ", {"type": "bubble"})
+    assert sent == ["ข้อความ"]
