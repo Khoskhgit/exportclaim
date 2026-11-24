@@ -5,12 +5,13 @@ import hashlib
 import logging
 import re
 import time
+from datetime import date, timedelta
 
 from fastapi import Body, FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
-from . import auth, eclaim_codes, eclaim_web, fdh_claims
+from . import aipn_web, auth, eclaim_codes, eclaim_web, fdh_claims
 from .config import Settings
 from .pull_job import PullJob
 from .repstm import RepStmError, parse_upload
@@ -35,9 +36,10 @@ def summary_text(parsed) -> str:
 
 
 def register(app: FastAPI, settings: Settings, local: Store, templates: Jinja2Templates,
-             eclaim: eclaim_web.EclaimWeb | None = None, eclaim_pause=lambda: time.sleep(1)) -> RepStmStore:
+             eclaim: eclaim_web.EclaimWeb | None = None, eclaim_pause=lambda: time.sleep(1),
+             aipn: aipn_web.AipnWeb | None = None) -> RepStmStore:
     results = RepStmStore(local)
-    shared: dict = {"client": eclaim}
+    shared: dict = {"client": eclaim, "aipn": aipn}
 
     def eclaim_client() -> eclaim_web.EclaimWeb:
         """One e-Claim session for the app, kept between pulls (login again only when it runs out)."""
@@ -160,6 +162,74 @@ def register(app: FastAPI, settings: Settings, local: Store, templates: Jinja2Te
         started = start_eclaim(who, funds, months)
         if not started:
             raise HTTPException(409, f"กำลังดึง REP อยู่ (เริ่มโดย {eclaim_job.busy_by()}) รอให้เสร็จก่อน")
+        return {"job": started}
+
+    # ---------------------------------------------------------------- AIPN (สกส.) REP RP1 + Statement AIPN
+    aipn_job = PullJob("aipn-pull")
+
+    def aipn_client() -> aipn_web.AipnWeb:
+        if shared["aipn"] is None:
+            shared["aipn"] = aipn_web.AipnWeb(settings.aipn_hcode, settings.aipn_user, settings.aipn_password)
+        return shared["aipn"]
+
+    def run_aipn(job: PullJob, months: int, who: str) -> None:
+        """List REP and STM on the AIPN web, then download and import the ones issued in the last `months` months
+        that aren't imported yet."""
+        imported = failed = 0
+        since = (date.today().replace(day=1) - timedelta(days=31 * (months - 1))).replace(day=1).isoformat()
+        try:
+            client = aipn_client()
+            job.update(phase="กำลังเข้า AIPN")
+            listed = []
+            for kind, label in (("rep", "REP (RP1)"), ("stm", "Statement AIPN")):
+                job.update(phase=f"อ่านรายการ {label}")
+                items = [i for i in client.list_files(kind) if i.issued_at[:10] >= since]
+                job.update({"kind": "list", "text": f"{label} ออกตั้งแต่ {since}: {len(items)} ไฟล์"})
+                listed += items
+            stm_no = {i.no: f"{settings.aipn_hcode}ST{i.no}" for i in listed if i.kind == "stm"}  # SIGNSTM {period} = STM {hcode}ST{period}
+            have_rep = set(results.known_reps(i.no for i in listed if i.kind == "rep"))
+            have_stm = set(results.known_stms(stm_no.values()))
+            todo = [i for i in listed if not (i.no in have_rep if i.kind == "rep" else stm_no[i.no] in have_stm)]
+            job.update({"kind": "list", "text": f"พบ {len(listed)} ไฟล์ นำเข้าแล้ว {len(listed) - len(todo)} ต้องดึงใหม่ {len(todo)}"},
+                       total=len(todo), found=len(listed), known=len(listed) - len(todo))
+            for n, item in enumerate(todo, 1):
+                label = f"{'REP' if item.kind == 'rep' else 'STM'} {item.no}"
+                job.update(phase=f"ดาวน์โหลดและนำเข้า {label} ({n}/{len(todo)})")
+                try:
+                    name, data = client.download(item)
+                    done = import_bytes(name, data, who)
+                    imported += 1
+                    job.update({"kind": "aipn", "ok": True, "type": item.kind, "rep_no": item.no, "name": name,
+                                "sent": done.get("sent", 0), "failed": done.get("failed", 0), "text": done["summary"]},
+                               done=n, imported=imported)
+                except (aipn_web.AipnWebError, HTTPException) as exc:
+                    failed += 1
+                    job.update({"kind": "aipn", "ok": False, "type": item.kind, "rep_no": item.no,
+                                "text": str(getattr(exc, "detail", None) or exc)}, done=n, errors=failed)
+                eclaim_pause()
+        except aipn_web.AipnWebError as exc:
+            failed += 1
+            job.update({"kind": "error", "ok": False, "text": str(exc)}, errors=failed)
+
+    def start_aipn(who: str, months: int) -> dict:
+        return aipn_job.start(who, lambda job: run_aipn(job, months, f"{who} · AIPN"), months=months)
+
+    app.state.aipn_job, app.state.start_aipn = aipn_job, start_aipn
+
+    @app.get("/api/repstm/aipn")
+    def aipn_status():
+        return {"ready": bool(settings.aipn_user and settings.aipn_password), "user": settings.aipn_user, "job": aipn_job.view()}
+
+    @app.post("/api/repstm/aipn")
+    def aipn_pull(request: Request, body: dict = Body(default={})):
+        try:
+            months = max(1, min(int(body.get("months") or 2), 36))
+        except (TypeError, ValueError):
+            raise HTTPException(400, "จำนวนเดือนไม่ถูกต้อง") from None
+        who = auth.user_label(request) or "ระบบ"
+        started = start_aipn(who, months)
+        if not started:
+            raise HTTPException(409, f"กำลังดึง AIPN อยู่ (เริ่มโดย {aipn_job.busy_by()}) รอให้เสร็จก่อน")
         return {"job": started}
 
     @app.get("/api/repstm/list")

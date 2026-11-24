@@ -183,6 +183,14 @@ class RepStmStore:
             marks = ",".join("?" * len(wanted))
             return [r[0] for r in db.execute(f"SELECT rep_no FROM rep_files WHERE rep_no IN ({marks}) ORDER BY rep_no", wanted)]
 
+    def known_stms(self, stm_nos) -> list[str]:
+        wanted = sorted({str(s).strip() for s in stm_nos if str(s).strip()})[:2000]
+        if not wanted:
+            return []
+        with self._db() as db:
+            marks = ",".join("?" * len(wanted))
+            return [r[0] for r in db.execute(f"SELECT stm_no FROM stm_files WHERE stm_no IN ({marks})", wanted)]
+
     def uploads(self, limit: int = 30) -> list[dict]:
         with self._db() as db:
             return [dict(r) for r in db.execute(

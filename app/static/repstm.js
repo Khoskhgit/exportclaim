@@ -268,7 +268,7 @@ function pullPanel({ p, url, body, line, after }) {
     const box = $(`${p}-progress`);
     if (!job || !job.started_at) { box.hidden = true; return; }
     box.hidden = false;
-    const ok = job.lines.filter((l) => (l.kind === "rep" || l.kind === "seamless") && l.ok);
+    const ok = job.lines.filter((l) => (l.kind === "rep" || l.kind === "seamless" || l.kind === "aipn") && l.ok);
     const sent = ok.reduce((n, l) => n + (l.sent || 0), 0);
     const failed = ok.reduce((n, l) => n + (l.failed || 0), 0);
     $(`${p}-phase`).textContent = job.running ? `${job.phase}…` : (job.errors ? "เสร็จ (มีบางรายการไม่สำเร็จ)" : "เสร็จแล้ว");
@@ -342,6 +342,17 @@ function eclaimLine(l) {
     el("strong", {}, `✓ REP ${l.rep_no}`), ` · ${l.fund.toUpperCase()} · ${l.sent} รายการ `, result, el("span", { class: "sub" }, l.name));
 }
 
+function aipnLine(l) {
+  if (l.kind !== "aipn") return plainLine(l);
+  const label = `${l.type === "stm" ? "STM" : "REP"} ${l.rep_no}`;
+  if (!l.ok) return el("li", { class: "error" }, el("strong", {}, `✕ ${label}`), ` · ${l.text}`);
+  const result = l.type === "stm" ? null
+    : (l.failed ? el("span", { class: "badge b-error" }, `ติด C ${l.failed}`) : el("span", { class: "badge b-ok" }, "ผ่านทั้งหมด"));
+  return el("li", { class: `rep-line ${l.failed ? "warn" : "ok"}`, title: "กดเพื่อดูรายละเอียด",
+    onclick: () => (l.type === "stm" ? null : openRep(l.rep_no)) },
+    el("strong", {}, `✓ ${label}`), ` · ${l.text} `, result, el("span", { class: "sub" }, l.name));
+}
+
 function seamlessLine(l) {
   if (l.kind !== "seamless") return plainLine(l);
   if (!l.ok) return el("li", { class: "error" }, el("strong", {}, `✕ ${l.rep_no}`), ` · ${l.project} · ${l.text}`);
@@ -381,6 +392,17 @@ async function setupPulls() {
   });
   $("eclaim-form").addEventListener("submit", (e) => { e.preventDefault(); eclaim.run(); });
   $("seamless-form").addEventListener("submit", (e) => { e.preventDefault(); seamless.run(); });
+  const aipn = pullPanel({
+    p: "aipn", url: "/api/repstm/aipn", line: aipnLine, after: load,
+    body: () => ({ months: Number(new FormData($("aipn-form")).get("months")) }),
+  });
+  $("aipn-form").addEventListener("submit", (e) => { e.preventDefault(); aipn.run(); });
+  try {
+    const status = await api("/api/repstm/aipn");
+    $("aipn-run").disabled = !status.ready;
+    $("aipn-note").textContent = status.ready ? `บัญชี AIPN: ${status.user}` : "ยังไม่ได้ตั้ง AIPN_USER / AIPN_PASSWORD ใน .env";
+    await aipn.start(status);
+  } catch (err) { $("aipn-note").textContent = err.message; }
   const missing = "ยังไม่ได้ตั้ง NHSO_USER / NHSO_PASSWORD / ECLAIM_TOTP_SECRET ใน .env";
   try {
     const status = await api("/api/repstm/eclaim");

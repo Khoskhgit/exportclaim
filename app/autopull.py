@@ -1,4 +1,5 @@
-"""Daily automatic REP pull: e-Claim REPs (every fund) then Seamless for DMIS (this fiscal year), then a summary to LINE.
+"""Daily automatic REP pull: e-Claim REPs (every fund), Seamless for DMIS (this fiscal year) and AIPN REP/STM (when
+AIPN_USER is set), then a summary to LINE.
 
 AUTO_PULL_TIME=06:00 turns it on (Asia/Bangkok). It reuses the page's background pulls, so a pull someone started by
 hand is waited for, and the page shows the automatic pull's progress like any other.
@@ -47,7 +48,7 @@ def money(value) -> str:
         return str(value or "0")
 
 
-def summary(eclaim: dict | None, seamless: dict | None, started: datetime, year_be: int) -> str:
+def summary(eclaim: dict | None, seamless: dict | None, started: datetime, year_be: int, aipn: dict | None = None) -> str:
     """The LINE message: what each pull found, what was new, and what failed."""
     out = [f"สรุปดึง REP อัตโนมัติ {started:%d/%m/}{started.year + 543} {started:%H:%M}"]
     if eclaim is None:
@@ -77,7 +78,14 @@ def summary(eclaim: dict | None, seamless: dict | None, started: datetime, year_
             out.append(f"… และอีก {len(ok) - 20} REP")
         if ok:
             out.append(f"รวมชดเชยสุทธิ {money(sum(float(l.get('net') or 0) for l in ok))} บาท")
-    errors = [l for job in (eclaim, seamless) if job for l in job["lines"] if l.get("ok") is False]
+    if aipn is not None:
+        ok = [l for l in aipn["lines"] if l.get("kind") == "aipn" and l.get("ok")]
+        out.append(f"\n[AIPN ผู้ป่วยใน ปกส. ย้อนหลัง {aipn.get('months', '')} เดือน]")
+        out.append(f"พบ {aipn.get('found', 0)} ไฟล์ · ใหม่ {aipn.get('total', 0)} · นำเข้าแล้ว {aipn.get('imported', 0)}"
+                   f" · ผิดพลาด {aipn.get('errors', 0)}")
+        for l in ok[:20]:
+            out.append(f"- {'REP' if l.get('type') == 'rep' else 'STM'} {l['rep_no']}: {l.get('text', '')}"[:200])
+    errors = [l for job in (eclaim, seamless, aipn) if job for l in job["lines"] if l.get("ok") is False]
     if errors:
         out.append("\nข้อผิดพลาด")
         out += [f"- {(l.get('rep_no') + ': ') if l.get('rep_no') else ''}{l.get('text', '')}"[:200] for l in errors[:8]]
@@ -119,12 +127,15 @@ class AutoPull:
         started = self.clock()
         year_be = fiscal_year_be(started.date())
         state = self.app.state
-        eclaim = seamless = None
+        eclaim = seamless = aipn = None
         try:
             eclaim = self._start(state.eclaim_job, lambda: state.start_eclaim(WHO, list(eclaim_web.FUNDS),
                                                                               self.settings.auto_pull_months))
             seamless = self._start(state.seamless_job, lambda: state.start_seamless(WHO, year_be))
-            text = summary(eclaim, seamless, started, year_be)
+            aipn = None
+            if self.settings.aipn_user and self.settings.aipn_password:
+                aipn = self._start(state.aipn_job, lambda: state.start_aipn(WHO, self.settings.auto_pull_months))
+            text = summary(eclaim, seamless, started, year_be, aipn)
             try:
                 self.send(text)
                 sent = "ส่ง LINE แล้ว"

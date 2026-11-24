@@ -96,6 +96,10 @@ class Settings:
     eclaim_user: str = ""
     eclaim_password: str = field(default="", repr=False)
     eclaim_totp_secret: str = field(default="", repr=False)
+    # AIPN web (cs8.chi.or.th/aipnupload, สกส.): pull REP RP1 and Statement AIPN
+    aipn_hcode: str = ""
+    aipn_user: str = ""
+    aipn_password: str = field(default="", repr=False)
     # Daily automatic REP pull (e-Claim + Seamless) at HH:MM (Asia/Bangkok); empty = off
     auto_pull_time: str = ""
     auto_pull_months: int = 2
@@ -205,6 +209,9 @@ def load_settings(env_file: Path | None = None) -> Settings:
         eclaim_user=(get("ECLAIM_USER") or get("NHSO_USER") or "").strip(),
         eclaim_password=get("ECLAIM_PASSWORD") or get("NHSO_PASSWORD") or "",
         eclaim_totp_secret=(get("ECLAIM_TOTP_SECRET") or "").strip(),
+        aipn_hcode=(get("AIPN_HCODE") or get("HCODE") or "").strip(),
+        aipn_user=(get("AIPN_USER") or "").strip(),
+        aipn_password=get("AIPN_PASSWORD") or "",
         auto_pull_time=(get("AUTO_PULL_TIME") or "").strip(),
         auto_pull_months=int(get("AUTO_PULL_MONTHS") or 2),
         line_channel_token=(get("LINE_CHANNEL_TOKEN") or "").strip(),

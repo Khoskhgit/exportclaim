@@ -91,6 +91,27 @@
     </details>
   </section>
 
+  <section class="panel eclaim-pull">
+    <form id="aipn-form" class="search">
+      <div class="wide"><strong>ดึง REP / STM AIPN (ผู้ป่วยใน ปกส., สกส.)</strong>
+        <span id="aipn-note" class="sub"></span></div>
+      <label>ออกย้อนหลัง<select name="months">
+        <option value="1">เดือนนี้</option><option value="2" selected>2 เดือน</option><option value="3">3 เดือน</option>
+        <option value="6">6 เดือน</option><option value="12">12 เดือน</option><option value="36">36 เดือน</option></select></label>
+      <div class="sub">REP เอกสารตอบรับ (RP1) + Statement AIPN</div>
+      <div class="actions-cell"><button class="primary" type="submit" id="aipn-run">ดึง REP / STM AIPN</button></div>
+    </form>
+    <p class="hint">login เว็บ cs8.chi.or.th/aipnupload ด้วยบัญชีของ รพ. เปิดหน้าเอกสารตอบรับ (RP1) และ Statement AIPN
+      ดาวน์โหลด ZIP ที่ออกในช่วงที่เลือกและยังไม่ได้นำเข้า แล้วนำเข้าเหมือนลากไฟล์มาวาง
+      ตั้งใน <code>.env</code>: <code>AIPN_USER</code>, <code>AIPN_PASSWORD</code> (รหัส รพ. ใช้ <code>HCODE</code>)</p>
+    <div id="aipn-progress" class="eclaim-progress" hidden>
+      <div class="eclaim-progress-head"><strong id="aipn-phase"></strong><span id="aipn-count" class="sub"></span></div>
+      <progress id="aipn-bar" max="1" value="0"></progress>
+      <div id="aipn-tally" class="eclaim-tally"></div>
+    </div>
+    <ul id="aipn-log" class="import-log"></ul>
+  </section>
+
   <section class="panel eclaim-pull" id="autopull-panel">
     <div class="search">
       <div class="wide"><strong>ดึง REP อัตโนมัติทุกวัน + ส่งสรุปทาง LINE</strong>
@@ -100,7 +121,7 @@
         <button type="button" id="autopull-run">ดึงอัตโนมัติตอนนี้</button>
       </div>
     </div>
-    <p class="hint">ดึง REP e-Claim ทุกสิทธิย้อนหลัง 2 เดือน แล้วดึง Seamless for DMIS ปีงบปัจจุบัน (เฉพาะ REP ที่ยังไม่มี) แล้วส่งสรุปเข้า LINE
+    <p class="hint">ดึง REP e-Claim ทุกสิทธิย้อนหลัง 2 เดือน, Seamless for DMIS ปีงบปัจจุบัน และ REP / STM AIPN 2 เดือน (เฉพาะไฟล์ที่ยังไม่มี) แล้วส่งสรุปเข้า LINE
       ตั้งใน <code>.env</code>: <code>AUTO_PULL_TIME=06:00</code>, <code>LINE_CHANNEL_TOKEN</code> (LINE Official Account / Messaging API),
       <code>LINE_TO</code> (User ID ขึ้นต้นด้วย U ว่างไว้ = ส่งถึงทุกคนที่เพิ่มบัญชีเป็นเพื่อน)</p>
     <p id="autopull-last" class="sub"></p>
