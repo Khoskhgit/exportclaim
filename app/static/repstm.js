@@ -268,7 +268,7 @@ function pullPanel({ p, url, body, line, after }) {
     const box = $(`${p}-progress`);
     if (!job || !job.started_at) { box.hidden = true; return; }
     box.hidden = false;
-    const ok = job.lines.filter((l) => (l.kind === "rep" || l.kind === "seamless" || l.kind === "aipn") && l.ok);
+    const ok = job.lines.filter((l) => (l.kind === "rep" || l.kind === "seamless" || l.kind === "aipn") && l.ok);  // mms lines carry no sent/failed
     const sent = ok.reduce((n, l) => n + (l.sent || 0), 0);
     const failed = ok.reduce((n, l) => n + (l.failed || 0), 0);
     $(`${p}-phase`).textContent = job.running ? `${job.phase}…` : (job.errors ? "เสร็จ (มีบางรายการไม่สำเร็จ)" : "เสร็จแล้ว");
@@ -353,6 +353,32 @@ function aipnLine(l) {
     el("strong", {}, `✓ ${label}`), ` · ${l.text} `, result, el("span", { class: "sub" }, l.name));
 }
 
+function mmsLine(l) {
+  if (l.kind !== "mms") return plainLine(l);
+  if (!l.ok) return el("li", { class: "error" }, el("strong", {}, `✕ ${l.rep_no}`), ` · ${l.text}`);
+  return el("li", { class: "ok" }, el("strong", {}, `✓ ${l.rep_no}`), ` · ${l.text} `,
+    el("a", { href: `/api/repstm/mms/file?kind=${l.type}&month=${l.month}` }, "Excel"));
+}
+
+function renderMms(months) {
+  const box = $("mms-list");
+  if (!months || !months.length) { box.replaceChildren(el("p", { class: "hint" }, "ยังไม่มีรายงานทันตกรรมที่ดึงไว้")); return; }
+  const file = (kind, m) => el("a", { href: `/api/repstm/mms/file?kind=${kind}&month=${m.month}` }, "Excel");
+  const cell = (x, key) => el("td", { class: "num" }, x ? money(x[key]) : "—");
+  box.replaceChildren(table(
+    [["เดือน"], ["ช่วงวันที่"], ["REP รายการ", "num"], ["ขอเบิก", "num"], ["STM รายการ", "num"], ["จ่าย", "num"], ["ส่วนต่าง", "num"], ["ไฟล์"], ["ดึงเมื่อ"]],
+    months.map((m) => {
+      const diff = m.rep && m.stm ? m.rep.claim - m.stm.paid : null;
+      return el("tr", {},
+        el("td", {}, m.month), el("td", {}, `${toDmy(m.date_start) || m.date_start} – ${toDmy(m.date_end) || m.date_end}`),
+        el("td", { class: "num" }, m.rep ? String(m.rep.rows) : "—"), cell(m.rep, "claim"),
+        el("td", { class: "num" }, m.stm ? String(m.stm.rows) : "—"), cell(m.stm, "paid"),
+        el("td", { class: "num" }, diff === null ? "—" : (diff ? el("span", { class: "badge b-error" }, money(diff)) : money(0))),
+        el("td", {}, m.rep ? file("rep", m) : null, " ", m.stm ? file("stm", m) : null),
+        el("td", {}, when((m.stm || m.rep).fetched_at)));
+    })));
+}
+
 function seamlessLine(l) {
   if (l.kind !== "seamless") return plainLine(l);
   if (!l.ok) return el("li", { class: "error" }, el("strong", {}, `✕ ${l.rep_no}`), ` · ${l.project} · ${l.text}`);
@@ -397,6 +423,18 @@ async function setupPulls() {
     body: () => ({ months: Number(new FormData($("aipn-form")).get("months")) }),
   });
   $("aipn-form").addEventListener("submit", (e) => { e.preventDefault(); aipn.run(); });
+  const mms = pullPanel({
+    p: "mms", url: "/api/repstm/mms", line: mmsLine, after: async (status) => renderMms(status.months),
+    body: () => ({ months: Number(new FormData($("mms-form")).get("months")) }),
+  });
+  $("mms-form").addEventListener("submit", (e) => { e.preventDefault(); mms.run(); });
+  try {
+    const status = await api("/api/repstm/mms");
+    $("mms-run").disabled = !status.ready;
+    $("mms-note").textContent = status.ready ? `บัญชี MMS: ${status.user}` : "ยังไม่ได้ตั้ง MMS_USER / MMS_PASSWORD ใน .env";
+    renderMms(status.months);
+    await mms.start(status);
+  } catch (err) { $("mms-note").textContent = err.message; }
   try {
     const status = await api("/api/repstm/aipn");
     $("aipn-run").disabled = !status.ready;

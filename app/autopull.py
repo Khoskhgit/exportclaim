@@ -1,5 +1,5 @@
-"""Daily automatic REP pull: e-Claim REPs (every fund), Seamless for DMIS (this fiscal year) and AIPN REP/STM (when
-AIPN_USER is set), then a summary to LINE: through MOPH Alert (a LINE group) when its keys are set, else the LINE
+"""Daily automatic REP pull: e-Claim REPs (every fund), Seamless for DMIS (this fiscal year), AIPN REP/STM (when
+AIPN_USER is set) and the SSO dental REP/STM from MMS (when MMS_USER is set), then a summary to LINE: through MOPH Alert (a LINE group) when its keys are set, else the LINE
 Messaging API.
 
 AUTO_PULL_TIME=06:00 turns it on (Asia/Bangkok). It reuses the page's background pulls, so a pull someone started by
@@ -49,7 +49,8 @@ def money(value) -> str:
         return str(value or "0")
 
 
-def summary(eclaim: dict | None, seamless: dict | None, started: datetime, year_be: int, aipn: dict | None = None) -> str:
+def summary(eclaim: dict | None, seamless: dict | None, started: datetime, year_be: int, aipn: dict | None = None,
+            mms: dict | None = None) -> str:
     """The LINE message: what each pull found, what was new, and what failed."""
     out = [f"สรุปดึง REP อัตโนมัติ {started:%d/%m/}{started.year + 543} {started:%H:%M}"]
     if eclaim is None:
@@ -86,7 +87,13 @@ def summary(eclaim: dict | None, seamless: dict | None, started: datetime, year_
                    f" · ผิดพลาด {aipn.get('errors', 0)}")
         for l in ok[:20]:
             out.append(f"- {'REP' if l.get('type') == 'rep' else 'STM'} {l['rep_no']}: {l.get('text', '')}"[:200])
-    errors = [l for job in (eclaim, seamless, aipn) if job for l in job["lines"] if l.get("ok") is False]
+    if mms is not None:
+        ok = [l for l in mms["lines"] if l.get("kind") == "mms" and l.get("ok")]
+        out.append(f"\n[ทันตกรรม ประกันสังคม (MMS) ย้อนหลัง {mms.get('months', '')} เดือน]")
+        out.append(f"ดึง {mms.get('imported', 0)}/{mms.get('total', 0)} รายงาน · ผิดพลาด {mms.get('errors', 0)}")
+        for l in ok:
+            out.append(f"- {l['rep_no']}: {l.get('text', '')}")
+    errors = [l for job in (eclaim, seamless, aipn, mms) if job for l in job["lines"] if l.get("ok") is False]
     if errors:
         out.append("\nข้อผิดพลาด")
         out += [f"- {(l.get('rep_no') + ': ') if l.get('rep_no') else ''}{l.get('text', '')}"[:200] for l in errors[:8]]
@@ -130,7 +137,8 @@ def _section(title: str, job: dict | None, rows: list[dict], foot: str = "", don
     return out
 
 
-def flex(eclaim: dict | None, seamless: dict | None, started: datetime, year_be: int, aipn: dict | None = None) -> dict:
+def flex(eclaim: dict | None, seamless: dict | None, started: datetime, year_be: int, aipn: dict | None = None,
+         mms: dict | None = None) -> dict:
     """The summary as a LINE flex bubble: a box per pull with its counts and the new REPs."""
     sections = []
     ok = [l for l in (eclaim or {}).get("lines", []) if l.get("kind") == "rep" and l.get("ok")]
@@ -150,7 +158,12 @@ def flex(eclaim: dict | None, seamless: dict | None, started: datetime, year_be:
         sections.append(_section(
             f"AIPN ผู้ป่วยใน ปกส. ย้อนหลัง {aipn.get('months', '')} เดือน", aipn,
             [_row(f"{'REP' if l.get('type') == 'rep' else 'STM'} {l['rep_no']}", str(l.get("text", ""))[:60]) for l in ok]))
-    errors = [l for job in (eclaim, seamless, aipn) if job for l in job["lines"] if l.get("ok") is False]
+    if mms is not None:
+        ok = [l for l in mms["lines"] if l.get("kind") == "mms" and l.get("ok")]
+        sections.append(_section(
+            f"ทันตกรรม ประกันสังคม (MMS) ย้อนหลัง {mms.get('months', '')} เดือน", {**mms, "found": mms.get("total", 0)},
+            [_row(l["rep_no"], l.get("text", "")) for l in ok], "", "ดึงแล้ว"))
+    errors = [l for job in (eclaim, seamless, aipn, mms) if job for l in job["lines"] if l.get("ok") is False]
     if errors:
         rows = [_text(f"• {(l.get('rep_no') + ': ') if l.get('rep_no') else ''}{l.get('text', '')}"[:160], size="xxs",
                       color=RED, wrap=True) for l in errors[:5]]
@@ -236,12 +249,14 @@ class AutoPull:
         started = self.clock()
         year_be = fiscal_year_be(started.date())
         state = self.app.state
-        eclaim = seamless = aipn = None
+        eclaim = seamless = aipn = mms = None
         use_aipn = bool(self.settings.aipn_user and self.settings.aipn_password)
+        use_mms = bool(self.settings.mms_user and self.settings.mms_password and hasattr(state, "start_mms"))
         self.steps = [{"key": k, "label": label, "state": "wait" if on else "skip"} for k, label, on in (
             ("eclaim", f"REP e-Claim (UCS/OFC/LGO ย้อนหลัง {self.settings.auto_pull_months} เดือน)", True),
             ("seamless", f"Seamless for DMIS ปีงบ {year_be}", True),
             ("aipn", f"REP / STM AIPN (ย้อนหลัง {self.settings.auto_pull_months} เดือน)", use_aipn),
+            ("mms", f"REP / STM ทันตกรรม ประกันสังคม MMS (ย้อนหลัง {self.settings.auto_pull_months} เดือน)", use_mms),
             ("line", "ส่งสรุปทาง LINE", True))]
         self.last = {"started_at": started.isoformat(timespec="seconds")}
         try:
@@ -250,10 +265,12 @@ class AutoPull:
             seamless = self._start(state.seamless_job, lambda: state.start_seamless(WHO, year_be), "seamless")
             if use_aipn:
                 aipn = self._start(state.aipn_job, lambda: state.start_aipn(WHO, self.settings.auto_pull_months), "aipn")
-            text = summary(eclaim, seamless, started, year_be, aipn)
+            if use_mms:
+                mms = self._start(state.mms_job, lambda: state.start_mms(WHO, self.settings.auto_pull_months), "mms")
+            text = summary(eclaim, seamless, started, year_be, aipn, mms)
             self._mark("line", "running")
             try:
-                self.deliver(text, flex(eclaim, seamless, started, year_be, aipn))
+                self.deliver(text, flex(eclaim, seamless, started, year_be, aipn, mms))
                 sent = "ส่ง LINE แล้ว"
                 self._mark("line", "done", {"text": sent})
             except line_push.LineError as exc:
@@ -300,7 +317,7 @@ class AutoPull:
 
     def _live_steps(self) -> list[dict]:
         """The steps, with the running pull's phase and counts read from its job."""
-        jobs = {"eclaim": "eclaim_job", "seamless": "seamless_job", "aipn": "aipn_job"}
+        jobs = {"eclaim": "eclaim_job", "seamless": "seamless_job", "aipn": "aipn_job", "mms": "mms_job"}
         out = []
         for step in self.steps:
             step = dict(step)

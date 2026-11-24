@@ -111,6 +111,10 @@ class Settings:
     moph_alert_client_key: str = field(default="", repr=False)
     moph_alert_secret_key: str = field(default="", repr=False)
     moph_alert_url: str = ""
+    # MMS ประกันสังคม (mms.sso.go.th): dental REP / STM reports
+    mms_user: str = ""
+    mms_password: str = field(default="", repr=False)
+    mms_hosp_code: str = ""
 
     @property
     def allowed_hosts(self) -> list[str]:
@@ -223,4 +227,7 @@ def load_settings(env_file: Path | None = None) -> Settings:
         moph_alert_client_key=(get("MOPH_ALERT_CLIENT_KEY") or "").strip(),
         moph_alert_secret_key=(get("MOPH_ALERT_SECRET_KEY") or "").strip(),
         moph_alert_url=(get("MOPH_ALERT_URL") or "").strip(),
+        mms_user=(get("MMS_USER") or "").strip(),
+        mms_password=get("MMS_PASSWORD") or "",
+        mms_hosp_code=(get("MMS_HOSP_CODE") or "").strip() or (f"00{(get('HCODE') or '').strip().zfill(5)}00" if (get("HCODE") or "").strip() else ""),
     )
