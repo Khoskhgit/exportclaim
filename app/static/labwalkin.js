@@ -50,7 +50,7 @@ async function openDrawer(r) {
   $("drawer-title").textContent = r.ptname || r.vn;
   $("drawer-sub").textContent = `VN ${r.vn} · HN ${r.hn} · ${toDmy(r.vstdate)}`;
   const body = $("drawer-body");
-  body.replaceChildren(none("กำลังโหลด…"));
+  body.replaceChildren(loadingBlock());
   const labs = state.rows.filter((x) => x.vn === r.vn);
   const labCodes = new Set(labs.map((x) => x.icode));
   const labTotal = labs.reduce((s, x) => s + Number(x.sum_price), 0);
@@ -102,6 +102,7 @@ async function load() {
   if (!body.start || !body.end) { notice("กรุณาเลือกช่วงวันที่"); return; }
   const button = $("search").querySelector("button[type=submit]");
   button.disabled = true;
+  showLoading("กำลังค้นหา…");
   try {
     const data = await api("/api/labwalkin", body);
     Object.assign(state, { rows: data.rows, hospitals: data.hospitals, filter: "all", period: body });

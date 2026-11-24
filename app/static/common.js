@@ -309,8 +309,43 @@ function fixBlock(fix) {
     ...fix.split("\n").map((line) => el("div", {}, line)));
 }
 
-function emptyState(text, icon = "○") {
-  return [el("div", { class: "empty-icon", "aria-hidden": "true" }, icon), el("div", {}, text)];
+// Empty, error and loading states of a list. The kind picks the icon (CSS draws it) and a next step under the text;
+// old calls pass a glyph ("○", "!", "…") and get the matching kind.
+const EMPTY_HINTS = {
+  filter: "ลองล้างคำค้น หรือกดการ์ด \"ทั้งหมด\" เพื่อดูทุกรายการ",
+  none: "ลองขยายช่วงวันที่ หรือเปลี่ยนเงื่อนไขแล้วค้นหาอีกครั้ง",
+  error: "กดค้นหาอีกครั้ง ถ้ายังไม่ได้ ดูสถานะการเชื่อมต่อ HOSxP ที่มุมขวาบน",
+};
+function emptyState(text, kind = "") {
+  kind = { "○": "", "!": "error", "…": "loading", "⌕": "search" }[kind] ?? kind;
+  if (kind === "loading") return loadingState(text);
+  if (!kind) kind = /ตัวกรอง/.test(text) ? "filter" : /ไม่พบ|ไม่มี/.test(text) ? "none" : "search";
+  const hint = EMPTY_HINTS[kind];
+  return [el("div", { class: "empty-icon", "data-icon": kind, "aria-hidden": "true" }),
+    el("div", { class: "empty-title" }, text), hint ? el("div", { class: "empty-hint" }, hint) : null].filter(Boolean);
+}
+
+// A skeleton shaped like table rows while a list loads, with the text read out to screen readers.
+function loadingState(text = "กำลังโหลด…", rows = 6) {
+  const bars = Array.from({ length: rows }, (_, i) => el("div", { class: "skeleton-row" },
+    el("span", { class: "skeleton-bar w1" }), el("span", { class: "skeleton-bar w2" }),
+    el("span", { class: "skeleton-bar w3" }), el("span", { class: `skeleton-bar w${(i % 3) + 1}` })));
+  return [el("div", { class: "skeleton", "aria-hidden": "true" }, ...bars),
+    el("div", { class: "empty-title skeleton-text", role: "status" }, text)];
+}
+
+// Clear the table (tbody#rows) and show the skeleton in #empty until render() runs.
+function showLoading(text = "กำลังค้นหา…") {
+  const rows = $("rows"), empty = $("empty");
+  if (rows) rows.replaceChildren();
+  if (empty) { empty.hidden = false; empty.replaceChildren(...loadingState(text)); }
+}
+
+// A few skeleton lines inside a drawer or panel while its details load.
+function loadingBlock(text = "กำลังโหลด…") {
+  return el("div", { class: "skeleton-block", role: "status" },
+    el("span", { class: "skeleton-bar w1" }), el("span", { class: "skeleton-bar w3" }), el("span", { class: "skeleton-bar w2" }),
+    el("span", { class: "sr-only" }, text));
 }
 
 // ----------------------------------------------------------------- user

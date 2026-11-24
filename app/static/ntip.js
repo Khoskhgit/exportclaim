@@ -202,7 +202,7 @@ async function openScreen(r) {
     el("h3", {}, "ค่าที่จะส่งในไฟล์"),
     table(["คอลัมน์", "ค่า"], Object.entries(v).map(([k, val]) => el("tr", {}, el("td", { class: "mono" }, k), el("td", {}, val || "—"))))].filter(Boolean);
   const body = $("drawer-body");
-  body.replaceChildren(...tabs([{ id: "check", label: "ข้อมูลส่งออก", content: check }, { id: "dx", label: "วินิจฉัย / Lab", content: [el("p", { class: "muted" }, "กำลังโหลด…")] }]));
+  body.replaceChildren(...tabs([{ id: "check", label: "ข้อมูลส่งออก", content: check }, { id: "dx", label: "วินิจฉัย / Lab", content: [loadingBlock()] }]));
   try {
     const data = await api("/api/ntip/detail", { vn: r.vn });
     if (state.current !== r.vn) return;
@@ -238,6 +238,7 @@ async function load(quiet = false) {
     }
     state.period = body;
     const view = state.view;
+    if (!quiet) showLoading("กำลังค้นหา…");
     const data = await api(view === "screen" ? "/api/ntip/screen" : "/api/ntip/labs", body);
     state[view] = data.rows;
     state.loaded[view] = true;

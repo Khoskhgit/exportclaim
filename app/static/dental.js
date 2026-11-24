@@ -98,7 +98,7 @@ async function openDrawer(c) {
     body.replaceChildren(...summary, el("p", { class: "hint" }, "ยังไม่พบ visit ใน HOSxP ตรวจเลขบัตรและวันที่ใช้สิทธิ"));
     return;
   }
-  body.replaceChildren(...summary, el("p", { class: "muted" }, "กำลังโหลด…"));
+  body.replaceChildren(...summary, loadingBlock());
   try {
     const [visit, dental] = await Promise.all([api("/api/detail", { vn: c.vn }), api("/api/dental/detail", { vn: c.vn })]);
     if (state.current !== id) return;
@@ -146,6 +146,7 @@ function renderHistory(uploads) {
 
 async function load() {
   const form = $("search");
+  showLoading("กำลังโหลดรายการ…");
   try {
     const data = await api("/api/dental/list", { start: form.elements.start.value, end: form.elements.end.value });
     state.claims = data.claims;

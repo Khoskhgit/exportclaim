@@ -82,6 +82,7 @@ function renderHistory(uploads) {
 
 async function load() {
   const form = $("search");
+  showLoading("กำลังโหลดรายการ…");
   try {
     const data = await api("/api/approve/list", { start: form.elements.start.value, end: form.elements.end.value });
     state.rows = data.rows;

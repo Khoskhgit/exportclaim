@@ -110,7 +110,7 @@ async function openDrawer(c) {
     body.replaceChildren(...summary, c.vn ? null : el("p", { class: "hint" }, "ยังไม่พบ visit ใน HOSxP ตรวจเลขบัตรและวันที่รับบริการ"));
     return;
   }
-  body.replaceChildren(...summary, el("p", { class: "muted" }, "กำลังโหลด…"));
+  body.replaceChildren(...summary, loadingBlock());
   try {
     const visit = await api("/api/detail", { vn: c.vn });
     if (state.current !== id) return;
@@ -145,6 +145,7 @@ async function load() {
   const form = $("search");
   const button = form.querySelector('button[type="submit"]');
   button.disabled = true;
+  showLoading("กำลังโหลดรายการ…");
   try {
     const data = await api("/api/disabled/list", { start: form.elements.start.value, end: form.elements.end.value });
     state.claims = data.claims;

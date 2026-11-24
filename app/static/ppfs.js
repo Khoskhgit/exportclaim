@@ -266,6 +266,7 @@ async function search() {
   const form = $("search");
   if (!form.reportValidity()) return;
   clearNotices();
+  showLoading("กำลังค้นหาและตรวจข้อมูล…");
   try {
     const data = await api("/api/ppfs/search", { service: form.elements.service.value, start: form.elements.start.value, end: form.elements.end.value });
     state.rows = data.rows;
@@ -344,7 +345,7 @@ async function openDrawer(r) {
   $("drawer-title").textContent = r.ptname || r.vn;
   $("drawer-sub").textContent = `VN ${r.vn} · HN ${r.hn} · ${toDmy(r.date)}${r.time ? ` ${r.time.slice(0, 5)}` : ""} · ${rowCodes(r).join(", ")} ${rowCodes(r).length > 1 ? "" : r.code_name}`;
   const body = $("drawer-body");
-  body.replaceChildren(el("p", { class: "muted" }, "กำลังโหลด…"));
+  body.replaceChildren(loadingBlock());
   try {
     const kind = service();
     const data = await api("/api/ppfs/detail", { vn: r.vn, service: kind, codes: state.rows.filter((x) => x.vn === r.vn).flatMap(rowCodes) });
@@ -691,7 +692,7 @@ async function showFollowUp() {
   const box = $("dmrem-follow-body");
   if (!box.hidden) { box.hidden = true; $("dmrem-follow").textContent = "ติดตามผู้ลงทะเบียน"; return; }
   box.hidden = false; $("dmrem-follow").textContent = "ซ่อนการติดตาม";
-  box.replaceChildren(el("p", { class: "muted" }, "กำลังโหลด…"));
+  box.replaceChildren(loadingBlock());
   try {
     const data = await api("/api/ppfs/dmrem/follow-up", {});
     if (!data.rows.length) { box.replaceChildren(el("p", { class: "hint" }, "ยังไม่ได้นำเข้าทะเบียน")); return; }
