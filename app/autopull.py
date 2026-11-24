@@ -103,6 +103,7 @@ class AutoPull:
         self._lock = threading.Lock()
         self.running = False
         self.last: dict = {}
+        self.steps: list[dict] = []  # this run's steps, shown live on the page
         self.next_at: datetime | None = None
         self._stop = threading.Event()
 
@@ -111,13 +112,24 @@ class AutoPull:
             time.sleep(self.poll)
         return job.view()
 
-    def _start(self, job, start: Callable[[], dict]) -> dict | None:
+    def _start(self, job, start: Callable[[], dict], key: str = "") -> dict | None:
         """Start a pull, waiting out one someone started by hand; None if it still can't start."""
+        self._mark(key, "running")
         for _ in range(3):
             if start():
-                return self._wait(job)
+                done = self._wait(job)
+                self._mark(key, "error" if done.get("errors") else "done", done)
+                return done
             self._wait(job)
+        self._mark(key, "error", {"text": "เริ่มไม่ได้ (มีการดึงอื่นค้างอยู่)"})
         return None
+
+    def _mark(self, key: str, state: str, job: dict | None = None) -> None:
+        for step in self.steps:
+            if step["key"] == key:
+                step["state"] = state
+                if job:
+                    step.update({k: job.get(k, step.get(k, 0)) for k in ("found", "total", "imported", "errors", "text")})
 
     def run_once(self) -> dict:
         with self._lock:
@@ -128,19 +140,28 @@ class AutoPull:
         year_be = fiscal_year_be(started.date())
         state = self.app.state
         eclaim = seamless = aipn = None
+        use_aipn = bool(self.settings.aipn_user and self.settings.aipn_password)
+        self.steps = [{"key": k, "label": label, "state": "wait" if on else "skip"} for k, label, on in (
+            ("eclaim", f"REP e-Claim (UCS/OFC/LGO ย้อนหลัง {self.settings.auto_pull_months} เดือน)", True),
+            ("seamless", f"Seamless for DMIS ปีงบ {year_be}", True),
+            ("aipn", f"REP / STM AIPN (ย้อนหลัง {self.settings.auto_pull_months} เดือน)", use_aipn),
+            ("line", "ส่งสรุปทาง LINE", True))]
+        self.last = {"started_at": started.isoformat(timespec="seconds")}
         try:
             eclaim = self._start(state.eclaim_job, lambda: state.start_eclaim(WHO, list(eclaim_web.FUNDS),
-                                                                              self.settings.auto_pull_months))
-            seamless = self._start(state.seamless_job, lambda: state.start_seamless(WHO, year_be))
-            aipn = None
-            if self.settings.aipn_user and self.settings.aipn_password:
-                aipn = self._start(state.aipn_job, lambda: state.start_aipn(WHO, self.settings.auto_pull_months))
+                                                                              self.settings.auto_pull_months), "eclaim")
+            seamless = self._start(state.seamless_job, lambda: state.start_seamless(WHO, year_be), "seamless")
+            if use_aipn:
+                aipn = self._start(state.aipn_job, lambda: state.start_aipn(WHO, self.settings.auto_pull_months), "aipn")
             text = summary(eclaim, seamless, started, year_be, aipn)
+            self._mark("line", "running")
             try:
                 self.send(text)
                 sent = "ส่ง LINE แล้ว"
+                self._mark("line", "done", {"text": sent})
             except line_push.LineError as exc:
                 sent = str(exc)
+                self._mark("line", "error", {"text": sent})
                 log.warning("auto pull: %s", exc)
             self.last = {"started_at": started.isoformat(timespec="seconds"),
                          "finished_at": self.clock().isoformat(timespec="seconds"), "line": sent, "text": text}
@@ -177,7 +198,20 @@ class AutoPull:
                 "next_at": self.next_at.isoformat(timespec="minutes") if self.next_at else "",
                 "line_ready": bool(self.settings.line_channel_token),
                 "line_to": "ผู้ใช้ที่ตั้งไว้" if self.settings.line_to else "ทุกคนที่เป็นเพื่อนกับบัญชี (broadcast)",
-                "last": self.last}
+                "last": self.last, "steps": self._live_steps()}
+
+    def _live_steps(self) -> list[dict]:
+        """The steps, with the running pull's phase and counts read from its job."""
+        jobs = {"eclaim": "eclaim_job", "seamless": "seamless_job", "aipn": "aipn_job"}
+        out = []
+        for step in self.steps:
+            step = dict(step)
+            job = getattr(self.app.state, jobs.get(step["key"], ""), None) if step["state"] == "running" else None
+            if job is not None:
+                live = job.view()
+                step.update({k: live.get(k, 0) for k in ("phase", "done", "total", "found", "imported", "errors")})
+            out.append(step)
+        return out
 
 
 def register(app: FastAPI, settings: Settings, send: Callable[[str], None] | None = None, **kw) -> AutoPull:

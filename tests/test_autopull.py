@@ -79,6 +79,10 @@ def test_run_once_pulls_both_and_sends_a_summary(tmp_path):
     assert "[e-Claim REP UCS, OFC, LGO ย้อนหลัง 2 เดือน]" in text and f"[Seamless for DMIS ปีงบ {year}]" in text
     assert "ดาวน์โหลดแล้ว 3" in text and "- R1 NAP" in text and "อื่น: Seamless ตอบ HTTP 500" in text
     assert status["last"]["line"] == "ส่ง LINE แล้ว"
+    steps = {st["key"]: st for st in status["steps"]}
+    assert [st["key"] for st in status["steps"]] == ["eclaim", "seamless", "aipn", "line"]
+    assert steps["eclaim"]["state"] == "done" and steps["aipn"]["state"] == "skip" and steps["line"]["state"] == "done"
+    assert steps["seamless"]["state"] == "error" and steps["seamless"]["imported"] == 3  # project 28 answered HTTP 500
     assert ("1", year - 543) in fake.searches
     assert client.post("/api/autopull/line-test").json() == {"sent": True} and "ทดสอบส่ง LINE" in messages[-1]
 

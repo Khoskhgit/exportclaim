@@ -420,6 +420,29 @@ async function setupPulls() {
   } catch (err) { $("seamless-note").textContent = err.message; }
 }
 
+const STEP_ICON = { wait: "○", running: "◐", done: "✓", error: "✕", skip: "–" };
+const STEP_TEXT = { wait: "รอ", running: "กำลังทำ", done: "เสร็จ", error: "มีข้อผิดพลาด", skip: "ข้าม (ยังไม่ได้ตั้งค่า)" };
+
+function renderSteps(s) {
+  const box = $("autopull-steps");
+  const steps = s.steps || [];
+  box.hidden = !steps.length;
+  box.replaceChildren(...steps.map((st) => {
+    const counts = st.key === "line" ? (st.text || "")
+      : st.state === "running"
+        ? `${st.phase || ""}${st.total ? ` (${st.done}/${st.total})` : ""}`
+        : (st.state === "done" || st.state === "error") ? `พบ ${st.found || 0} · ใหม่ ${st.imported || 0}/${st.total || 0}` +
+          (st.errors ? ` · ผิดพลาด ${st.errors}` : "") + (st.text ? ` · ${st.text}` : "") : "";
+    return el("li", { class: { done: "ok", error: "error", running: "warn" }[st.state] || "" },
+      el("strong", {}, `${STEP_ICON[st.state] || ""} ${st.label}`), ` · ${STEP_TEXT[st.state] || st.state}`,
+      counts ? el("span", { class: "sub" }, ` · ${counts}`) : null,
+      st.state === "running" && st.total ? el("progress", { max: st.total, value: st.done || 0 }) : null);
+  }));
+  const text = $("autopull-text");
+  text.hidden = !(s.last && s.last.text);
+  text.textContent = (s.last && s.last.text) || "";
+}
+
 async function setupAutoPull() {
   const show = async () => {
     try {
@@ -428,7 +451,9 @@ async function setupAutoPull() {
         ` · LINE: ${s.line_ready ? s.line_to : "ยังไม่ได้ตั้ง LINE_CHANNEL_TOKEN"}` + (s.running ? " · กำลังดึงอยู่" : "");
       $("autopull-run").disabled = s.running;
       $("autopull-line-test").disabled = !s.line_ready;
-      $("autopull-last").textContent = s.last && s.last.finished_at ? `ครั้งล่าสุด ${when(s.last.finished_at)} · ${s.last.line}` : "";
+      $("autopull-last").textContent = s.last && s.last.finished_at ? `ครั้งล่าสุด ${when(s.last.finished_at)} · ${s.last.line}`
+        : (s.running && s.last.started_at ? `เริ่ม ${when(s.last.started_at)}` : "");
+      renderSteps(s);
       return s;
     } catch (err) { $("autopull-note").textContent = err.message; return {}; }
   };
@@ -438,12 +463,18 @@ async function setupAutoPull() {
   $("autopull-run").onclick = async () => {
     try {
       await api("/api/autopull/run", {});
-      notice("เริ่มดึงอัตโนมัติแล้ว (รีเฟรชหน้าเพื่อดูความคืบหน้า) เสร็จแล้วส่งสรุปทาง LINE", "ok");
-      const timer = setInterval(async () => { const s = await show(); if (!s.running) { clearInterval(timer); load(); } }, 5000);
+      notice("เริ่มดึงอัตโนมัติแล้ว ดูความคืบหน้าในแผงนี้ เสร็จแล้วส่งสรุปทาง LINE", "ok");
+      follow();
     } catch (err) { notice(err.message); }
-    show();
   };
-  show();
+  let timer = null;
+  const follow = async () => {  // poll every 3 s while a run is going (also when it was started at 06:00 or elsewhere)
+    clearTimeout(timer);
+    const s = await show();
+    if (s.running) timer = setTimeout(follow, 3000);
+    else if (s.steps && s.steps.length) load();
+  };
+  follow();
 }
 
 setupDrop();
