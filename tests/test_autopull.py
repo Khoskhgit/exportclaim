@@ -102,3 +102,43 @@ def test_loop_runs_at_the_set_time():
     auto.run_once = lambda: (ran.append(auto.next_at), auto.stop())
     auto.loop()
     assert ran == [datetime(2026, 11, 25, 6, 0, tzinfo=autopull.TZ)]
+
+
+def test_moph_alert_request_and_errors():
+    import json
+    from app import moph_alert
+    sent = []
+
+    class Reply:
+        def __init__(self, body):
+            self.body = body
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def read(self):
+            return self.body
+
+    def opener(request, timeout):
+        sent.append(request)
+        return Reply(b'{"status":200,"message":"Succesfully"}')
+
+    moph_alert.send("ck", "sk", "hi", opener=opener)
+    request = sent[0]
+    assert request.full_url == moph_alert.URL and request.get_header("Client-key") == "ck"
+    assert request.get_header("Secret-key") == "sk"
+    assert json.loads(request.data) == {"messages": [{"type": "text", "text": "hi"}]}
+    with pytest.raises(moph_alert.MophAlertError, match="MOPH_ALERT_CLIENT_KEY"):
+        moph_alert.send("", "sk", "hi", opener=opener)
+    with pytest.raises(line_push.LineError, match="ไม่รับข้อความ"):
+        moph_alert.send("ck", "sk", "hi", opener=lambda r, timeout: Reply(b'{"status":401,"message":"bad key"}'))
+
+
+def test_autopull_uses_moph_alert_when_its_keys_are_set(tmp_path):
+    config = replace(settings(), export_dir=tmp_path / "e", moph_alert_client_key="ck", moph_alert_secret_key="sk")
+    app = create_app(config, FakeHosxp(), Store(tmp_path / "s.sqlite3"))
+    status = TestClient(app).get("/api/autopull").json()
+    assert status["line_ready"] and status["line_to"] == "กลุ่ม LINE ของ MOPH Alert"

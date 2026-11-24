@@ -1,5 +1,6 @@
 """Daily automatic REP pull: e-Claim REPs (every fund), Seamless for DMIS (this fiscal year) and AIPN REP/STM (when
-AIPN_USER is set), then a summary to LINE.
+AIPN_USER is set), then a summary to LINE: through MOPH Alert (a LINE group) when its keys are set, else the LINE
+Messaging API.
 
 AUTO_PULL_TIME=06:00 turns it on (Asia/Bangkok). It reuses the page's background pulls, so a pull someone started by
 hand is waited for, and the page shows the automatic pull's progress like any other.
@@ -16,7 +17,7 @@ from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI, HTTPException
 
-from . import eclaim_web, line_push
+from . import eclaim_web, line_push, moph_alert
 from .config import Settings
 
 log = logging.getLogger("ssop.autopull")
@@ -98,7 +99,9 @@ class AutoPull:
     def __init__(self, app: FastAPI, settings: Settings, send: Callable[[str], None] | None = None,
                  clock: Callable[[], datetime] = lambda: datetime.now(TZ), poll: float = 5.0):
         self.app, self.settings, self.clock, self.poll = app, settings, clock, poll
-        self.send = send or (lambda text: line_push.send(settings.line_channel_token, settings.line_to, text))
+        self.moph = bool(settings.moph_alert_client_key and settings.moph_alert_secret_key)
+        self.send = send or (self._moph_send if self.moph else
+                             lambda text: line_push.send(settings.line_channel_token, settings.line_to, text))
         self.at = parse_time(settings.auto_pull_time)
         self._lock = threading.Lock()
         self.running = False
@@ -106,6 +109,10 @@ class AutoPull:
         self.steps: list[dict] = []  # this run's steps, shown live on the page
         self.next_at: datetime | None = None
         self._stop = threading.Event()
+
+    def _moph_send(self, text: str) -> None:
+        s = self.settings
+        moph_alert.send(s.moph_alert_client_key, s.moph_alert_secret_key, text, s.moph_alert_url or moph_alert.URL)
 
     def _wait(self, job) -> dict:
         while job.view()["running"]:
@@ -196,8 +203,9 @@ class AutoPull:
     def view(self) -> dict:
         return {"time": self.settings.auto_pull_time if self.at else "", "running": self.running,
                 "next_at": self.next_at.isoformat(timespec="minutes") if self.next_at else "",
-                "line_ready": bool(self.settings.line_channel_token),
-                "line_to": "ผู้ใช้ที่ตั้งไว้" if self.settings.line_to else "ทุกคนที่เป็นเพื่อนกับบัญชี (broadcast)",
+                "line_ready": self.moph or bool(self.settings.line_channel_token),
+                "line_to": "กลุ่ม LINE ของ MOPH Alert" if self.moph else
+                           "ผู้ใช้ที่ตั้งไว้" if self.settings.line_to else "ทุกคนที่เป็นเพื่อนกับบัญชี (broadcast)",
                 "last": self.last, "steps": self._live_steps()}
 
     def _live_steps(self) -> list[dict]:

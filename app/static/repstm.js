@@ -448,7 +448,7 @@ async function setupAutoPull() {
     try {
       const s = await api("/api/autopull");
       $("autopull-note").textContent = (s.time ? `ทุกวันเวลา ${s.time} น. · รอบถัดไป ${when(s.next_at)}` : "ปิดอยู่ (ยังไม่ได้ตั้ง AUTO_PULL_TIME)") +
-        ` · LINE: ${s.line_ready ? s.line_to : "ยังไม่ได้ตั้ง LINE_CHANNEL_TOKEN"}` + (s.running ? " · กำลังดึงอยู่" : "");
+        ` · LINE: ${s.line_ready ? s.line_to : "ยังไม่ได้ตั้ง MOPH_ALERT_CLIENT_KEY / SECRET_KEY หรือ LINE_CHANNEL_TOKEN"}` + (s.running ? " · กำลังดึงอยู่" : "");
       $("autopull-run").disabled = s.running;
       $("autopull-line-test").disabled = !s.line_ready;
       $("autopull-last").textContent = s.last && s.last.finished_at ? `ครั้งล่าสุด ${when(s.last.finished_at)} · ${s.last.line}`

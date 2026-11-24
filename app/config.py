@@ -107,6 +107,10 @@ class Settings:
     # friend of the account (broadcast) when LINE_TO is empty
     line_channel_token: str = field(default="", repr=False)
     line_to: str = ""
+    # MOPH Alert (MOPH Notify): the keys of one LINE group; used instead of LINE_CHANNEL_TOKEN when set
+    moph_alert_client_key: str = field(default="", repr=False)
+    moph_alert_secret_key: str = field(default="", repr=False)
+    moph_alert_url: str = ""
 
     @property
     def allowed_hosts(self) -> list[str]:
@@ -216,4 +220,7 @@ def load_settings(env_file: Path | None = None) -> Settings:
         auto_pull_months=int(get("AUTO_PULL_MONTHS") or 2),
         line_channel_token=(get("LINE_CHANNEL_TOKEN") or "").strip(),
         line_to=(get("LINE_TO") or "").strip(),
+        moph_alert_client_key=(get("MOPH_ALERT_CLIENT_KEY") or "").strip(),
+        moph_alert_secret_key=(get("MOPH_ALERT_SECRET_KEY") or "").strip(),
+        moph_alert_url=(get("MOPH_ALERT_URL") or "").strip(),
     )
