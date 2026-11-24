@@ -50,7 +50,9 @@ function moneyChart(reps) {
         class: `viz-bar ${cls}`, style: `width:${Math.max(0.6, 100 * value / max)}%`,
         "data-tip": `${a.label}\n${label}: ${baht.format(value)} บาท`,
       }) : null),
-      el("span", { class: "viz-num" }, value == null ? "ไม่มีข้อมูล" : value ? baht.format(value) : "0"))))));
+      value ? el("span", { class: "viz-num" }, baht.format(value))
+        : el("span", { class: "viz-num viz-num-none", title: value == null ? "ไม่มีข้อมูล" : "0 บาท" }, "—",
+          el("span", { class: "sr-only" }, value == null ? "ไม่มีข้อมูล" : "0 บาท")))))));
 }
 
 function monthChart(m) {
@@ -138,7 +140,7 @@ function renderReps(reps) {
 }
 
 function renderMenus(menus) {
-  $("menus").replaceChildren(...menus.map((m) => el("a", { class: "dash-menu", href: m.href,
+  $("menus").replaceChildren(...menus.map((m) => el("a", { class: m.items ? "dash-menu" : "dash-menu idle", href: m.href,
     title: m.last ? `${m.label} · ล่าสุด ${thaiDateTime(m.last)}` : `${m.label} · ยังไม่มีในช่วงนี้` },
     el("span", { class: "dash-menu-head" }, el("span", { class: "dash-menu-label" }, m.label),
       el("span", { class: "dash-menu-count" }, count.format(m.items || 0), el("small", {}, ` ${m.unit}`))),

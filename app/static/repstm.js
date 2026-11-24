@@ -363,19 +363,21 @@ function mmsLine(l) {
 function renderMms(months) {
   const box = $("mms-list");
   if (!months || !months.length) { box.replaceChildren(el("p", { class: "hint" }, "ยังไม่มีรายงาน MMS ที่ดึงไว้")); return; }
-  const file = (x, m) => el("a", { href: `/api/repstm/mms/file?kind=${x.kind}&month=${m.month}` }, "Excel");
+  const file = (x, m) => el("a", { href: `/api/repstm/mms/file?kind=${x.kind}&month=${m.month}`, title: "ดาวน์โหลด Excel" }, x.kind.endsWith("stm") ? "STM" : "REP");
   const cell = (x, key) => el("td", { class: "num" }, x ? money(x[key]) : "—");
   box.replaceChildren(table(
     [["เดือน"], ["งาน"], ["ช่วงวันที่"], ["REP รายการ", "num"], ["ขอเบิก", "num"], ["STM รายการ", "num"], ["จ่าย", "num"], ["ส่วนต่าง", "num"], ["ไฟล์"], ["ดึงเมื่อ"]],
     months.map((m) => {
       const diff = m.rep && m.stm ? m.rep.claim - m.stm.paid : null;
       const empty = !(m.rep && m.rep.rows) && !(m.stm && m.stm.rows);
-      return el("tr", { class: empty ? "sub" : "" },
+      return el("tr", { class: empty ? "row-idle" : "" },
         el("td", {}, m.month), el("td", {}, m.label || m.program),
         el("td", {}, `${toDmy(m.date_start) || m.date_start} – ${toDmy(m.date_end) || m.date_end}`),
         el("td", { class: "num" }, m.rep ? String(m.rep.rows) : "—"), cell(m.rep, "claim"),
         el("td", { class: "num" }, m.stm ? String(m.stm.rows) : "—"), cell(m.stm, "paid"),
-        el("td", { class: "num" }, diff === null ? "—" : (diff ? el("span", { class: "badge b-error" }, money(diff)) : money(0))),
+        el("td", { class: "num" }, diff === null ? "—"
+          : m.rep.rows && !m.stm.rows ? el("span", { class: "badge b-sent", title: "ยังไม่มีรายการจ่ายของเดือนนี้" }, "รอ STM")
+          : (diff ? el("span", { class: "badge b-error" }, money(diff)) : money(0))),
         el("td", {}, m.rep ? file(m.rep, m) : null, " ", m.stm ? file(m.stm, m) : null),
         el("td", {}, when((m.stm || m.rep).fetched_at)));
     })));

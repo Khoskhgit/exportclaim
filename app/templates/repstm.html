@@ -10,8 +10,12 @@
 {% set active = "repstm" %}{% include "_top.html" %}
 <main>
   <div class="page-head"><h2>REP / STM</h2><p>นำเข้าผลตอบรับ (REP) และใบชดเชย (STM) ของประกันสังคม และ REP/STM ข้าราชการ e-Claim (.xls) และรายละเอียดรายการเคลม FDH (.xlsx) · ใช้แสดงสถานะในหน้า SSOP และ 18 แฟ้ม</p></div>
+  <nav class="page-nav" aria-label="ไปยังส่วนของหน้านี้">
+    <a href="#import">นำเข้าไฟล์</a><a href="#pull-eclaim">e-Claim</a><a href="#pull-seamless">Seamless</a><a href="#pull-aipn">AIPN</a>
+    <a href="#pull-mms">MMS ประกันสังคม</a><a href="#autopull-panel">ดึงอัตโนมัติ</a><a href="#vn-search">ค้นหา VN / รหัส C</a><a href="#lists">รายการ REP / STM</a>
+  </nav>
 
-  <section class="panel import-panel">
+  <section class="panel import-panel" id="import">
     <label id="drop" class="drop" for="files">
       <span class="drop-icon" aria-hidden="true">⇪</span>
       <strong>ลากไฟล์ ZIP มาวาง หรือคลิกเพื่อเลือกไฟล์</strong>
@@ -21,7 +25,7 @@
     <ul id="import-log" class="import-log"></ul>
   </section>
 
-  <section class="panel eclaim-pull">
+  <section class="panel eclaim-pull" id="pull-eclaim">
     <form id="eclaim-form" class="search">
       <div class="wide"><strong>ดึง REP e-Claim (สปสช.) อัตโนมัติ</strong>
         <span id="eclaim-note" class="sub"></span></div>
@@ -34,8 +38,8 @@
       </fieldset>
       <div class="actions-cell"><button class="primary" type="submit" id="eclaim-run">ดึง REP</button></div>
     </form>
-    <p class="hint">กด "ดึง REP" แล้วรอจนขึ้นผล ไม่ต้องเปิดเว็บ e-Claim และไม่ต้องกรอก captcha หรือรหัส Google Authenticator เอง
-      ระบบดึงเฉพาะ REP ที่ยังไม่ได้นำเข้า ครั้งแรกอาจนาน 5–10 นาที (ราว 10 วินาทีต่อไฟล์) ครั้งต่อไปเร็วขึ้นเพราะดึงแค่ไฟล์ใหม่</p>
+    <details class="hint-more"><summary>วิธีใช้</summary><p class="hint">กด "ดึง REP" แล้วรอจนขึ้นผล ไม่ต้องเปิดเว็บ e-Claim และไม่ต้องกรอก captcha หรือรหัส Google Authenticator เอง
+      ระบบดึงเฉพาะ REP ที่ยังไม่ได้นำเข้า ครั้งแรกอาจนาน 5–10 นาที (ราว 10 วินาทีต่อไฟล์) ครั้งต่อไปเร็วขึ้นเพราะดึงแค่ไฟล์ใหม่</p></details>
     <details class="history eclaim-help">
       <summary>วิธีใช้และการตั้งค่า</summary>
       <div class="history-body">
@@ -68,7 +72,7 @@
     <ul id="eclaim-log" class="import-log"></ul>
   </section>
 
-  <section class="panel eclaim-pull">
+  <section class="panel eclaim-pull" id="pull-seamless">
     <form id="seamless-form" class="search">
       <div class="wide"><strong>ดึง REP Seamless for DMIS (โรคเฉพาะ)</strong>
         <span id="seamless-note" class="sub"></span></div>
@@ -76,9 +80,9 @@
       <div class="sub">ทุกโครงการ · รอบ: ทั้งหมด</div>
       <div class="actions-cell"><button class="primary" type="submit" id="seamless-run">ดึง REP Seamless</button></div>
     </form>
-    <p class="hint">เหมือนที่ทำเองบนเว็บ Seamless: เลือกทุกโครงการ เลือกปีงบ รอบทั้งหมด แล้วกด Download รายงาน Excel (Unite report) ของทุก REP
+    <details class="hint-more"><summary>วิธีใช้</summary><p class="hint">เหมือนที่ทำเองบนเว็บ Seamless: เลือกทุกโครงการ เลือกปีงบ รอบทั้งหมด แล้วกด Download รายงาน Excel (Unite report) ของทุก REP
       ระบบดึงเฉพาะ REP ที่ยังไม่มี ครั้งแรกอาจนาน 10–20 นาที (ราว 5–15 วินาทีต่อไฟล์) ไฟล์เก็บไว้ในแอป กด "Excel" ในตารางเพื่อดาวน์โหลด
-      ไฟล์มีชื่อและเลขบัตรผู้ป่วย ใช้ภายใน รพ. เท่านั้น</p>
+      ไฟล์มีชื่อและเลขบัตรผู้ป่วย ใช้ภายใน รพ. เท่านั้น</p></details>
     <div id="seamless-progress" class="eclaim-progress" hidden>
       <div class="eclaim-progress-head"><strong id="seamless-phase"></strong><span id="seamless-count" class="sub"></span></div>
       <progress id="seamless-bar" max="1" value="0"></progress>
@@ -91,7 +95,7 @@
     </details>
   </section>
 
-  <section class="panel eclaim-pull">
+  <section class="panel eclaim-pull" id="pull-aipn">
     <form id="aipn-form" class="search">
       <div class="wide"><strong>ดึง REP / STM AIPN (ผู้ป่วยใน ปกส., สกส.)</strong>
         <span id="aipn-note" class="sub"></span></div>
@@ -101,9 +105,9 @@
       <div class="sub">REP เอกสารตอบรับ (RP1) + Statement AIPN</div>
       <div class="actions-cell"><button class="primary" type="submit" id="aipn-run">ดึง REP / STM AIPN</button></div>
     </form>
-    <p class="hint">login เว็บ cs8.chi.or.th/aipnupload ด้วยบัญชีของ รพ. เปิดหน้าเอกสารตอบรับ (RP1) และ Statement AIPN
+    <details class="hint-more"><summary>วิธีใช้</summary><p class="hint">login เว็บ cs8.chi.or.th/aipnupload ด้วยบัญชีของ รพ. เปิดหน้าเอกสารตอบรับ (RP1) และ Statement AIPN
       ดาวน์โหลด ZIP ที่ออกในช่วงที่เลือกและยังไม่ได้นำเข้า แล้วนำเข้าเหมือนลากไฟล์มาวาง
-      ตั้งใน <code>.env</code>: <code>AIPN_USER</code>, <code>AIPN_PASSWORD</code> (รหัส รพ. ใช้ <code>HCODE</code>)</p>
+      ตั้งใน <code>.env</code>: <code>AIPN_USER</code>, <code>AIPN_PASSWORD</code> (รหัส รพ. ใช้ <code>HCODE</code>)</p></details>
     <div id="aipn-progress" class="eclaim-progress" hidden>
       <div class="eclaim-progress-head"><strong id="aipn-phase"></strong><span id="aipn-count" class="sub"></span></div>
       <progress id="aipn-bar" max="1" value="0"></progress>
@@ -112,7 +116,7 @@
     <ul id="aipn-log" class="import-log"></ul>
   </section>
 
-  <section class="panel eclaim-pull">
+  <section class="panel eclaim-pull" id="pull-mms">
     <form id="mms-form" class="search">
       <div class="wide"><strong>ดึง REP / STM ประกันสังคม (MMS)</strong>
         <span id="mms-note" class="sub"></span></div>
@@ -127,9 +131,9 @@
       <div class="sub">รายงานการส่งเบิก (REP) + รายงานการจ่าย (STM)</div>
       <div class="actions-cell"><button class="primary" type="submit" id="mms-run">ดึงรายงาน MMS</button></div>
     </form>
-    <p class="hint">login mms.sso.go.th ด้วยบัญชีของ รพ. (ใช้เบราว์เซอร์เบื้องหลัง) ดึงรายงานทีละเดือน งานละ 2 รายงาน (เว็บให้เลือกได้ไม่เกิน 1 เดือนและถึงเมื่อวาน · รายงานละประมาณ 1 นาที)
+    <details class="hint-more"><summary>วิธีใช้</summary><p class="hint">login mms.sso.go.th ด้วยบัญชีของ รพ. (ใช้เบราว์เซอร์เบื้องหลัง) ดึงรายงานทีละเดือน งานละ 2 รายงาน (เว็บให้เลือกได้ไม่เกิน 1 เดือนและถึงเมื่อวาน · รายงานละประมาณ 1 นาที)
       เก็บไฟล์ Excel และสรุปต่อเดือน ดึงเดือนเดิมซ้ำจะแทนที่ข้อมูลเดิม (สถานะและการจ่ายเปลี่ยนได้)
-      ตั้งใน <code>.env</code>: <code>MMS_USER</code>, <code>MMS_PASSWORD</code> · ต้องติดตั้ง <code>playwright</code> + <code>playwright install chromium</code></p>
+      ตั้งใน <code>.env</code>: <code>MMS_USER</code>, <code>MMS_PASSWORD</code> · ต้องติดตั้ง <code>playwright</code> + <code>playwright install chromium</code></p></details>
     <div id="mms-progress" class="eclaim-progress" hidden>
       <div class="eclaim-progress-head"><strong id="mms-phase"></strong><span id="mms-count" class="sub"></span></div>
       <progress id="mms-bar" max="1" value="0"></progress>
@@ -148,9 +152,9 @@
         <button type="button" id="autopull-run">ดึงอัตโนมัติตอนนี้</button>
       </div>
     </div>
-    <p class="hint">ดึง REP e-Claim ทุกสิทธิย้อนหลัง 2 เดือน, Seamless for DMIS ปีงบปัจจุบัน และ REP / STM AIPN 2 เดือน (เฉพาะไฟล์ที่ยังไม่มี) แล้วส่งสรุปเข้า LINE
+    <details class="hint-more"><summary>วิธีใช้</summary><p class="hint">ดึง REP e-Claim ทุกสิทธิย้อนหลัง 2 เดือน, Seamless for DMIS ปีงบปัจจุบัน และ REP / STM AIPN 2 เดือน (เฉพาะไฟล์ที่ยังไม่มี) แล้วส่งสรุปเข้า LINE
       ตั้งใน <code>.env</code>: <code>AUTO_PULL_TIME=06:00</code> และ <code>MOPH_ALERT_CLIENT_KEY</code> + <code>MOPH_ALERT_SECRET_KEY</code>
-      (MOPH Alert ส่งเข้ากลุ่ม LINE ที่ลงทะเบียนไว้) หรือ <code>LINE_CHANNEL_TOKEN</code> + <code>LINE_TO</code> (LINE Official Account)</p>
+      (MOPH Alert ส่งเข้ากลุ่ม LINE ที่ลงทะเบียนไว้) หรือ <code>LINE_CHANNEL_TOKEN</code> + <code>LINE_TO</code> (LINE Official Account)</p></details>
     <p id="autopull-last" class="sub"></p>
     <ul id="autopull-steps" class="import-log" hidden></ul>
     <details class="history eclaim-help"><summary>ข้อความสรุปที่ส่ง LINE ครั้งล่าสุด</summary>
