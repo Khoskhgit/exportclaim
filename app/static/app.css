@@ -1120,3 +1120,25 @@ button,input,select,textarea{font-family:inherit}
 .nav-list a[aria-current=page] .nav-icon{color:#8e2449}
 .sidebar :focus-visible{box-shadow:0 0 0 2px #fff}
 .sidebar{scrollbar-color:#ffffff66 transparent}
+
+/* UI step 12b (2026-11-25): the top bar joins the deep pink sidebar of step 12. It starts in the sidebar's top colour
+   (#c23a76) and runs slightly darker; white text passes on both (5.1:1, 5.9:1). The logo block is exactly as tall as the
+   top bar and shares its bottom line, so the two read as one band. */
+:root{--top-h:56px}
+@media (hover:none) and (pointer:coarse){:root{--top-h:64px}}
+.top{height:var(--top-h);min-height:0;padding-top:0;padding-bottom:0;background:linear-gradient(90deg,#c23a76 0%,#b3326b 100%);border-bottom:1px solid #ffffff33;backdrop-filter:none;color:#fff}
+.top::after{display:none}
+.side-brand{box-sizing:border-box;height:var(--top-h);min-height:0;margin:0 0 8px;padding:0 16px;border-radius:0;background:#c23a76;border-bottom:1px solid #ffffff33;flex:none}
+.crumbs ol{color:#fff}
+.crumbs li+li::before{color:#ffffff80}
+.crumbs li[aria-current=page]{color:#fff;font-weight:700}
+.menu-toggle{color:#fff;background:transparent;border-color:transparent;box-shadow:none}
+.menu-toggle:hover:not(:disabled){background:#00000026;color:#fff}
+.top .connection{background:#ffffff1f;border-color:#ffffff4d;color:#fff}
+.top .dot.ok{background:#7ef0b8;box-shadow:0 0 0 2px #fff}
+.top .dot.bad{background:var(--error);box-shadow:0 0 0 2px #fff}
+.top .avatar{background:#fff;border-color:#fff;color:#8e2449}
+.top .user-name{color:#fff}.top .user-name small{color:#fce7f3}
+.top .user-box button.ghost{background:transparent;border-color:#ffffff80;color:#fff;box-shadow:none}
+.top .user-box button.ghost:hover:not(:disabled){background:#00000026;border-color:#fff;color:#fff}
+.top :focus-visible{box-shadow:0 0 0 2px #fff}
