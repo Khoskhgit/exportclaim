@@ -953,3 +953,44 @@ dialog{border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(-
   .side-collapsed .sidebar ~ .notices,.side-collapsed .sidebar ~ main{margin-left:auto}
   .side-collapsed .sidebar ~ .actions{left:0}
 }
+
+/* ================================================================ UI step 8 (2026-11-25): pink, with gradients
+   Primary pink #be185d (white text 6.0:1) running to purple #7e22ce (7.0:1). Status colours (green pass, amber C,
+   red Deny) and chart colours stay as they are: they carry meaning. Cards and tables stay white so figures read clearly. */
+:root{
+  --accent:#be185d;--accent-2:#9d174d;--accent-soft:#fce7f3;--bar:#be185d;--accent-ink:#fff;
+  --purple:#7e22ce;--purple-2:#6b21a8;--pink-tint:#fdf2f8;
+  --grad:linear-gradient(135deg,var(--accent) 0%,var(--purple) 100%);
+  --grad-hover:linear-gradient(135deg,var(--accent-2) 0%,var(--purple-2) 100%);
+  --grad-soft:linear-gradient(90deg,#fce7f3 0%,#f3e8ff 100%);
+  --faint:#68686f;--ring:#be185d59;
+}
+body{background:radial-gradient(1100px 420px at 100% 0,#fce7f3b3 0%,#fce7f300 70%),radial-gradient(800px 360px at 30% 0,#f3e8ff80 0%,#f3e8ff00 70%),var(--bg);background-repeat:no-repeat}
+
+/* primary buttons and the logo run pink to purple */
+button.primary{background:var(--grad);border-color:transparent;color:#fff;box-shadow:0 1px 2px #0000000d,0 4px 12px #be185d33}
+button.primary:hover:not(:disabled){background:var(--grad-hover);border-color:transparent;box-shadow:0 1px 2px #0000000d,0 6px 16px #be185d40}
+.side-brand .logo,.logo{background:var(--grad);color:#fff}
+.skip-link{background:var(--grad)}
+
+/* sidebar: pink at the top fading to white; the open page has a soft pink-to-lilac band and a pink edge */
+.sidebar{background:linear-gradient(180deg,var(--pink-tint) 0%,#fff 70%)}
+.nav-list a:hover,.nav-group summary:hover{background:#fce7f3;color:var(--accent-2)}
+.nav-list a[aria-current=page]{background:var(--grad-soft);color:var(--accent-2);box-shadow:inset 3px 0 0 var(--accent)}
+
+/* top bar: a thin pink, purple and orange line along the bottom */
+.top{border-bottom-color:transparent}
+.top::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;background:linear-gradient(90deg,#ec4899 0%,#a855f7 55%,#fb923c 100%);pointer-events:none}
+
+/* page titles: dark pink to dark purple text; padding keeps Thai marks above and below inside the painted area */
+@supports ((-webkit-background-clip:text) or (background-clip:text)){
+  .page-head h2,.dash-title h2{background:linear-gradient(90deg,var(--accent-2) 0%,var(--purple-2) 100%);-webkit-background-clip:text;background-clip:text;color:transparent;padding:.15em 0;margin:-.15em 0}
+}
+
+/* smaller pink touches */
+tr.picked td{background:var(--pink-tint)}
+tbody tr.current td{background:#fce7f3}
+.tab[aria-selected=true]{color:var(--accent-2);border-bottom-color:var(--accent)}
+.card[aria-pressed=true]{background:linear-gradient(180deg,#fff 0%,var(--pink-tint) 100%)}
+input:focus,select:focus,.multi[open] summary{border-color:var(--accent)}
+.tone-paid{--tone:#0d6b55}  /* paid money keeps its green: a status, not the brand colour */
