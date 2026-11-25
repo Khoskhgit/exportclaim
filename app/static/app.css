@@ -1193,3 +1193,51 @@ tr.picked td,tbody tr.current td{background:var(--pink-tint)}
 .top .user-name{color:#24191e}.top .user-name small{color:#8c0141}
 .top .user-box button.ghost{background:#fff;border-color:var(--rana-2);color:#24191e}
 .top .user-box button.ghost:hover:not(:disabled){background:var(--rana-3);border-color:#8c0141;color:#24191e}
+
+/* ================================================================ UI step 15 (2026-11-25): Pale Teal #82CBB2
+   The frame (sidebar, top bar) in #82CBB2 with very dark text, because white on it is only 1.9:1. Actions use a dark teal
+   from the same hue (159deg): #1f7a60 (white 5.2:1, on the page 5.0:1), hover #14614b. Pink from steps 8-14 is replaced.
+   Frame text: items #17201d 8.8:1, labels #0f4d3c 5.2:1; hover lightens to #a6dbc8 (10.8:1 / 6.3:1). Status colours unchanged. */
+:root{
+  --teal:#82cbb2;--teal-hover:#a6dbc8;--teal-light:#c3e6d9;--teal-line:#6bbfa2;--teal-ink:#0f4d3c;
+  --accent:#1f7a60;--accent-2:#14614b;--accent-soft:#e3f4ee;--bar:#1f7a60;--brand:#1f7a60;--brand-darker:#0f4d3c;
+  --grad:linear-gradient(135deg,#1f7a60 0%,#14614b 100%);--grad-hover:linear-gradient(135deg,#14614b 0%,#0f4d3c 100%);
+  --pink-tint:#eef7f3;--ring:#1f7a6059;
+  --bg:#f7faf9;--panel-2:#fafcfb;--hover:#eef6f3;--line:#dbe9e3;--line-2:#eef6f3;
+  --ink:#17201d;--muted:#3a4a44;--faint:#5b6b65;
+  --shadow:0 1px 2px #0f4d3c0f;--shadow-lg:0 10px 30px -8px #0f4d3c33,0 4px 8px -4px #0f4d3c1f;
+}
+body{background:var(--bg)}
+button.primary{box-shadow:inset 0 1px 0 #ffffff40,0 6px 16px -8px #0f4d3c66}
+button.primary:hover:not(:disabled){box-shadow:inset 0 1px 0 #ffffff33,0 8px 20px -8px #0f4d3c80}
+
+/* sidebar */
+.sidebar{background:linear-gradient(180deg,var(--teal) 0%,var(--teal-light) 100%);border-right:1px solid var(--teal-line);color:var(--ink);scrollbar-color:#0f4d3c55 transparent}
+.side-brand{background:var(--teal);border-bottom:1px solid var(--teal-line)}
+.side-brand h1{color:var(--ink)}
+.side-brand p{color:var(--teal-ink)}
+.side-brand .logo{background:var(--teal-ink);color:#fff;box-shadow:none}
+.nav-group summary{color:var(--teal-ink);font-weight:600}
+.nav-group summary:hover{background:var(--teal-hover);color:var(--ink)}
+.nav-list a,.nav-list a .nav-icon{color:var(--ink)}
+.nav-list a:hover{background:var(--teal-hover);color:var(--ink)}
+.nav-list a[aria-current=page]{background:#fff;color:var(--teal-ink);box-shadow:0 1px 3px #0f4d3c26}
+.nav-list a[aria-current=page] .nav-icon{color:var(--accent)}
+.sidebar :focus-visible,.top :focus-visible{box-shadow:0 0 0 2px var(--teal-ink)}
+
+/* top bar */
+.top{background:var(--teal);border-bottom:1px solid var(--teal-line);color:var(--ink)}
+.crumbs ol{color:var(--teal-ink)}
+.crumbs li+li::before{color:var(--teal-ink)}
+.crumbs li[aria-current=page]{color:var(--ink);font-weight:700}
+.menu-toggle{color:var(--teal-ink)}
+.menu-toggle:hover:not(:disabled){background:var(--teal-hover);color:var(--ink)}
+.top .connection{background:#fff;border-color:var(--teal-line);color:var(--muted)}
+.top .avatar{background:#fff;border-color:var(--teal-line);color:var(--teal-ink)}
+.top .user-name{color:var(--ink)}.top .user-name small{color:var(--teal-ink)}
+.top .user-box button.ghost{background:#fff;border-color:var(--teal-line);color:var(--ink)}
+.top .user-box button.ghost:hover:not(:disabled){background:var(--accent-soft);border-color:var(--teal-ink);color:var(--ink)}
+
+/* page */
+tr.picked td,tbody tr.current td{background:var(--pink-tint)}
+.tab[aria-selected=true]{color:var(--accent-2);border-bottom-color:var(--accent)}
