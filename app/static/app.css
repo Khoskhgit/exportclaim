@@ -1142,3 +1142,23 @@ button,input,select,textarea{font-family:inherit}
 .top .user-box button.ghost{background:transparent;border-color:#ffffff80;color:#fff;box-shadow:none}
 .top .user-box button.ghost:hover:not(:disabled){background:#00000026;border-color:#fff;color:#fff}
 .top :focus-visible{box-shadow:0 0 0 2px #fff}
+
+/* UI step 13 (2026-11-25): Dark Hot Pink #D90166 as the one brand colour, with two darker steps for gradients.
+   White on #d90166 5.1:1, on #b00152 7.1:1, on #8c0141 9.6:1; #d90166 links on the page 4.8:1; #b00152 on #ffe0ee 5.8:1.
+   Status and chart colours unchanged. */
+:root{
+  --accent:#d90166;--accent-2:#b00152;--brand:#d90166;--brand-darker:#8c0141;--bar:#d90166;
+  --accent-soft:#ffe0ee;--pink-tint:#fff0f6;--ring:#d9016659;
+  --grad:linear-gradient(135deg,#d90166 0%,#b00152 100%);
+  --grad-hover:linear-gradient(135deg,#b00152 0%,#8c0141 100%);
+}
+.sidebar{background:linear-gradient(160deg,#d90166 0%,#b00152 55%,#8c0141 100%)}
+.side-brand{background:#d90166}
+.side-brand .logo{color:#8c0141}
+.nav-list a[aria-current=page],.nav-list a[aria-current=page] .nav-icon{color:#8c0141}
+.top{background:linear-gradient(90deg,#d90166 0%,#c2015b 100%)}
+.top .avatar{color:#8c0141}
+button.primary{box-shadow:inset 0 1px 0 #ffffff59,0 6px 16px -8px #b0015273}
+button.primary:hover:not(:disabled){box-shadow:inset 0 1px 0 #ffffff40,0 8px 20px -8px #b0015280}
+tr.picked td,tbody tr.current td{background:var(--pink-tint)}
+.tab[aria-selected=true]{color:var(--accent-2);border-bottom-color:var(--accent)}
