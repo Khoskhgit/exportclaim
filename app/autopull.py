@@ -200,7 +200,9 @@ class AutoPull:
     def __init__(self, app: FastAPI, settings: Settings, send: Callable[[str], None] | None = None,
                  clock: Callable[[], datetime] = lambda: datetime.now(TZ), poll: float = 5.0):
         self.app, self.settings, self.clock, self.poll = app, settings, clock, poll
-        self.moph = bool(settings.moph_alert_client_key and settings.moph_alert_secret_key)
+        # A LINE Official Account (LINE_CHANNEL_TOKEN) wins; MOPH Alert is used only when no OA is set.
+        self.moph = bool(settings.moph_alert_client_key and settings.moph_alert_secret_key
+                         and not settings.line_channel_token)
         self.flex = send is None  # the real senders take a flex card; a test's sender gets the text only
         self.send = send or (self._moph_send if self.moph else
                              lambda text, flex=None: line_push.send(settings.line_channel_token, settings.line_to,

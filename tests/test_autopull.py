@@ -144,6 +144,14 @@ def test_autopull_uses_moph_alert_when_its_keys_are_set(tmp_path):
     assert status["line_ready"] and status["line_to"] == "กลุ่ม LINE ของ MOPH Alert"
 
 
+def test_autopull_prefers_line_oa_over_moph_alert(tmp_path):
+    config = replace(settings(), export_dir=tmp_path / "e", moph_alert_client_key="ck", moph_alert_secret_key="sk",
+                     line_channel_token="tok", line_to="U" + "0" * 32)
+    app = create_app(config, FakeHosxp(), Store(tmp_path / "s.sqlite3"))
+    status = TestClient(app).get("/api/autopull").json()
+    assert status["line_ready"] and status["line_to"] == "ผู้ใช้ที่ตั้งไว้"
+
+
 def test_flex_summary_card():
     import json
     eclaim = {"funds": ["ucs"], "months": 2, "found": 3, "total": 2, "imported": 2, "errors": 1, "lines": [
