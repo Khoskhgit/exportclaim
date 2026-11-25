@@ -1,0 +1,116 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "dark-glow",
+        "value": "*",
+        "files": [
+          "app/templates/aipn.html"
+        ],
+        "createdAt": "2026-11-25T13:37:36.670Z",
+        "reason": "Claude: shadow #103026 is a neutral elevation shadow on a light page; rendered scan of all pages at 1280 and 390 found no glow"
+      },
+      {
+        "rule": "dark-glow",
+        "value": "*",
+        "files": [
+          "app/templates/approve.html"
+        ],
+        "createdAt": "2026-11-25T13:37:36.690Z",
+        "reason": "Claude: shadow #103026 is a neutral elevation shadow on a light page; rendered scan of all pages at 1280 and 390 found no glow"
+      },
+      {
+        "rule": "dark-glow",
+        "value": "*",
+        "files": [
+          "app/templates/dashboard.html"
+        ],
+        "createdAt": "2026-11-25T13:37:36.707Z",
+        "reason": "Claude: shadow #103026 is a neutral elevation shadow on a light page; rendered scan of all pages at 1280 and 390 found no glow"
+      },
+      {
+        "rule": "dark-glow",
+        "value": "*",
+        "files": [
+          "app/templates/dental.html"
+        ],
+        "createdAt": "2026-11-25T13:37:36.724Z",
+        "reason": "Claude: shadow #103026 is a neutral elevation shadow on a light page; rendered scan of all pages at 1280 and 390 found no glow"
+      },
+      {
+        "rule": "dark-glow",
+        "value": "*",
+        "files": [
+          "app/templates/disabled.html"
+        ],
+        "createdAt": "2026-11-25T13:37:36.741Z",
+        "reason": "Claude: shadow #103026 is a neutral elevation shadow on a light page; rendered scan of all pages at 1280 and 390 found no glow"
+      },
+      {
+        "rule": "dark-glow",
+        "value": "*",
+        "files": [
+          "app/templates/index.html"
+        ],
+        "createdAt": "2026-11-25T13:37:36.757Z",
+        "reason": "Claude: shadow #103026 is a neutral elevation shadow on a light page; rendered scan of all pages at 1280 and 390 found no glow"
+      },
+      {
+        "rule": "dark-glow",
+        "value": "*",
+        "files": [
+          "app/templates/labwalkin.html"
+        ],
+        "createdAt": "2026-11-25T13:37:36.774Z",
+        "reason": "Claude: shadow #103026 is a neutral elevation shadow on a light page; rendered scan of all pages at 1280 and 390 found no glow"
+      },
+      {
+        "rule": "dark-glow",
+        "value": "*",
+        "files": [
+          "app/templates/nhso18.html"
+        ],
+        "createdAt": "2026-11-25T13:37:36.794Z",
+        "reason": "Claude: shadow #103026 is a neutral elevation shadow on a light page; rendered scan of all pages at 1280 and 390 found no glow"
+      },
+      {
+        "rule": "dark-glow",
+        "value": "*",
+        "files": [
+          "app/templates/ntip.html"
+        ],
+        "createdAt": "2026-11-25T13:37:36.810Z",
+        "reason": "Claude: shadow #103026 is a neutral elevation shadow on a light page; rendered scan of all pages at 1280 and 390 found no glow"
+      },
+      {
+        "rule": "dark-glow",
+        "value": "*",
+        "files": [
+          "app/templates/ppfs.html"
+        ],
+        "createdAt": "2026-11-25T13:37:36.827Z",
+        "reason": "Claude: shadow #103026 is a neutral elevation shadow on a light page; rendered scan of all pages at 1280 and 390 found no glow"
+      },
+      {
+        "rule": "dark-glow",
+        "value": "*",
+        "files": [
+          "app/templates/ppfs_summary.html"
+        ],
+        "createdAt": "2026-11-25T13:37:36.843Z",
+        "reason": "Claude: shadow #103026 is a neutral elevation shadow on a light page; rendered scan of all pages at 1280 and 390 found no glow"
+      },
+      {
+        "rule": "dark-glow",
+        "value": "*",
+        "files": [
+          "app/templates/repstm.html"
+        ],
+        "createdAt": "2026-11-25T13:37:36.863Z",
+        "reason": "Claude: shadow #103026 is a neutral elevation shadow on a light page; rendered scan of all pages at 1280 and 390 found no glow"
+      }
+    ]
+  }
+}

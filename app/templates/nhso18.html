@@ -21,11 +21,11 @@
     <label>HN<input name="hn" autocomplete="off" placeholder="ทุกครั้งของ HN"></label>
     <div class="actions-cell"><button class="primary" type="submit">ค้นหาและตรวจ</button></div>
     <div class="presets">
-      <span>ช่วงด่วน:</span><button type="button" data-preset="this">เดือนนี้</button><button type="button" data-preset="last">เดือนก่อน</button>
-      <span>สิทธิ:</span><span id="groups"></span>
-      <span>ประเภท:</span>
-      <label class="inline"><input type="checkbox" name="opd" checked> OPD</label>
-      <label class="inline"><input type="checkbox" name="ipd"> IPD</label>
+      <div class="preset-group" role="group" aria-label="ช่วงด่วน"><span>ช่วงด่วน:</span><button type="button" data-preset="this">เดือนนี้</button><button type="button" data-preset="last">เดือนก่อน</button></div>
+      <div class="preset-group" role="group" aria-label="สิทธิ"><span>สิทธิ:</span><span id="groups"></span></div>
+      <div class="preset-group" role="group" aria-label="ประเภท"><span>ประเภท:</span>
+        <label class="inline"><input type="checkbox" name="opd" checked> OPD</label>
+        <label class="inline"><input type="checkbox" name="ipd"> IPD</label></div>
     </div>
   </form>
 
