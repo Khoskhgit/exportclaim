@@ -217,3 +217,14 @@ def test_no_refer_choice_is_kept_per_visit(tmp_path):
     assert store.nhso18_no_refer(["v1", "v2"]) == {"v1"}
     store.set_nhso18_no_refer("v1", False)
     assert store.nhso18_no_refer(["v1"]) == set()
+
+
+def test_disability_device_is_c357_for_uc():
+    from datetime import date
+    from app import nhso18_service as svc
+    hit = lambda sql: [{"k": "v1", "item": "8902 รถนั่งคนพิการ"}] if "8706|8707|8526" in sql else []
+    base = {"kind": "OPD", "vn": "v1", "pdx": "Z00", "date": date(2026, 11, 2), "money_hosxp": 0, "money_total": 0}
+    found = svc.checks(hit, "rcmdb", [{**base, "maininscl": "UCS"}])
+    assert [e["code"] for e in found["v1"]["errors"]] == ["C357"] and found["v1"]["errors"][0]["items"] == ["8902 รถนั่งคนพิการ"]
+    found = svc.checks(hit, "rcmdb", [{**base, "maininscl": "OFC", "claimcode": "X"}])
+    assert found["v1"]["errors"] == []

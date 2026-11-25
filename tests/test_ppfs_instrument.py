@@ -15,12 +15,12 @@ HEAD = ("Zone,ZoneName,ProvinceCode,ProvinceName,HospCode,HospName,VisitNo,VstDa
         "Service_Charge,Real_Price,Diff,Amount,Request_Price,Income,RegDate,Staff,SerialNo,Status")
 
 
-def line(code="8902", day="05/03/2569", cid=CID, hn="000001", income="4000", hosp="11111"):
+def line(code="8305", day="05/03/2569", cid=CID, hn="000001", income="4000", hosp="11111"):
     return (f"06,เขต 6,2700,สระแก้ว,{hosp},รพ.ทดสอบ,1,{day},{cid},ชื่อ,สกุล,{hn},,คนพิการ,ทางกาย,,UCS,74,OP,{code},"
             f"ขาเทียม,,,Z89,,4400,0,4400,0,1,4400,{income},06/03/2569,เจ้าหน้าที่,SN1,อนุมัติ")
 
 
-def item(vn="v1", day="2026-03-05", code="8902", qty=1, amount=4400, pttype_name="บัตรทอง", authen="EP1", paidst="02"):
+def item(vn="v1", day="2026-03-05", code="8305", qty=1, amount=4400, pttype_name="บัตรทอง", authen="EP1", paidst="02"):
     return {"vn": vn, "hn": "000001", "vstdate": date.fromisoformat(day), "vsttime": "09:00:00", "an": None, "pttype": "72",
             "pttype_name": pttype_name, "cid": CID, "ptname": "ผู้ป่วย ทดสอบ", "authen": authen,
             "icode": "3000001", "paidst": paidst, "code": code, "item_name": "ขาเทียม", "qty": qty, "amount": amount}
@@ -31,7 +31,7 @@ def adp(code, type_id=2, ucs=4400, start=None, expire="0000-00-00", active=None)
             "expire_date": expire, "active_status": active}
 
 
-ADP = {c: adp(c, ucs=u) for c, u in (("8902", 4400), ("8705", 250), ("8101", 0))}
+ADP = {c: adp(c, ucs=u) for c, u in (("8305", 4400), ("8705", 250), ("8101", 0), ("3002", 220))}
 
 
 def data(items=(), web=(), web_visits=(), equipment=None, eclaim=None, adp_rows=None, registered=("000001",)):
@@ -43,7 +43,7 @@ def codes(row):
     return [e["code"] for e in row.errors], [w["code"] for w in row.warnings]
 
 
-def web_row(code="8902", income="4000.00"):
+def web_row(code="8305", income="4000.00"):
     return {"cid": CID, "hn": "", "vstdate": "2026-03-05", "code": code, "name": "ขาเทียม", "amount": "1.00",
             "request_price": "4400.00", "income": income, "reg_date": "2026-03-06", "status": "อนุมัติ", "serial_no": "SN1"}
 
@@ -59,7 +59,7 @@ def test_every_adp_type_2_item_is_an_instrument():
 def test_a_registered_device_in_the_list():
     (row,) = check(data([item()]))
     assert (row.key, row.count, row.amount, row.extra["adp_found"], row.extra["adp_ucs"]) == (
-        "v1|8902", 1, Decimal("4400.00"), True, "4400.00")
+        "v1|8305", 1, Decimal("4400.00"), True, "4400.00")
     assert codes(row) == ([], [])
 
 
@@ -71,13 +71,13 @@ def test_warnings_do_not_block():
 def test_the_code_is_checked_against_nhso_adp_code():
     (row,) = check(data([item()], adp_rows={}))
     assert codes(row)[0] == ["NOT_IN_ADP"] and not row.extra["adp_found"]
-    (row,) = check(data([item()], adp_rows={"8902": adp("8902", type_id=19)}))
+    (row,) = check(data([item()], adp_rows={"8305": adp("8305", type_id=19)}))
     assert codes(row)[0] == ["ADP_TYPE"]
-    (row,) = check(data([item()], adp_rows={"8902": adp("8902", active="N")}))
+    (row,) = check(data([item()], adp_rows={"8305": adp("8305", active="N")}))
     assert codes(row)[0] == ["ADP_CLOSED"]
-    (row,) = check(data([item()], adp_rows={"8902": adp("8902", expire=date(2026, 3, 1))}))
+    (row,) = check(data([item()], adp_rows={"8305": adp("8305", expire=date(2026, 3, 1))}))
     assert codes(row)[0] == ["ADP_DATE"]
-    (row,) = check(data([item()], adp_rows={"8902": adp("8902", start="2026-04-01")}))
+    (row,) = check(data([item()], adp_rows={"8305": adp("8305", start="2026-04-01")}))
     assert codes(row)[0] == ["ADP_DATE"]
 
 
@@ -99,15 +99,16 @@ def test_a_code_with_no_ucs_price_is_not_paid_by_uc():
     assert codes(row)[0] == ["UC_NOT_PAID"]
 
 
-def test_a_disability_device_needs_the_registry():
-    (row,) = check(data([item()], registered=()))
-    assert codes(row) == ([], ["NOT_DISABLED"])
-    (row,) = check(data([item(code="8707", amount=600)], adp_rows={"8707": adp("8707", ucs=600)}, registered=()))
-    assert codes(row)[1] == ["NOT_DISABLED"]
-    (row,) = check(data([item(code="8705", amount=250)], registered=()))  # crutches are for anyone
-    assert codes(row) == ([], [])
-    (row,) = check(data([item()]))
-    assert codes(row) == ([], [])
+def test_a_disability_device_is_c357_in_eclaim():
+    for code in ("8902", "8901", "8706", "8707", "8526"):
+        (row,) = check(data([item(code=code, amount=300)], adp_rows={code: adp(code, ucs=4400)}))
+        assert codes(row) == (["C357"], []) and "กทม." in row.errors[0]["message"]
+        assert "ทะเบียนคนพิการ (ท.74)" not in row.errors[0]["message"]
+    (row,) = check(data([item(code="8902", amount=300)], adp_rows={"8902": adp("8902")}, registered=()))
+    assert codes(row) == (["C357"], []) and "ทะเบียนคนพิการ (ท.74)" in row.errors[0]["message"]
+    for code, ucs in (("8705", 250), ("3002", 220)):  # crutches and other devices go by e-Claim as before
+        (row,) = check(data([item(code=code, amount=ucs)], registered=()))
+        assert codes(row) == ([], [])
 
 
 def test_the_registry_is_read_only_for_disability_devices():
@@ -151,14 +152,14 @@ def test_web_record_and_income():
 
 
 def test_equipment_service_counts_as_web():
-    (row,) = check(data([item()], equipment={("v1", "8902"): {"regdate": "2026-03-06", "status": "A"}}))
+    (row,) = check(data([item()], equipment={("v1", "8305"): {"regdate": "2026-03-06", "status": "A"}}))
     assert row.extra["web"] and "IN_WEB" in codes(row)[1] and "OVER_INCOME" not in codes(row)[1]
 
 
 def test_web_only_row_needs_the_item_in_hosxp():
     visit = {k: v for k, v in item().items() if k not in ("icode", "code", "qty", "amount", "paidst", "item_name")}
     (row,) = check(data(web=[web_row()], web_visits=[visit]))
-    assert row.key == "v1|8902" and "NO_ITEM" in codes(row)[0]
+    assert row.key == "v1|8305" and "NO_ITEM" in codes(row)[0]
 
 
 def test_self_paid_is_an_error():
@@ -170,7 +171,7 @@ def test_csv_with_header_in_tis620():
     rows = parse_csv(f"{HEAD}\r\n{line()}\r\n".encode("cp874"))
     (r,) = rows
     assert (r.cid, r.vstdate, r.code, r.income, r.request_price, r.reg_date, r.serial_no) == (
-        CID, "2026-03-05", "8902", Decimal("4000.00"), Decimal("4400.00"), "2026-03-06", "SN1")
+        CID, "2026-03-05", "8305", Decimal("4000.00"), Decimal("4400.00"), "2026-03-06", "SN1")
     assert not hasattr(r, "fname") and "ชื่อ" not in repr(r)
 
 
@@ -227,5 +228,5 @@ def test_one_row_per_visit_with_each_code_in_parts():
 
 
 def test_visit_warnings_are_said_once():
-    (row,) = check(data([item(code="8902", authen=""), item(code="8705", amount=250, authen="")]))
+    (row,) = check(data([item(code="8305", authen=""), item(code="8705", amount=250, authen="")]))
     assert codes(row)[1] == ["NO_AUTHEN"]

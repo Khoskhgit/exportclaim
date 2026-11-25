@@ -14,9 +14,11 @@ Ported from the old program's "รายชื่อสิทธิผู้พ�
               เงินพึงได้ (Income) is compared with what HOSxP bills
    UC price   a code whose UCS price in nhso_adp_code is 0 is not paid by UC (OFC/LGO only, e.g. 8608 knee support,
               9212-9214 crown/bridge/pin): an error (the user's choice, 2026-11-25, after FY69 REP paid none of them)
-   disabled   a disability device (wheelchairs 89xx, 3-leg cane 8707) for a patient not in the disability registry
-              (person_deformed) is a warning: it needs the ท.74 registration and the device web (the hospital is outside
-              Bangkok); FY69 paid none of the 10 wheelchairs, 9 of them for unregistered patients (2026-11-25)
+   disabled   a disability device (wheelchairs 89xx, canes 8706/8707, knee pad 8526) sent by e-Claim / 18 files comes
+              back C 357 "หน่วยบริการบันทึกเบิกอุปกรณ์ผู้พิการ ไม่ใช่หน่วยบริการในเขต กทม.": only Bangkok units claim
+              them in e-Claim, the others record them in the disability device program. An error; the message also
+              says when the patient is not in the disability registry (person_deformed). REP FY68-70: every C 357 was
+              one of these codes (2026-11-25)
 One row per visit (the user's choice, 2026-11-19): each ADP code is checked on its own and kept in
 extra["parts"]; the row's key is VN|code+code. HOSxP is only read.
 """
@@ -40,7 +42,8 @@ KEY = "instrument"
 INSTRUMENT_TYPE = 2
 PROJECT_PATTERN = r"[A-Za-z0-9_\-]{1,15}"
 ITEM_FILTER = f"d.nhso_adp_type_id={INSTRUMENT_TYPE} AND IFNULL(d.nhso_adp_code,'')<>''"
-DISABLED_CODES = re.compile(r"89\d\d|8707")  # devices only for registered disabled people
+DISABLED_CODES = re.compile(r"89\d\d|8706|8707|8526")  # disability devices: C 357 in e-Claim outside Bangkok
+DISABLED_SQL = "REGEXP '^(89[0-9][0-9]|8706|8707|8526)$'"
 
 
 def is_disabled_device(code: str) -> bool:
@@ -340,8 +343,11 @@ def check(data: dict, sent: dict[tuple[str, str], str] | None = None) -> list[Ro
         self_paid_error(row)
         adp_problems(row, data.get("adp", {}).get(code), billed)
         if is_disabled_device(code) and row.hn not in data.get("registered", set()):
-            row.add(WARN, "NOT_DISABLED", f"รหัส {code} เป็นอุปกรณ์คนพิการ แต่ผู้ป่วยไม่อยู่ในทะเบียนคนพิการ "
-                                          "(ขึ้นทะเบียน ท.74 และบันทึกในโปรแกรมอุปกรณ์คนพิการก่อนเบิก)")
+            row.add(ERROR, "C357", f"รหัส {code} เป็นอุปกรณ์คนพิการ ส่ง e-Claim จะติด C 357 (เบิกใน e-Claim ได้เฉพาะหน่วยบริการ"
+                                   " ในเขต กทม.) ให้บันทึกในโปรแกรมอุปกรณ์คนพิการ และผู้ป่วยยังไม่อยู่ในทะเบียนคนพิการ (ท.74)")
+        elif is_disabled_device(code):
+            row.add(ERROR, "C357", f"รหัส {code} เป็นอุปกรณ์คนพิการ ส่ง e-Claim จะติด C 357 (เบิกใน e-Claim ได้เฉพาะหน่วยบริการ"
+                                   " ในเขต กทม.) ให้บันทึกในโปรแกรมอุปกรณ์คนพิการแทน")
         if not row.extra["authen"]:
             row.add(WARN, "NO_AUTHEN", "ไม่มี AuthenCode (Claim Code) ของ visit นี้")
         if billed and row.extra["web"]:

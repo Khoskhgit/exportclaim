@@ -8,6 +8,7 @@ from typing import Callable, Iterable, Sequence
 
 from . import nhso18
 from .nhso18 import INCOME, PttypeGroups, Visit, lit, lit_list, num
+from .ppfs_instrument import DISABLED_SQL
 from .validate import text
 
 Select = Callable[[str], list[dict]]
@@ -208,6 +209,11 @@ def checks(q: Select, rcm: str, rows: list[dict]) -> dict[str, dict]:
     hn_sql = lambda key, table, col: (f"SELECT oo.{key} k, oo.hn item FROM opitemrece oo JOIN {table} x ON x.{col}=oo.{key} "
                                       f"WHERE oo.{key} IN ({{ids}}) AND oo.hn<>x.hn")
     other_hn = flag(hn_sql("vn", "ovst", "vn"), hn_sql("an", "ipt", "an"))
+    # Disability devices come back C 357 from e-Claim: only Bangkok units claim them there (see ppfs_instrument).
+    dis_sql = lambda key: (f"SELECT oo.{key} k, CONCAT_WS(' ',d.nhso_adp_code,d.name) item FROM opitemrece oo "
+                           f"JOIN s_drugitems d ON d.icode=oo.icode WHERE oo.{key} IN ({{ids}}) AND IFNULL(oo.qty,0)<>0 "
+                           f"AND d.nhso_adp_type_id=2 AND d.nhso_adp_code {DISABLED_SQL}")
+    disabled_device = flag(dis_sql("vn"), dis_sql("an"))
     screen = {r["k"]: r["item"] for r in q(
         "SELECT vn k, CASE WHEN bw>999 THEN 'บันทึกน้ำหนักผิดพลาด' WHEN temperature>999 THEN 'บันทึกอุณหภูมิผิดพลาด' "
         "WHEN bps>999 OR bpd>999 THEN 'บันทึก BP ผิดพลาด' WHEN pulse>999 THEN 'บันทึกชีพจรผิดพลาด' "
@@ -261,6 +267,9 @@ def checks(q: Select, rcm: str, rows: list[dict]) -> dict[str, dict]:
             add(e, "OTHER_HN", "พบ HN อื่นในรายการ")
         if round(num(r.get("money_hosxp")), 2) != round(num(r.get("money_total")), 2):
             add(w, "MONEY_MISMATCH", "ยอดค่าใช้จ่ายไม่ตรงกับรายการ")
+        if k in disabled_device and text(r.get("maininscl")) in ("UCS", "WEL"):
+            add(e, "C357", "มีค่าอุปกรณ์คนพิการ จะติด C 357 (หน่วยบริการนอก กทม. ต้องบันทึกในโปรแกรมอุปกรณ์คนพิการ)",
+                disabled_device[k])
         if k in qty_zero:
             add(w, "QTY_ZERO", "รายการจำนวน 0 ส่งเบิกเป็น 0 บาท แต่ HOSxP คิดเงิน (แก้จำนวนใน HOSxP)", qty_zero[k])
         if k in drug_missing:
