@@ -132,7 +132,9 @@ function render() {
   $("result-count").textContent = state.loaded[state.view] ? `แสดง ${count.format(list.length)} จาก ${count.format(rows.length)} รายการ` : "";
   const picked = state.screen.filter((r) => state.selected.has(r.vn) && pickable(r)).length;
   $("excel").textContent = state.view === "screen" ? `ส่งออก NTIP Plus (เลือก ${count.format(picked)})` : "ส่งออก Excel ตรวจ Lab";
-  $("excel").disabled = !state.loaded[state.view] || (state.view === "screen" && !picked);
+  const why = !state.loaded[state.view] ? "ค้นหาก่อน แล้วจึงส่งออก" : state.view === "screen" && !picked ? "เลือกรายการในตารางก่อน" : "";
+  $("excel").disabled = Boolean(why);
+  $("excel").title = why;
   const all = $("select-all");
   if (all) {
     const shown = list.filter((r) => pickable(r) && !r.exported);

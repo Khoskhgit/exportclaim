@@ -70,7 +70,7 @@ function renderTotals() {
   const total = list.reduce((sum, v) => sum + Number(v.send_amount), 0);
   $("selected-count").textContent = `เลือก ${count.format(list.length)} คน`;
   $("selected-total").textContent = `ค่าใช้จ่าย ${baht.format(total)} บาท`;
-  $("export").disabled = list.length === 0;
+  explainDisabled($("export"), list.length ? "" : "เลือกรายการในตารางก่อน");
 }
 function render() { renderChips(); renderRows(); renderTotals(); }
 

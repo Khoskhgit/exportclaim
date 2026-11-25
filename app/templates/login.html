@@ -34,7 +34,7 @@
       {% if moph_ready %}
       <a class="ring-link" href="/auth/moph/start">เข้าสู่ระบบด้วย MOPH ID</a>
       {% else %}
-      <span class="ring-link disabled" title="ยังไม่ได้ตั้งค่า MOPH ID ใน .env">MOPH ID (ยังไม่ได้ตั้งค่า)</span>
+      <span class="ring-link disabled" title="ยังไม่ได้ตั้งค่า MOPH ID · ผู้ดูแลระบบ: ใส่ client ID และ secret key ใน .env">MOPH ID (ยังไม่ได้ตั้งค่า)</span>
       {% endif %}
       {% else %}
       {% if moph_ready %}
@@ -42,7 +42,7 @@
         <span>เข้าสู่ระบบด้วย</span><img src="/static/moph-id.png?v={{ v }}" alt="MOPH ID" width="120" height="38"></a>
       <p class="ring-sub">Health ID / Provider ID ของบุคลากรโรงพยาบาลนี้</p>
       {% else %}
-      <p class="ring-caps">ยังไม่ได้ตั้งค่า MOPH ID ให้ผู้ดูแลใส่ client ID และ secret key ใน .env</p>
+      <p class="ring-caps">ยังไม่ได้ตั้งค่า MOPH ID · แจ้งผู้ดูแลระบบให้ตั้งค่า</p>
       {% endif %}
       {% endif %}
     </section>

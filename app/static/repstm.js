@@ -435,17 +435,19 @@ async function setupPulls() {
   try {
     const status = await api("/api/repstm/mms");
     $("mms-run").disabled = !status.ready;
-    $("mms-note").textContent = status.ready ? `บัญชี MMS: ${status.user}` : "ยังไม่ได้ตั้ง MMS_USER / MMS_PASSWORD ใน .env";
+    $("mms-note").textContent = status.ready ? `บัญชี MMS: ${status.user}` : "ยังไม่ได้ตั้งบัญชี MMS ประกันสังคม · แจ้งผู้ดูแลระบบให้ตั้งค่า";
+    $("mms-note").title = status.ready ? "" : "ผู้ดูแลระบบ: MMS_USER / MMS_PASSWORD ใน .env";
     renderMms(status.months);
     await mms.start(status);
   } catch (err) { $("mms-note").textContent = err.message; }
   try {
     const status = await api("/api/repstm/aipn");
     $("aipn-run").disabled = !status.ready;
-    $("aipn-note").textContent = status.ready ? `บัญชี AIPN: ${status.user}` : "ยังไม่ได้ตั้ง AIPN_USER / AIPN_PASSWORD ใน .env";
+    $("aipn-note").textContent = status.ready ? `บัญชี AIPN: ${status.user}` : "ยังไม่ได้ตั้งบัญชี AIPN · แจ้งผู้ดูแลระบบให้ตั้งค่า";
+    $("aipn-note").title = status.ready ? "" : "ผู้ดูแลระบบ: AIPN_USER / AIPN_PASSWORD ใน .env";
     await aipn.start(status);
   } catch (err) { $("aipn-note").textContent = err.message; }
-  const missing = "ยังไม่ได้ตั้ง NHSO_USER / NHSO_PASSWORD / ECLAIM_TOTP_SECRET ใน .env";
+  const missing = "ยังไม่ได้ตั้งบัญชี e-Claim สปสช. · แจ้งผู้ดูแลระบบให้ตั้งค่า";
   try {
     const status = await api("/api/repstm/eclaim");
     $("eclaim-run").disabled = !status.ready;

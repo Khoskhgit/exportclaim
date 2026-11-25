@@ -104,7 +104,7 @@ function renderTotals() {
   const total = list.reduce((sum, r) => sum + Number(r.send_amount), 0);
   $("selected-count").textContent = `เลือก ${count.format(list.length)} คน`;
   $("selected-total").textContent = `ยอดส่ง ${baht.format(total)} บาท`;
-  $("export").disabled = list.length === 0;
+  explainDisabled($("export"), list.length ? "" : "เลือกรายการในตารางก่อน");
 }
 function render() { renderChips(); renderRows(); renderTotals(); }
 

@@ -62,7 +62,7 @@
   <div class="actions-inner">
     <div class="totals"><span class="step" aria-hidden="true">1</span><div><strong id="selected-count">เลือก 0 รายการ</strong><span id="selected-total" class="amount">ค่าใช้จ่าย 0.00 บาท</span></div></div>
     <span class="arrow" aria-hidden="true">→</span>
-    <button id="export" class="primary big" type="button" disabled>สร้าง ZIP 18 แฟ้ม</button>
+    <button id="export" class="primary big" type="button" data-why="ค้นหาแล้วเลือกรายการในตารางก่อน" disabled>สร้าง ZIP 18 แฟ้ม</button>
     <span class="or" aria-hidden="true">หรือ</span>
     <details id="fdh" class="fdh-group fdh-pop" hidden>
       <summary><span class="fdh-title">ส่ง FDH</span><span class="zone-tag" data-zone-tag>UAT ทดสอบ</span></summary>
@@ -95,8 +95,8 @@
         </div>
       </div>
     </details>
-    <span id="eclaim-off" class="fdh-off" hidden>ส่ง New e-Claim: ยังไม่ได้ตั้ง NHSO_USER / NHSO_PASSWORD ใน .env</span>
-    <span id="fdh-off" class="fdh-off" hidden>ส่ง FDH: ยังไม่ได้ตั้ง FDH_USER / FDH_PASSWORD ใน .env</span>
+    <span id="eclaim-off" class="fdh-off" hidden title="ผู้ดูแลระบบ: NHSO_USER / NHSO_PASSWORD ใน .env">ส่ง New e-Claim: ยังไม่ได้ตั้งบัญชี · แจ้งผู้ดูแลระบบให้ตั้งค่า</span>
+    <span id="fdh-off" class="fdh-off" hidden title="ผู้ดูแลระบบ: FDH_USER / FDH_PASSWORD ใน .env">ส่ง FDH: ยังไม่ได้ตั้งบัญชี · แจ้งผู้ดูแลระบบให้ตั้งค่า</span>
   </div>
 </footer>
 
@@ -117,7 +117,7 @@
 <dialog id="fdh-account-dialog">
   <form id="fdh-account-form" method="dialog">
     <h2>บัญชี FDH ของฉัน</h2>
-    <p class="muted-note">ใช้ส่ง FDH เมื่อเข้าสู่ระบบด้วยชื่อนี้ ไม่ว่าจะใช้เครื่องไหน ถ้าไม่ได้ตั้งจะใช้บัญชีกลางใน .env
+    <p class="muted-note">ใช้ส่ง FDH เมื่อเข้าสู่ระบบด้วยชื่อนี้ ไม่ว่าจะใช้เครื่องไหน ถ้าไม่ได้ตั้งจะใช้บัญชีกลางของโรงพยาบาล
       โปรแกรมเก็บเฉพาะชื่อผู้ใช้และค่า hash ของรหัสผ่าน และจะลองขอ Token จาก FDH ก่อนบันทึก</p>
     <p id="fdh-account-now" class="muted"></p>
     <label>ชื่อผู้ใช้ FDH<input name="user" autocomplete="off" required></label>

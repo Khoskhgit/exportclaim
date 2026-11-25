@@ -166,7 +166,7 @@ function renderTotals() {
   const list = selectedRows();
   $("selected-count").textContent = `เลือก ${count.format(list.length)} รายการ`;
   $("selected-total").textContent = `ค่าใช้จ่าย ${baht.format(list.reduce((s, r) => s + Number(r.money), 0))} บาท`;
-  $("export").disabled = list.length === 0;
+  explainDisabled($("export"), list.length ? "" : "เลือกรายการในตารางก่อน");
   $("fdh-send").disabled = $("fdh-prescreen").disabled = $("eclaim-send").disabled = list.length === 0 || state.fdhBusy;
 }
 function render() { renderChips(); renderRows(); renderTotals(); }

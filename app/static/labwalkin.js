@@ -33,6 +33,7 @@ function render() {
   $("result-count").textContent = state.period
     ? `แสดง ${count.format(list.length)} จาก ${count.format(state.rows.length)} รายการ · รวม ${baht.format(total)} บาท` : "";
   $("excel").disabled = !state.period;
+  $("excel").title = state.period ? "" : "ค้นหาก่อน แล้วจึงส่งออก";
 }
 
 // ------------------------------------------------------------- drawer

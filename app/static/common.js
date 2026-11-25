@@ -25,6 +25,24 @@ async function api(path, body) {
   return data;
 }
 
+// A main button that cannot be pressed yet says why, in a line just before it (read out with the button).
+// Pass "" to enable it. Buttons turned off only while they work ("กำลังสร้าง…") keep using .disabled.
+function explainDisabled(button, reason) {
+  button.disabled = Boolean(reason);
+  button.title = reason || "";
+  const id = `${button.id}-why`;
+  let hint = document.getElementById(id);
+  if (!hint) {
+    hint = el("span", { id, class: "why-hint", "aria-live": "polite" });
+    button.before(hint);
+    button.setAttribute("aria-describedby", id);
+  }
+  hint.textContent = reason || "";
+  hint.hidden = !reason;
+}
+// Buttons that start off say why from the first paint (the page script updates the reason after a search).
+document.querySelectorAll("button[data-why]:disabled").forEach((button) => explainDisabled(button, button.dataset.why));
+
 // ------------------------------------------------------------- messages
 // Errors and lasting warnings stay at the top until closed; short messages are toasts that fade out.
 function notice(message, kind = "error", lasting = false) {
