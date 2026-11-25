@@ -34,9 +34,9 @@ def adp(code, type_id=2, ucs=4400, start=None, expire="0000-00-00", active=None)
 ADP = {c: adp(c, ucs=u) for c, u in (("8902", 4400), ("8705", 250), ("8101", 0))}
 
 
-def data(items=(), web=(), web_visits=(), equipment=None, eclaim=None, adp_rows=None):
-    return {"items": list(items), "web": list(web), "web_visits": list(web_visits),
-            "equipment": equipment or {}, "eclaim": eclaim or {}, "adp": ADP if adp_rows is None else adp_rows}
+def data(items=(), web=(), web_visits=(), equipment=None, eclaim=None, adp_rows=None, registered=("000001",)):
+    return {"items": list(items), "web": list(web), "web_visits": list(web_visits), "equipment": equipment or {},
+            "eclaim": eclaim or {}, "adp": ADP if adp_rows is None else adp_rows, "registered": set(registered)}
 
 
 def codes(row):
@@ -86,8 +86,37 @@ def test_a_unit_price_over_the_ucs_price_is_a_warning():
     assert codes(row) == ([], ["OVER_UCS"])
     (row,) = check(data([item(qty=2, amount=8800)]))
     assert codes(row) == ([], [])
-    (row,) = check(data([item(code="8101", amount=99999)]))  # no UCS price in the table: nothing to compare
+    (row,) = check(data([item(code="8101", amount=99999)]))  # no UCS price in the table: UC does not pay it
+    assert codes(row) == (["UC_NOT_PAID"], [])
+
+
+def test_a_code_with_no_ucs_price_is_not_paid_by_uc():
+    rows = {c: adp(c, ucs=0) for c in ("8608", "9212", "9214")}
+    for code in rows:
+        (row,) = check(data([item(code=code, amount=800)], adp_rows=rows))
+        assert codes(row)[0] == ["UC_NOT_PAID"] and "OFC/LGO" in row.errors[0]["message"]
+    (row,) = check(data([item(code="8608", amount=800)], adp_rows={"8608": adp("8608", ucs=None)}))
+    assert codes(row)[0] == ["UC_NOT_PAID"]
+
+
+def test_a_disability_device_needs_the_registry():
+    (row,) = check(data([item()], registered=()))
+    assert codes(row) == ([], ["NOT_DISABLED"])
+    (row,) = check(data([item(code="8707", amount=600)], adp_rows={"8707": adp("8707", ucs=600)}, registered=()))
+    assert codes(row)[1] == ["NOT_DISABLED"]
+    (row,) = check(data([item(code="8705", amount=250)], registered=()))  # crutches are for anyone
     assert codes(row) == ([], [])
+    (row,) = check(data([item()]))
+    assert codes(row) == ([], [])
+
+
+def test_the_registry_is_read_only_for_disability_devices():
+    from app.ppfs_instrument import registered_disabled
+    seen = []
+    q = lambda sql: seen.append(sql) or [{"hn": "000001"}]
+    assert registered_disabled(q, ["000001", "", "000001"]) == {"000001"}
+    assert "person_deformed" in seen[0] and "'000001'" in seen[0]
+    assert registered_disabled(q, []) == set() and len(seen) == 1
 
 
 def test_project_code_is_saved_per_visit(tmp_path):
@@ -108,7 +137,7 @@ def test_project_store(tmp_path):
     assert store.projects("cervix", ["v1"]) == {}
 
 
-def test_disability_right_and_registry_are_not_used():
+def test_disability_right_is_not_used():
     (row,) = check(data([item()]))
     assert codes(row) == ([], []) and "deformed" not in row.extra and "disabled_right" not in row.extra
     (row,) = check(data([item(pttype_name="ผู้พิการ ในเขต")]))

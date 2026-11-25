@@ -12,6 +12,11 @@ Ported from the old program's "รายชื่อสิทธิผู้พ�
    web        the device recorded in the NHSO device web: rcmdb.equipment_service, or the Export-Equipment*.CSV
               imported on the PPFS page ("ตรวจสอบ"); it may be claimed twice, so it is a warning, and the CSV's
               เงินพึงได้ (Income) is compared with what HOSxP bills
+   UC price   a code whose UCS price in nhso_adp_code is 0 is not paid by UC (OFC/LGO only, e.g. 8608 knee support,
+              9212-9214 crown/bridge/pin): an error (the user's choice, 2026-11-25, after FY69 REP paid none of them)
+   disabled   a disability device (wheelchairs 89xx, 3-leg cane 8707) for a patient not in the disability registry
+              (person_deformed) is a warning: it needs the ท.74 registration and the device web (the hospital is outside
+              Bangkok); FY69 paid none of the 10 wheelchairs, 9 of them for unregistered patients (2026-11-25)
 One row per visit (the user's choice, 2026-11-19): each ADP code is checked on its own and kept in
 extra["parts"]; the row's key is VN|code+code. HOSxP is only read.
 """
@@ -35,6 +40,21 @@ KEY = "instrument"
 INSTRUMENT_TYPE = 2
 PROJECT_PATTERN = r"[A-Za-z0-9_\-]{1,15}"
 ITEM_FILTER = f"d.nhso_adp_type_id={INSTRUMENT_TYPE} AND IFNULL(d.nhso_adp_code,'')<>''"
+DISABLED_CODES = re.compile(r"89\d\d|8707")  # devices only for registered disabled people
+
+
+def is_disabled_device(code: str) -> bool:
+    return bool(DISABLED_CODES.fullmatch(text(code)))
+
+
+def registered_disabled(q: Select, hns: Iterable[str]) -> set[str]:
+    """The HNs in HOSxP's disability registry (person_deformed)."""
+    hns = sorted({h for h in hns if h})
+    if not hns:
+        return set()
+    return {text(r["hn"]) for r in q(f"""
+        SELECT DISTINCT p.patient_hn hn FROM person_deformed pd JOIN person p ON p.person_id=pd.person_id
+        WHERE p.patient_hn IN ({lit_list(hns)})""")}
 
 
 def instrument_icodes(q: Select, icodes: Iterable[str]) -> set[str]:
@@ -214,8 +234,10 @@ def fetch(q: Select, start: date, end: date, rcm: str, web: list[dict]) -> dict:
         for r in q(f"SELECT vn, GROUP_CONCAT(DISTINCT rep) rep FROM `{rcm}`.repdata "
                    f"WHERE vn IN ({lit_list(vns)}) AND IFNULL(errorcode,'')='' GROUP BY vn"):
             eclaim.setdefault(text(r["vn"]), {"rep": text(r["rep"]), "paid": ""})
+    disabled_hns = [text(r["hn"]) for r in items if is_disabled_device(text(r["code"]))]
     return {"items": items, "web_visits": web_visits, "web": web, "equipment": equipment, "eclaim": eclaim,
-            "adp": adp_codes(q, [text(r["code"]) for r in items] + [w["code"] for w in web])}
+            "adp": adp_codes(q, [text(r["code"]) for r in items] + [w["code"] for w in web]),
+            "registered": registered_disabled(q, disabled_hns)}
 
 
 def adp_codes(q: Select, codes: Iterable[str]) -> dict[str, dict]:
@@ -254,6 +276,8 @@ def adp_problems(row: Row, adp: dict | None, billed: bool) -> None:
         row.add(ERROR, "ADP_DATE", f"รหัส {code} หมดอายุ {expire.isoformat()} ก่อนวันรับบริการ")
     ucs = _money(adp.get("ucs"))
     row.extra["adp_ucs"] = f"{ucs:.2f}" if ucs > 0 else ""
+    if ucs <= 0:
+        row.add(ERROR, "UC_NOT_PAID", f"รหัส {code} ไม่มีราคา UCS ใน nhso_adp_code (UC ไม่จ่าย เบิกได้เฉพาะ OFC/LGO)")
     if billed and ucs > 0:
         unit = (row.amount / row.qty).quantize(Decimal("0.01"))
         if unit > ucs:
@@ -315,6 +339,9 @@ def check(data: dict, sent: dict[tuple[str, str], str] | None = None) -> list[Ro
             row.add(ERROR, "NO_ITEM", f"มีในเว็บบันทึกอุปกรณ์ แต่ไม่พบรายการ {code} ใน HOSxP (คีย์ค่าอุปกรณ์ก่อนส่ง)")
         self_paid_error(row)
         adp_problems(row, data.get("adp", {}).get(code), billed)
+        if is_disabled_device(code) and row.hn not in data.get("registered", set()):
+            row.add(WARN, "NOT_DISABLED", f"รหัส {code} เป็นอุปกรณ์คนพิการ แต่ผู้ป่วยไม่อยู่ในทะเบียนคนพิการ "
+                                          "(ขึ้นทะเบียน ท.74 และบันทึกในโปรแกรมอุปกรณ์คนพิการก่อนเบิก)")
         if not row.extra["authen"]:
             row.add(WARN, "NO_AUTHEN", "ไม่มี AuthenCode (Claim Code) ของ visit นี้")
         if billed and row.extra["web"]:
