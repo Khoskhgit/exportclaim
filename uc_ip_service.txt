@@ -1,0 +1,93 @@
+
+  Value := GetSQLIntegerData('select count(o.vn)'+
+'from ovst o '+
+'left outer join pttype pt on pt.pttype= o.pttype '+
+'where (o.vstdate between "'+ds1+'" and "'+ds2+'") and o.an is null '+
+'and (pt.pttype_spp_id in("3","4"))');
+
+
+Value := GetSQLIntegerData('select count(o.vn)'+
+'from ovst o '+
+'left outer join pttype pt on pt.pttype= o.pttype '+
+'where (o.vstdate between "'+ds1+'" and "'+ds2+'") and o.an is null '+
+'and (pt.pttype_spp_id ="2")');
+
+Value := GetSQLIntegerData('select count(o.vn)'+
+'from ovst o '+
+'left outer join pttype pt on pt.pttype= o.pttype '+
+'where (o.vstdate between "'+ds1+'" and "'+ds2+'") and o.an is null '+
+'and (pt.pttype_spp_id ="1")');
+
+Value := GetSQLIntegerData('select count(o.vn)'+
+'from ovst o '+
+'left outer join pttype pt on pt.pttype= o.pttype '+
+'where (o.vstdate between "'+ds1+'" and "'+ds2+'") and o.an is null '+
+'and (pt.pttype_spp_id ="7")');
+
+Value :=GetSQLIntegerData('select count(vn)'+
+'from ovst '+
+'where vstdate between "'+ds1+'" and "'+ds2+'" and an is null');
+
+Value :=GetSQLIntegerData('select count(distinct(hn))'+
+'from ovst '+
+'where vstdate between "'+ds1+'" and "'+ds2+'" and an is null');
+
+
+
+Value :=GetSQLIntegerData('select count(ip.an)'+
+'from ipt ip '+
+'left outer join pttype pt on pt.pttype=ip.pttype '+
+'where ip.dchdate between "'+ds1+'" and "'+ds2+'" and pt.pttype_spp_id in("3","4")');
+
+Value :=GetSQLIntegerData('select count(ip.an)'+
+'from ipt ip '+
+'left outer join pttype pt on pt.pttype=ip.pttype '+
+'where ip.dchdate between "'+ds1+'" and "'+ds2+'" and pt.pttype_spp_id="2"');
+
+Value :=GetSQLIntegerData('select count(ip.an)'+
+'from ipt ip '+
+'left outer join pttype pt on pt.pttype=ip.pttype '+
+'where ip.dchdate between "'+ds1+'" and "'+ds2+'" and pt.pttype_spp_id="2"');
+
+Value :=GetSQLIntegerData('select count(ip.an)'+
+'from ipt ip '+
+'left outer join pttype pt on pt.pttype=ip.pttype '+
+'where ip.dchdate between "'+ds1+'" and "'+ds2+'" and pt.pttype_spp_id="7"');
+
+
+Value := GetSQLIntegerData('select count(an)'+
+'from ipt '+
+'where dchdate between "'+ds1+'" and "'+ds2+'"');
+
+Value :=GetSQLIntegerData('select sum(admdate)'+
+'from an_stat '+
+'where dchdate between "'+ds1+'" and "'+ds2+'"');
+
+Value :=GetSQLIntegerData('select count(distinct(ov.hn))'+
+'from ovst ov '+
+'left outer join clinicmember cl on cl.hn=ov.hn '+
+'where ov.hn in(select hn from clinicmember where clinic in ("001","002"))'+
+'and ov.vstdate between "'+ds1+'" and "'+ds2+'"');
+
+
+Value :=GetSQLDoubleData('select sum(ip.adjrw)'+
+'from ipt ip '+
+'left outer join pttype pt on pt.pttype=ip.pttype '+
+'where ip.dchdate between "'+ds1+'" and "'+ds2+'" '+
+'and pt.pttype_spp_id in("3","4")');
+
+Value :=GetSQLDoubleData('select sum(ip.adjrw)'+
+'from ipt ip '+
+'left outer join pttype pt on pt.pttype=ip.pttype '+
+'where ip.dchdate between "'+ds1+'" and "'+ds2+'" '+
+'and pt.pttype_spp_id ="1"');
+
+Value :=GetSQLDoubleData('select sum(ip.adjrw)'+
+'from ipt ip '+
+'left outer join pttype pt on pt.pttype=ip.pttype '+
+'where ip.dchdate between "'+ds1+'" and "'+ds2+'" '+
+'and pt.pttype_spp_id ="7"');
+
+Value:= GetSQLDoubleData('select sum(adjrw)'+
+'from ipt '+
+'where dchdate between "'+ds1+'" and "'+ds2+'"');

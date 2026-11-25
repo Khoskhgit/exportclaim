@@ -17,3 +17,8 @@ Pasted *
 *.textClipping
 .claude/
 REP-STM/
+# Reports and web pages saved from e-Claim / SSOP may hold patient data or session tokens
+*.xls
+*.xlsx
+/*.html
+.npm_cache/
