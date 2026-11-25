@@ -199,6 +199,7 @@ async function runExport() {
 }
 
 async function search() {
+  if (dbBlocked()) return;
   const form = new FormData($("search"));
   const pttypes = [...document.querySelectorAll("#pttype-list input.one:checked")].map((i) => i.value);
   const body = { start: form.get("start"), end: form.get("end"), vn: form.get("vn").trim(), hn: form.get("hn").trim(), pttypes };
@@ -211,7 +212,7 @@ async function search() {
     $("empty").replaceChildren(...emptyState("ไม่พบรายการในช่วงนี้"));
     if (!data.z_ready) notice("ไม่มีตารางรหัส Z ที่เบิกได้ โปรแกรมจึงยังไม่ได้ตรวจ PDx รหัส Z นำเข้าไฟล์ได้ที่ส่วนประวัติการส่งออก", "warn");
     render();
-  } catch (err) { $("empty").replaceChildren(...emptyState(err.message, "!")); }
+  } catch (err) { $("empty").replaceChildren(...searchFailed(err)); }
 }
 
 async function loadHistory() {
@@ -237,19 +238,18 @@ async function start() {
     if (status.db_error) {
       setConnection(`เชื่อมต่อไม่ได้ (${status.db_host})`, false);
       notice(status.db_error);
-      $("pttype-label").textContent = "โหลดสิทธิไม่ได้";
       loadHistory();
       return;
     }
     if (!dbState) { setConnection("ยังไม่ได้ตั้งค่าฐานข้อมูล", false); return; }
-    setConnection(`${dbState.ok ? "HOSxP" : "ฐานข้อมูลไม่ครบ"} · ${status.db_host}`, dbState.ok);
+    setConnection(`${dbState.ok ? "HOSxP" : "ฐานข้อมูลไม่ครบ"} · ${status.db_host}`, dbState.ok, false);
     if (dbState.missing_tables.length) notice(`ไม่พบตาราง: ${dbState.missing_tables.join(", ")}`);
     if (dbState.missing_columns.length) notice(`ไม่พบคอลัมน์: ${dbState.missing_columns.join(", ")}`);
     if (dbState.optional_missing.some((name) => name.endsWith(".chi"))) notice("ไม่พบตาราง chi ตรวจการส่งซ้ำได้เฉพาะรายการที่ส่งออกจากโปรแกรมนี้ กรุณาตรวจ RCM_DB", "warn", true);
     if (dbState.user_can_write) notice("user ฐานข้อมูลนี้มีสิทธิ์เขียน ควรใช้ user ที่มีแค่ SELECT", "warn", true);
     const pttypes = await api("/api/pttypes");
     fillPttypes(pttypes);
-  } catch (err) { setConnection("เชื่อมต่อไม่ได้", false); notice(err.message); $("pttype-label").textContent = "โหลดสิทธิไม่ได้"; }
+  } catch (err) { setConnection("เชื่อมต่อไม่ได้", false); notice(err.message); }
   loadHistory();
 }
 

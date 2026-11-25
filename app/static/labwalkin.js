@@ -100,6 +100,7 @@ function period() {
 async function load() {
   const body = period();
   if (!body.start || !body.end) { notice("กรุณาเลือกช่วงวันที่"); return; }
+  if (dbBlocked()) return;
   const button = $("search").querySelector("button[type=submit]");
   button.disabled = true;
   showLoading("กำลังค้นหา…");
@@ -107,7 +108,7 @@ async function load() {
     const data = await api("/api/labwalkin", body);
     Object.assign(state, { rows: data.rows, hospitals: data.hospitals, filter: "all", period: body });
     render();
-  } catch (err) { notice(err.message); } finally { button.disabled = false; }
+  } catch (err) { if (DB_ERROR.test(err.message)) $("empty").replaceChildren(...searchFailed(err)); else notice(err.message); } finally { button.disabled = false; }
 }
 
 async function exportExcel() {

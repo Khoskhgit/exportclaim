@@ -6,7 +6,7 @@
 <title>รายการ PPFS · KHH Claim Sure</title>
 <link rel="stylesheet" href="/static/app.css?v={{ v }}">
 </head>
-<body>
+<body data-hosxp="search">
 {% set active = "ppfs" %}{% include "_top.html" %}
 <main>
   <div class="page-head"><h2>รายการ PPFS</h2><p>บริการสร้างเสริมสุขภาพและป้องกันโรค (PP Fee Schedule) ทุกสิทธิ · ตรวจ เลือก แล้วสร้าง ZIP 18 แฟ้มนำเข้าโปรแกรม e-Claim · <a href="/ppfs/summary">สรุปตามกองทุน (ส่งแล้ว / ชดเชย / ติด C / Deny)</a></p></div>
@@ -81,15 +81,24 @@
     <div class="totals"><span class="step" aria-hidden="true">1</span><div><strong id="selected-count">เลือก 0 รายการ</strong><span id="selected-total" class="amount">ยอดเบิก 0.00 บาท</span></div></div>
     <span class="arrow" aria-hidden="true">→</span>
     <button id="export" class="primary big" type="button" disabled>สร้าง ZIP 18 แฟ้ม (e-Claim)</button>
-    <div id="fdh" class="fdh-group" hidden>
-      <span class="fdh-title">FDH</span>
-      <a id="fdh-account" class="ghost fdh-account" href="/nhso18" title="ตั้งบัญชี FDH ที่หน้า 18 แฟ้ม สปสช."></a>
-      <label class="fdh-zone">ปลายทาง<select id="fdh-zone"><option value="uat">UAT (ทดสอบ)</option><option value="prod">PROD (ส่งจริง)</option></select></label>
-      <label class="inline"><input type="checkbox" id="fdh-phdb" checked> ส่งแฟ้ม PHDB ด้วย</label>
-      <button id="fdh-test" type="button" class="ghost">ทดสอบเชื่อมต่อ</button>
-      <button id="fdh-prescreen" type="button" class="big" disabled>PreScreen</button>
-      <button id="fdh-send" type="button" class="primary big" disabled>ส่ง FDH</button>
-    </div>
+    <span class="or" aria-hidden="true">หรือ</span>
+    <details id="fdh" class="fdh-group fdh-pop" hidden>
+      <summary><span class="fdh-title">ส่ง FDH</span><span class="zone-tag" data-zone-tag>UAT ทดสอบ</span></summary>
+      <div class="fdh-panel" role="group" aria-label="ส่ง FDH">
+        <div class="fdh-panel-head"><strong>ส่งรายการที่เลือกเข้า FDH</strong>
+          <a id="fdh-account" class="fdh-account" href="/nhso18" title="ตั้งบัญชี FDH ที่หน้า 18 แฟ้ม สปสช."></a></div>
+        <div class="fdh-panel-row">
+          <label class="fdh-zone">ปลายทาง<select id="fdh-zone"><option value="uat">UAT (ทดสอบ)</option><option value="prod">PROD (ส่งจริง)</option></select></label>
+          <label class="inline"><input type="checkbox" id="fdh-phdb" checked> ส่งแฟ้ม PHDB ด้วย</label>
+          <button id="fdh-test" type="button" class="ghost">ทดสอบเชื่อมต่อ</button>
+        </div>
+        <p class="zone-warn">PROD คือส่งเบิกจริง ตรวจด้วย PreScreen ก่อน</p>
+        <div class="fdh-panel-row fdh-panel-go">
+          <button id="fdh-prescreen" type="button" class="big" disabled>PreScreen</button>
+          <button id="fdh-send" type="button" class="primary big" disabled>ส่ง FDH</button>
+        </div>
+      </div>
+    </details>
     <span id="fdh-off" class="fdh-off" hidden>ส่ง FDH: ยังไม่ได้ตั้งบัญชี FDH (ตั้งที่หน้า 18 แฟ้ม สปสช. หรือ FDH_USER / FDH_PASSWORD ใน .env)</span>
   </div>
 </footer>

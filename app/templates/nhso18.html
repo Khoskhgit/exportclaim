@@ -6,7 +6,7 @@
 <title>18 แฟ้ม · KHH Claim Sure</title>
 <link rel="stylesheet" href="/static/app.css?v={{ v }}">
 </head>
-<body>
+<body data-hosxp="search">
 {% set active = "nhso18" %}{% include "_top.html" %}
 <main>
   <div class="page-head"><h2>ส่งออก 18 แฟ้ม สปสช.</h2><p>สำหรับอัปโหลดเข้า New e-Claim · ค้นหา ตรวจ เลือก แล้วสร้าง ZIP ของแฟ้ม TXT</p></div>
@@ -63,22 +63,38 @@
     <div class="totals"><span class="step" aria-hidden="true">1</span><div><strong id="selected-count">เลือก 0 รายการ</strong><span id="selected-total" class="amount">ค่าใช้จ่าย 0.00 บาท</span></div></div>
     <span class="arrow" aria-hidden="true">→</span>
     <button id="export" class="primary big" type="button" disabled>สร้าง ZIP 18 แฟ้ม</button>
-    <div id="fdh" class="fdh-group" hidden>
-      <span class="fdh-title">FDH</span>
-      <button id="fdh-account" type="button" class="ghost fdh-account" title="บัญชี FDH ที่ใช้ส่ง"></button>
-      <label class="fdh-zone">ปลายทาง<select id="fdh-zone"><option value="uat">UAT (ทดสอบ)</option><option value="prod">PROD (ส่งจริง)</option></select></label>
-      <label class="inline"><input type="checkbox" id="fdh-phdb" checked> ส่งแฟ้ม PHDB ด้วย</label>
-      <button id="fdh-test" type="button" class="ghost">ทดสอบเชื่อมต่อ</button>
-      <button id="fdh-prescreen" type="button" class="big" disabled>PreScreen</button>
-      <button id="fdh-send" type="button" class="primary big" disabled>ส่ง FDH</button>
-    </div>
-    <div id="eclaim" class="fdh-group" hidden>
-      <span class="fdh-title">New e-Claim</span>
-      <label class="fdh-zone">สิทธิ<select id="eclaim-inscl"><option value="">ทุกสิทธิ</option><option>UCS</option><option>OFC</option><option>LGO</option><option>SSS</option><option>NHS</option></select></label>
-      <label class="inline"><input type="checkbox" id="eclaim-dup"> นำเข้าซ้ำ</label>
-      <button id="eclaim-test" type="button" class="ghost">ทดสอบ Token</button>
-      <button id="eclaim-send" type="button" class="primary big" disabled>ส่ง New e-Claim</button>
-    </div>
+    <span class="or" aria-hidden="true">หรือ</span>
+    <details id="fdh" class="fdh-group fdh-pop" hidden>
+      <summary><span class="fdh-title">ส่ง FDH</span><span class="zone-tag" data-zone-tag>UAT ทดสอบ</span></summary>
+      <div class="fdh-panel" role="group" aria-label="ส่ง FDH">
+        <div class="fdh-panel-head"><strong>ส่งรายการที่เลือกเข้า FDH</strong>
+          <button id="fdh-account" type="button" class="ghost small fdh-account" title="บัญชี FDH ที่ใช้ส่ง"></button></div>
+        <div class="fdh-panel-row">
+          <label class="fdh-zone">ปลายทาง<select id="fdh-zone"><option value="uat">UAT (ทดสอบ)</option><option value="prod">PROD (ส่งจริง)</option></select></label>
+          <label class="inline"><input type="checkbox" id="fdh-phdb" checked> ส่งแฟ้ม PHDB ด้วย</label>
+          <button id="fdh-test" type="button" class="ghost">ทดสอบเชื่อมต่อ</button>
+        </div>
+        <p class="zone-warn">PROD คือส่งเบิกจริง ตรวจด้วย PreScreen ก่อน</p>
+        <div class="fdh-panel-row fdh-panel-go">
+          <button id="fdh-prescreen" type="button" class="big" disabled>PreScreen</button>
+          <button id="fdh-send" type="button" class="primary big" disabled>ส่ง FDH</button>
+        </div>
+      </div>
+    </details>
+    <details id="eclaim" class="fdh-group fdh-pop" hidden>
+      <summary><span class="fdh-title">ส่ง New e-Claim</span></summary>
+      <div class="fdh-panel" role="group" aria-label="ส่ง New e-Claim">
+        <div class="fdh-panel-head"><strong>ส่งรายการที่เลือกเข้า New e-Claim (ส่งจริง)</strong></div>
+        <div class="fdh-panel-row">
+          <label class="fdh-zone">สิทธิ<select id="eclaim-inscl"><option value="">ทุกสิทธิ</option><option>UCS</option><option>OFC</option><option>LGO</option><option>SSS</option><option>NHS</option></select></label>
+          <label class="inline"><input type="checkbox" id="eclaim-dup"> นำเข้าซ้ำ</label>
+          <button id="eclaim-test" type="button" class="ghost">ทดสอบ Token</button>
+        </div>
+        <div class="fdh-panel-row fdh-panel-go">
+          <button id="eclaim-send" type="button" class="primary big" disabled>ส่ง New e-Claim</button>
+        </div>
+      </div>
+    </details>
     <span id="eclaim-off" class="fdh-off" hidden>ส่ง New e-Claim: ยังไม่ได้ตั้ง NHSO_USER / NHSO_PASSWORD ใน .env</span>
     <span id="fdh-off" class="fdh-off" hidden>ส่ง FDH: ยังไม่ได้ตั้ง FDH_USER / FDH_PASSWORD ใน .env</span>
   </div>

@@ -496,6 +496,7 @@ async function setupEclaim() {
 }
 
 async function search() {
+  if (dbBlocked()) return;
   const form = $("search");
   const key = form.elements.key.value.trim();
   const body = {
@@ -512,7 +513,7 @@ async function search() {
     state.selected = new Set(data.rows.filter((r) => r.default_selected).map((r) => r.key));
     $("empty").replaceChildren(...emptyState("ไม่พบรายการในช่วงนี้"));
     render();
-  } catch (err) { $("empty").replaceChildren(...emptyState(err.message, "!")); }
+  } catch (err) { $("empty").replaceChildren(...searchFailed(err)); }
 }
 
 async function loadHistory() {
@@ -540,7 +541,7 @@ async function start() {
   $("groups").replaceChildren(...Object.keys(GROUPS).map((g) => el("button", { type: "button", onclick: () => pickGroup(g) }, g)));
   try {
     const status = await api("/api/status");
-    if (status.db_error) { setConnection(`เชื่อมต่อไม่ได้ (${status.db_host})`, false); notice(status.db_error); return; }
+    if (status.db_error) { notice(status.db_error); setConnection(`เชื่อมต่อไม่ได้ (${status.db_host})`, false); return; }
     if (!status.database) { setConnection("ยังไม่ได้ตั้งค่าฐานข้อมูล", false); return; }
     setConnection(`HOSxP · ${status.db_host}`, true);
     state.pttypes = await api("/api/nhso18/pttypes");

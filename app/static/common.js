@@ -11,6 +11,8 @@ function el(tag, props = {}, ...children) {
     else node.setAttribute(key, value);
   }
   for (const child of children) if (child !== null && child !== undefined && child !== false) node.append(child);
+  // A table row that opens details is reachable with Tab and opens with Enter / Space (see the keydown below).
+  if (tag === "tr" && typeof props.onclick === "function") { node.tabIndex = 0; node.classList.add("row-link"); }
   return node;
 }
 
@@ -58,8 +60,55 @@ function confirmDialog(title, content, okLabel) {
   });
 }
 
-function setConnection(text, ok) {
+// blocking: HOSxP cannot be searched (false for a reachable database that only misses some columns).
+function setConnection(text, ok, blocking = !ok) {
   $("connection").replaceChildren(el("span", { class: `dot ${ok ? "ok" : "bad"}`, "aria-hidden": "true" }), el("span", {}, text));
+  $("connection").title = text;
+  dbProblem = blocking ? text : "";
+  if (blocking) markDbDown();
+}
+
+// ------------------------------------------------------- HOSxP down
+// When HOSxP cannot be reached the pages that search it say so where the user looks (the rights box and the
+// table), and a search shows the same state instead of a misleading "pick the rights" error.
+let dbProblem = "";
+const DB_ERROR = /\((2003|2005|2006|2013)\)|Can't connect|Lost connection|เชื่อมต่อฐาน|ต่อฐาน HOSxP/i;
+function dbDownState() {
+  const retry = el("button", { type: "button", class: "primary", onclick: async () => {
+    retry.disabled = true; retry.textContent = "กำลังตรวจ…";
+    try {
+      const status = await api("/api/status");
+      if (status.database && !status.db_error) { window.location.reload(); return; }
+      notice(status.db_error || "ยังเชื่อมต่อ HOSxP ไม่ได้");
+    } catch (err) { notice(err.message); }
+    retry.disabled = false; retry.textContent = "ลองเชื่อมต่อใหม่";
+  } }, "ลองเชื่อมต่อใหม่");
+  return [el("div", { class: "empty-icon", "data-icon": "error", "aria-hidden": "true" }),
+    el("div", { class: "empty-title" }, "ต่อฐานข้อมูล HOSxP ไม่ได้ จึงยังค้นหาไม่ได้"),
+    el("div", { class: "empty-hint" }, `${dbProblem || "เชื่อมต่อไม่ได้"} · ตรวจว่าเครื่อง server HOSxP เปิดอยู่และเครือข่ายใช้ได้ แล้วกดลองใหม่`),
+    el("div", { class: "empty-action" }, retry)];
+}
+function markDbDown() {
+  const label = $("pttype-label");
+  if (label && !document.querySelector("#pttype-list input")) {
+    label.textContent = "โหลดสิทธิไม่ได้ (ต่อ HOSxP ไม่ได้)";
+    $("pttypes")?.classList.add("is-error");
+  }
+  const empty = $("empty"), rows = $("rows");
+  if (empty && document.body.dataset.hosxp === "search" && (!rows || !rows.children.length)) { empty.hidden = false; empty.replaceChildren(...dbDownState()); }
+}
+// Call at the start of a HOSxP search: true (and the state shown) when it cannot run.
+function dbBlocked() {
+  if (!dbProblem) return false;
+  const empty = $("empty");
+  if (empty) { $("rows")?.replaceChildren(); empty.hidden = false; empty.replaceChildren(...dbDownState()); }
+  else notice(`ต่อฐานข้อมูล HOSxP ไม่ได้: ${dbProblem}`);
+  return true;
+}
+// The empty-state for a failed search: the HOSxP-down state for a connection error, else the message.
+function searchFailed(err) {
+  if (DB_ERROR.test(err.message)) { dbProblem = dbProblem || err.message; return dbDownState(); }
+  return emptyState(err.message, "!");
 }
 
 // ---------------------------------------------------------------- cards
@@ -371,3 +420,82 @@ document.querySelectorAll(".menu .menu-links").forEach((menu) => {
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && menu.open) { menu.open = false; menu.querySelector("summary").focus(); } });
   menu.querySelectorAll("a").forEach((a) => a.addEventListener("click", () => { menu.open = false; }));
 });
+
+// ------------------------------------------------- keyboard: rows and the drawer
+document.addEventListener("keydown", (e) => {
+  const row = e.target;
+  if (row instanceof HTMLTableRowElement && row.classList.contains("row-link") && (e.key === "Enter" || e.key === " ")) {
+    e.preventDefault(); row.click();
+  }
+});
+// When the drawer opens, focus moves into it and Tab stays inside; when it closes, focus goes back to the row
+// it came from (found again by position, as the table is drawn anew on open and close).
+(() => {
+  const drawer = $("drawer");
+  if (!drawer) return;
+  let back = null;
+  const rowPlace = (node) => {
+    const row = node?.closest?.("tr.row-link");
+    const body = row?.parentElement;
+    return row && body?.id ? { body: body.id, index: [...body.rows].indexOf(row) } : null;
+  };
+  document.addEventListener("pointerdown", (e) => { if (drawer.hidden) back = rowPlace(e.target); }, true);
+  document.addEventListener("keydown", (e) => { if (drawer.hidden && (e.key === "Enter" || e.key === " ")) back = rowPlace(e.target); }, true);
+  new MutationObserver(() => {
+    if (!drawer.hidden) {
+      if (!drawer.contains(document.activeElement)) $("drawer-close")?.focus({ preventScroll: true });
+      return;
+    }
+    const place = back; back = null;
+    const row = place && $(place.body)?.rows[place.index];
+    if (row && (!document.activeElement || document.activeElement === document.body || drawer.contains(document.activeElement))) row.focus();
+  }).observe(drawer, { attributes: true, attributeFilter: ["hidden"] });
+  drawer.setAttribute("role", "dialog");
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !drawer.hidden && !document.querySelector("dialog[open]")) $("drawer-close")?.click();
+  });
+  drawer.addEventListener("keydown", (e) => {
+    if (e.key !== "Tab") return;
+    const items = [...drawer.querySelectorAll("button, a[href], input, select, textarea, summary, [tabindex]:not([tabindex='-1'])")]
+      .filter((n) => !n.disabled && n.offsetParent !== null);
+    if (!items.length) return;
+    const first = items[0], last = items[items.length - 1];
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  });
+})();
+
+// ------------------------------------------- footer send panels (FDH / New e-Claim)
+// One open at a time; they close on a click outside (not while a confirm dialog is up), or Escape.
+document.querySelectorAll(".fdh-pop").forEach((pop) => {
+  const zone = pop.querySelector("select[id$='-zone']"), tag = pop.querySelector("[data-zone-tag]");
+  const mark = () => {
+    const prod = zone?.value === "prod";
+    pop.classList.toggle("prod", prod);
+    if (tag) tag.textContent = prod ? "PROD ส่งจริง" : "UAT ทดสอบ";
+  };
+  zone?.addEventListener("change", mark); mark();
+  pop.addEventListener("toggle", () => {
+    if (pop.open) document.querySelectorAll(".fdh-pop[open]").forEach((other) => { if (other !== pop) other.open = false; });
+  });
+  document.addEventListener("click", (e) => {
+    if (pop.open && !pop.contains(e.target) && !e.target.closest("dialog") && !document.querySelector("dialog[open]")) pop.open = false;
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && pop.open && !document.querySelector("dialog[open]")) { pop.open = false; pop.querySelector("summary").focus(); }
+  });
+});
+
+// ------------------------------------------------ main menu on narrow screens
+// Below 900px the menu folds behind one button that names the current page; it closes after a link or on Escape.
+(() => {
+  const toggle = $("menu-toggle"), top = toggle?.closest(".top");
+  if (!toggle) return;
+  const current = document.querySelector("#main-menu a[aria-current=page]");
+  if (current) toggle.querySelector(".menu-toggle-text").textContent = current.textContent.replace("↗", "").trim();
+  const set = (open) => { top.classList.toggle("menu-open", open); toggle.setAttribute("aria-expanded", String(open)); };
+  toggle.onclick = () => set(!top.classList.contains("menu-open"));
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && top.classList.contains("menu-open")) { set(false); toggle.focus(); } });
+  document.addEventListener("click", (e) => { if (top.classList.contains("menu-open") && !top.contains(e.target)) set(false); });
+  $("main-menu").querySelectorAll("a").forEach((a) => a.addEventListener("click", () => set(false)));
+})();

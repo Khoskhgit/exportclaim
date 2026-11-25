@@ -264,7 +264,7 @@ function renderRules() {
 
 async function search() {
   const form = $("search");
-  if (!form.reportValidity()) return;
+  if (!form.reportValidity() || dbBlocked()) return;
   clearNotices();
   showLoading("กำลังค้นหาและตรวจข้อมูล…");
   try {
@@ -272,7 +272,7 @@ async function search() {
     state.rows = data.rows;
     const keys = new Set(state.rows.filter(selectable).map((r) => r.key));
     [...state.selected].forEach((k) => { if (!keys.has(k)) state.selected.delete(k); });
-  } catch (err) { notice(err.message); }
+  } catch (err) { if (DB_ERROR.test(err.message)) { state.rows = []; render(); $("empty").replaceChildren(...searchFailed(err)); return; } notice(err.message); }
   render();
 }
 

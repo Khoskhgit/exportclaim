@@ -227,6 +227,7 @@ function period() {
 async function load(quiet = false) {
   const body = quiet && state.period ? state.period : period();
   if (!body.start || !body.end) { notice("กรุณาเลือกช่วงวันที่"); return; }
+  if (dbBlocked()) return;
   const button = $("search").querySelector("button[type=submit]");
   button.disabled = true;
   try {

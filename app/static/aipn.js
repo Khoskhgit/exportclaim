@@ -248,6 +248,7 @@ async function runExport() {
 }
 
 async function search() {
+  if (dbBlocked()) return;
   const form = new FormData($("search"));
   const pttypes = [...document.querySelectorAll("#pttype-list input.one:checked")].map((i) => i.value);
   const body = { start: form.get("start"), end: form.get("end"), an: form.get("an").trim(), pttypes };
@@ -261,7 +262,7 @@ async function search() {
     if (!$("session").value && data.next_session) $("session").value = data.next_session;
     $("empty").replaceChildren(...emptyState("ไม่พบรายการในช่วงนี้"));
     render();
-  } catch (err) { $("empty").replaceChildren(...emptyState(err.message, "!")); }
+  } catch (err) { $("empty").replaceChildren(...searchFailed(err)); }
 }
 
 async function loadHistory() {
@@ -283,13 +284,13 @@ async function start() {
   try {
     const status = await api("/api/status");
     for (const problem of status.settings_problems) notice(problem);
-    if (status.db_error) { setConnection(`เชื่อมต่อไม่ได้ (${status.db_host})`, false); notice(status.db_error); $("pttype-label").textContent = "โหลดสิทธิไม่ได้"; loadHistory(); return; }
+    if (status.db_error) { setConnection(`เชื่อมต่อไม่ได้ (${status.db_host})`, false); notice(status.db_error); loadHistory(); return; }
     if (!status.database) { setConnection("ยังไม่ได้ตั้งค่าฐานข้อมูล", false); return; }
     setConnection(`HOSxP · ${status.db_host}`, true);
     if (status.database.user_can_write) notice("user ฐานข้อมูลนี้มีสิทธิ์เขียน ควรใช้ user ที่มีแค่ SELECT", "warn", true);
     const pttypes = await api("/api/aipn/pttypes");
     fillPttypes(pttypes);
-  } catch (err) { setConnection("เชื่อมต่อไม่ได้", false); notice(err.message); $("pttype-label").textContent = "โหลดสิทธิไม่ได้"; }
+  } catch (err) { setConnection("เชื่อมต่อไม่ได้", false); notice(err.message); }
   loadHistory();
 }
 
