@@ -1105,3 +1105,18 @@ button,input,select,textarea{font-family:inherit}
 .top .user-box button.ghost:hover:not(:disabled){background:#fbcfe8;border-color:#f5d0e1}
 .sidebar{border-right-color:#f5d0e1}
 .side-brand{min-height:40px}
+
+/* UI step 12 (2026-11-25): the sidebar in a deep pink gradient, #c23a76 at the top to #8e2449 at the bottom, white text.
+   White passes on both ends (5.1:1 and 8.4:1); hover darkens instead of lightening so it keeps passing; the open page is a
+   white pill with #8e2449 text (8.4:1). */
+.sidebar{background:linear-gradient(160deg,#c23a76 0%,#a92e62 50%,#8e2449 100%);border-right:0;color:#fff}
+.side-brand h1,.side-brand p{color:#fff}
+.side-brand .logo{background:#fff;color:#8e2449;box-shadow:none}
+.nav-group summary{color:#fff;font-weight:600}
+.nav-group summary:hover{background:#00000026;color:#fff}
+.nav-list a,.nav-list a .nav-icon{color:#fff}
+.nav-list a:hover{background:#00000026;color:#fff}
+.nav-list a[aria-current=page]{background:#fff;color:#8e2449;box-shadow:0 1px 3px #3d002433}
+.nav-list a[aria-current=page] .nav-icon{color:#8e2449}
+.sidebar :focus-visible{box-shadow:0 0 0 2px #fff}
+.sidebar{scrollbar-color:#ffffff66 transparent}
