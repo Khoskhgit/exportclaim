@@ -1075,3 +1075,17 @@ tr.picked td,tbody tr.current td{background:var(--pink-tint)}
 body{font-family:"Prompt","Sarabun","Noto Sans Thai","Leelawadee UI",Tahoma,system-ui,sans-serif}
 button,input,select,textarea{font-family:inherit}
 .notice-close{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;font-size:var(--text-xl)}  /* Prompt draws a very small multiplication sign */
+
+/* UI step 10c (2026-11-25): a lighter sidebar - soft pink instead of wine. Contrast on #fce7f3: items #463a41 9.2:1,
+   group labels #9d174d 6.7:1, hospital name in dark gold #7c5a12 5.4:1; hover #fbcfe8 keeps 5.7:1 and up. */
+.sidebar{background:linear-gradient(180deg,#fce7f3 0%,#fdf2f8 100%);border-right:1px solid var(--line);color:var(--muted)}
+.side-brand h1{color:var(--ink)}
+.side-brand p{color:#7c5a12}
+.side-brand .logo{box-shadow:0 0 0 2px #c99a2e55}
+.nav-group summary{color:#9d174d}
+.nav-group summary:hover{background:#fbcfe8;color:#500724}
+.nav-list a{color:var(--muted)}
+.nav-list a .nav-icon{color:#be185d}
+.nav-list a:hover{background:#fbcfe8;color:#500724}
+.nav-list a[aria-current=page]{background:#fff;color:var(--brand-darker);box-shadow:inset 3px 0 0 var(--gold),0 1px 3px #9d174d1f}
+.sidebar :focus-visible{box-shadow:var(--focus-ring)}
