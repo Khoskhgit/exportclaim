@@ -87,7 +87,7 @@ async function load() {
     const data = await api("/api/approve/list", { start: form.elements.start.value, end: form.elements.end.value });
     state.rows = data.rows;
     $("pttypes").textContent = data.pttypes.join(", ");
-    if (data.db_error) notice(data.db_error, "warn");
+    if (data.db_error) notice(data.db_error);
     renderHistory(data.uploads);
   } catch (err) { notice(err.message); }
   render();

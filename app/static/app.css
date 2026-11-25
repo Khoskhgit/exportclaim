@@ -304,7 +304,7 @@ dl.sum{display:grid;grid-template-columns:auto 1fr;gap:4px 16px;margin:12px 0 0;
 dl.sum dt{color:var(--muted)}dl.sum dd{margin:0;font-weight:600;font-variant-numeric:tabular-nums}
 
 /* --------------------------------------------------------------- login: a ring of bars that sweeps while waiting */
-.login-page{min-height:100vh;margin:0;padding:24px 16px;background:#232a3a;color:#e8eef8;display:grid;place-items:center}
+.login-page{min-height:100vh;min-height:100dvh;margin:0;padding:24px 16px;background:#232a3a;color:#e8eef8;display:grid;place-items:center}
 .ring-login{width:100%;max-width:none;margin:0;padding:0;display:grid;justify-items:center;gap:12px;background:none}
 .ring-stage{--size:min(560px,94vw);position:relative;width:var(--size);height:var(--size);display:grid;place-items:center}
 .ring{position:absolute;inset:0}
@@ -789,3 +789,16 @@ button.primary:disabled{background:var(--line);border-color:var(--line);color:va
 @media (max-width:900px){.why-hint{max-width:none;width:100%}}
 /* 4) iOS Safari zooms into any field under 16px: keep fields at 16px on touch screens */
 @media (hover:none) and (pointer:coarse){input:not([type=checkbox]):not([type=radio]),select,textarea{font-size:16px!important}}
+
+/* UI step 6 (2026-11-25): targets and keyboard (ui-ux-pro-max audit) */
+.skip-link{position:absolute;left:8px;top:-60px;z-index:1000;padding:8px 16px;border-radius:var(--radius-sm);background:var(--accent);color:#fff;font-weight:600;text-decoration:none}
+.skip-link:focus{top:8px}
+main[tabindex="-1"]:focus,main[tabindex="-1"]:focus-visible{outline:none;box-shadow:none}
+.notice-close{min-width:24px;min-height:24px;display:inline-grid;place-items:center}
+@media (hover:none) and (pointer:coarse){
+  button,.multi summary,input:not([type=checkbox]):not([type=radio]),select{min-height:44px}
+  button.small,.presets button,.price-input,.care-as{min-height:40px}
+  .notice-close{min-width:40px;min-height:40px}
+  input[type=checkbox]{width:24px;height:24px}
+  td.check,th.check{width:48px}
+}

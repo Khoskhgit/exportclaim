@@ -150,7 +150,7 @@ async function load() {
     const data = await api("/api/disabled/list", { start: form.elements.start.value, end: form.elements.end.value });
     state.claims = data.claims;
     state.pttypes = data.pttypes;
-    if (data.db_error) notice(data.db_error, "warn");
+    if (data.db_error) notice(data.db_error);
     renderHistory(data.uploads);
   } catch (err) { notice(err.message); } finally { button.disabled = false; }
   render();
