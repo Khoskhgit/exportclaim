@@ -939,3 +939,17 @@ dialog{border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(-
   .nav-list a{min-height:44px}
   .menu-toggle{width:44px;min-height:44px}
 }
+/* UI step 7b: the menu button also hides the sidebar on wide screens (remembered per browser, common.js) */
+@media (min-width:1024px){
+  .menu-toggle{display:inline-grid;place-items:center;flex:none;order:-1;width:36px;min-height:36px;padding:0;border-radius:var(--radius-sm);color:var(--muted);background:transparent;border:1px solid transparent;box-shadow:none}
+  .menu-toggle:hover:not(:disabled){background:var(--hover);color:var(--ink)}
+  .menu-toggle-bars{position:relative;display:block;width:16px;height:2px;border-radius:2px;background:currentColor}
+  .menu-toggle-bars::before,.menu-toggle-bars::after{content:"";position:absolute;left:0;display:block;width:16px;height:2px;border-radius:2px;background:currentColor}
+  .menu-toggle-bars::before{top:-5px}.menu-toggle-bars::after{top:5px}
+  .top{padding-left:16px}
+  .sidebar{transition:transform var(--dur-move) var(--ease),visibility 0s linear 0s}
+  .side-collapsed .sidebar{transform:translateX(-100%);visibility:hidden;transition:transform var(--dur-move) var(--ease),visibility 0s linear var(--dur-move)}
+  .side-collapsed .sidebar ~ .top{margin-left:0}
+  .side-collapsed .sidebar ~ .notices,.side-collapsed .sidebar ~ main{margin-left:auto}
+  .side-collapsed .sidebar ~ .actions{left:0}
+}

@@ -511,9 +511,22 @@ document.querySelectorAll(".fdh-pop").forEach((pop) => {
     if (backdrop) backdrop.hidden = !open;
     if (open) (side.querySelector("a[aria-current=page]") || side.querySelector("a"))?.focus({ preventScroll: true });
   };
-  toggle.onclick = () => set(!isOpen());
+  // On wide screens the same button hides or shows the sidebar, and the choice is remembered on this browser.
+  const wide = matchMedia("(min-width:1024px)");
+  const collapsed = () => document.body.classList.contains("side-collapsed");
+  const showWide = () => {
+    toggle.setAttribute("aria-expanded", String(!collapsed()));
+    toggle.setAttribute("aria-label", collapsed() ? "แสดงเมนู" : "ซ่อนเมนู");
+  };
+  const setCollapsed = (on) => {
+    document.body.classList.toggle("side-collapsed", on);
+    try { localStorage.setItem("side-collapsed", on ? "1" : "0"); } catch (e) { /* private window: not remembered */ }
+    showWide();
+  };
+  if (wide.matches) showWide();
+  toggle.onclick = () => (wide.matches ? setCollapsed(!collapsed()) : set(!isOpen()));
   backdrop?.addEventListener("click", () => set(false));
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && isOpen()) { set(false); toggle.focus(); } });
   side.querySelectorAll("a").forEach((a) => a.addEventListener("click", () => set(false)));
-  matchMedia("(min-width:1024px)").addEventListener("change", (e) => { if (e.matches && isOpen()) set(false); });
+  wide.addEventListener("change", (e) => { if (isOpen()) set(false); if (e.matches) showWide(); else set(false); });
 })();

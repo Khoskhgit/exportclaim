@@ -22,6 +22,7 @@
 ] -%}
 {%- macro icon(name) %}<svg class="nav-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{{ icons[name] | safe }}</svg>{% endmacro -%}
 <a class="skip-link" href="#main">ข้ามไปที่เนื้อหา</a>
+<script>try{if(localStorage.getItem("side-collapsed")==="1")document.body.classList.add("side-collapsed")}catch(e){}</script>
 <aside class="sidebar" id="sidebar" aria-label="เมนู">
   <div class="side-brand">
     <div class="logo" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.8 4.5 5.6v6.1c0 4.6 3.1 8.2 7.5 9.5 4.4-1.3 7.5-4.9 7.5-9.5V5.6z"/><path d="m8.6 12.1 2.4 2.4 4.6-4.9"/></svg></div>
@@ -61,7 +62,7 @@
 </aside>
 <div class="sidebar-backdrop" id="sidebar-backdrop" hidden></div>
 <header class="top">
-  <button type="button" class="menu-toggle" id="menu-toggle" aria-expanded="false" aria-controls="sidebar" aria-label="เปิดเมนู">
+  <button type="button" class="menu-toggle" id="menu-toggle" aria-expanded="false" aria-controls="sidebar" aria-label="เปิดเมนู" title="ซ่อน/แสดงเมนู">
     <span class="menu-toggle-bars" aria-hidden="true"></span></button>
   <nav class="crumbs" aria-label="ตำแหน่งปัจจุบัน"><ol>
     {%- for gid, label, items in groups %}{% for key, href, text in items if key == active %}
