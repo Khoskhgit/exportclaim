@@ -1089,3 +1089,19 @@ button,input,select,textarea{font-family:inherit}
 .nav-list a:hover{background:#fbcfe8;color:#500724}
 .nav-list a[aria-current=page]{background:#fff;color:var(--brand-darker);box-shadow:inset 3px 0 0 var(--gold),0 1px 3px #9d174d1f}
 .sidebar :focus-visible{box-shadow:var(--focus-ring)}
+
+/* UI step 10d (2026-11-25): the top bar in the sidebar's soft pink, so both read as one frame around the page.
+   Crumb group #9d174d 6.7:1 and current page #24191e on #fce7f3; the pink line gives way to a plain border. */
+.top{background:#fce7f3f2;border-bottom:1px solid #f5d0e1}
+.top::after{display:none}
+.crumbs ol{color:#9d174d}
+.crumbs li+li::before{color:#f472b6}
+.crumbs li[aria-current=page]{color:var(--ink);font-weight:600}
+.menu-toggle{color:#9d174d}
+.menu-toggle:hover:not(:disabled){background:#fbcfe8;color:#500724}
+.top .connection{background:#fff;border-color:#f5d0e1}
+.top .avatar{background:#fff;border-color:#f5d0e1;color:var(--brand-darker)}
+.top .user-box button.ghost{background:#fff;border-color:#f5d0e1}
+.top .user-box button.ghost:hover:not(:disabled){background:#fbcfe8;border-color:#f5d0e1}
+.sidebar{border-right-color:#f5d0e1}
+.side-brand{min-height:40px}
