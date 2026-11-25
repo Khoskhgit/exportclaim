@@ -806,3 +806,136 @@ main[tabindex="-1"]:focus,main[tabindex="-1"]:focus-visible{outline:none;box-sha
   input[type=checkbox]{width:24px;height:24px}
   td.check,th.check{width:48px}
 }
+
+/* ================================================================ UI step 7 (2026-11-25): sidebar layout, shadcn/ui look
+   Neutral zinc surfaces, 1px borders, small shadows, 8-12px radii; the green stays as the one primary colour.
+   Sidebar menu grouped by fund (templates/_top.html); below 1024px it slides in from the left (common.js). */
+:root{
+  --bg:#fff;--panel:#fff;--panel-2:#fafafa;--ink:#09090b;--muted:#52525b;--faint:#71717a;--line:#e4e4e7;--line-2:#f4f4f5;
+  --hover:#f4f4f5;--ring:#0d6b5580;--side-w:256px;
+  --radius:12px;--radius-sm:8px;--shadow:0 1px 2px #0000000d;--shadow-lg:0 10px 15px -3px #0000001a,0 4px 6px -4px #0000001a;
+  --focus-ring:0 0 0 3px var(--ring);
+}
+body{background:var(--bg)}
+
+/* sidebar */
+.sidebar{position:fixed;inset:0 auto 0 0;z-index:30;width:var(--side-w);display:flex;flex-direction:column;background:var(--panel-2);border-right:1px solid var(--line);overflow-y:auto;overscroll-behavior:contain}
+.side-brand{display:flex;align-items:center;gap:8px;padding:12px 12px;margin:8px 8px 4px;border-radius:var(--radius-sm)}
+.side-brand .logo{width:32px;height:32px;border-radius:var(--radius-sm);background:var(--accent);color:#fff;border:0;box-shadow:none}
+.side-brand-text{min-width:0}
+.side-brand h1{font-size:var(--text-sm);font-weight:600;color:var(--ink);line-height:1.3}
+.side-brand p{margin:0;font-size:var(--text-xs);color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.side-nav{display:grid;gap:4px;padding:4px 8px 24px}
+.nav-group summary{list-style:none;display:flex;align-items:center;justify-content:space-between;min-height:32px;padding:0 8px;border-radius:var(--radius-sm);font-size:var(--text-xs);font-weight:500;color:var(--faint);cursor:pointer}
+.nav-group summary::-webkit-details-marker{display:none}
+.nav-group summary::after{content:"";width:16px;height:16px;background:currentColor;-webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m9 6 6 6-6 6'/%3E%3C/svg%3E") center/contain no-repeat;mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m9 6 6 6-6 6'/%3E%3C/svg%3E") center/contain no-repeat;transition:transform var(--dur-fast) var(--ease)}
+.nav-group[open] summary::after{transform:rotate(90deg)}
+.nav-group summary:hover{color:var(--ink);background:var(--hover)}
+.nav-list{display:grid;gap:2px;padding:2px 0 8px}
+.nav-list a{display:flex;align-items:center;gap:8px;min-height:36px;padding:0 8px;border-radius:var(--radius-sm);color:var(--muted);text-decoration:none;font-size:var(--text-sm);font-weight:500}
+.nav-list a span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.nav-list a:hover{background:var(--hover);color:var(--ink)}
+.nav-list a[aria-current=page]{background:var(--accent-soft);color:var(--accent);font-weight:600}
+.nav-icon{flex:none}
+.sidebar :focus-visible{outline:none;box-shadow:var(--focus-ring)}
+.sidebar ~ .top,.sidebar ~ .notices,.sidebar ~ main{margin-left:var(--side-w)}
+.sidebar ~ .actions{left:var(--side-w)}
+.sidebar-backdrop{position:fixed;inset:0;z-index:29;background:#00000066}
+
+/* top bar: where you are, the database link and the user */
+.top{position:sticky;top:0;z-index:20;min-height:56px;display:flex;flex-wrap:nowrap;align-items:center;gap:12px;padding:8px 24px;background:#ffffffe6;backdrop-filter:blur(8px);color:var(--ink);border-bottom:1px solid var(--line);box-shadow:none}
+.crumbs{flex:1 1 auto;min-width:0}
+.crumbs ol{display:flex;align-items:center;gap:8px;margin:0;padding:0;list-style:none;font-size:var(--text-sm);color:var(--faint);white-space:nowrap;overflow:hidden}
+.crumbs li{overflow:hidden;text-overflow:ellipsis}
+.crumbs li+li::before{content:"/";margin-right:8px;color:var(--line)}
+.crumbs li[aria-current=page]{color:var(--ink);font-weight:500}
+.top-right{margin-left:auto;gap:12px}
+.top .connection{color:var(--muted);background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:4px 12px}
+.top .dot.ok{background:var(--ok-mark);box-shadow:0 0 0 3px #1fa46326}
+.top .avatar{width:32px;height:32px;background:var(--hover);color:var(--ink);border:1px solid var(--line)}
+.top .user-name{color:var(--ink);font-weight:500}.top .user-name small{color:var(--faint);font-weight:400}
+.top .user-box button.ghost{color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:var(--radius-sm);box-shadow:var(--shadow)}
+.top .user-box button.ghost:hover:not(:disabled){background:var(--hover);color:var(--ink);border-color:var(--line)}
+.menu-toggle{display:none}
+
+/* page frame */
+main{max-width:1500px;padding:24px 24px;gap:16px}
+.notices{padding:0 24px}
+.page-head{flex-direction:column;align-items:flex-start;gap:4px}
+.page-head h2,.dash-title h2{font-size:var(--text-2xl);font-weight:600;letter-spacing:-.3px}
+.page-head p,.dash-title p{font-size:var(--text-sm);color:var(--faint)}
+.panel{border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow)}
+
+/* inputs and buttons */
+label{font-size:var(--text-sm);font-weight:500;color:var(--ink)}
+input,select,.multi summary,.dmy-text{min-height:36px;border:1px solid var(--line);border-radius:var(--radius-sm);background-color:var(--panel);box-shadow:var(--shadow)}
+input:focus,select:focus,.multi[open] summary{background-color:var(--panel);border-color:var(--accent);box-shadow:var(--focus-ring)}
+input:focus-visible,select:focus-visible,button:focus-visible,summary:focus-visible,a:focus-visible,[tabindex]:focus-visible{outline:none;box-shadow:var(--focus-ring)}
+button{min-height:36px;padding:8px 16px;border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--panel);color:var(--ink);font-weight:500;box-shadow:var(--shadow)}
+button:hover:not(:disabled){background:var(--hover)}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff;box-shadow:var(--shadow)}
+button.primary:hover:not(:disabled){background:var(--accent-2);border-color:var(--accent-2);box-shadow:var(--shadow)}
+button.ghost{border-color:transparent;background:transparent;box-shadow:none}
+button.ghost:hover:not(:disabled){background:var(--hover)}
+button.small{min-height:32px;padding:4px 12px;border-radius:var(--radius-sm)}
+.presets button{min-height:28px;border-radius:var(--radius-sm);background:var(--panel)}
+.search-box input{border-radius:var(--radius-sm)}
+
+/* summary cards: plain white cards, a coloured dot says the status */
+.card{padding:16px 16px;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);transition:background var(--dur-fast) var(--ease),border-color var(--dur-fast) var(--ease)}
+.card:hover:not(:disabled){transform:none;background:var(--panel-2);border-color:var(--line);box-shadow:var(--shadow)}
+.card[aria-pressed=true]{border-color:var(--tone,var(--accent));box-shadow:0 0 0 1px var(--tone,var(--accent)) inset,var(--shadow)}
+.card-label{font-size:var(--text-sm);font-weight:500;color:var(--muted)}
+.card-count{font-size:var(--text-2xl);font-weight:600;letter-spacing:-.3px}
+.dash-cards .card{padding:12px 16px}
+
+/* dashboard: the content is narrower beside the sidebar, so the per-menu tiles fill by width */
+.dash-grid .dash-menus{grid-template-columns:repeat(auto-fill,minmax(190px,1fr))}
+
+/* tables: no zebra, thin row lines, quiet header */
+.table-tools{background:var(--panel);border-bottom:1px solid var(--line)}
+th{background:var(--panel);color:var(--faint);font-weight:500;height:40px;border-bottom:1px solid var(--line)}
+tbody tr:nth-child(even) td{background:transparent}
+td{border-bottom:1px solid var(--line-2)}
+tbody tr:hover td{background:var(--panel-2)}
+tbody tr.current td{background:var(--hover)}
+.badge{border-radius:6px;font-weight:500}
+
+/* drawer, dialogs, notices, action bar */
+.drawer{border-radius:0;border-left:1px solid var(--line);box-shadow:var(--shadow-lg)}
+.drawer-head{background:var(--panel);border-radius:0;border-bottom:1px solid var(--line)}
+.drawer-backdrop{background:#00000066;backdrop-filter:none}
+.info-grid{border-radius:var(--radius-sm);background:var(--panel-2);border:1px solid var(--line)}
+dialog{border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow-lg)}
+.notice{border-radius:var(--radius-sm)}
+.actions{background:#ffffffe6;border-top:1px solid var(--line);box-shadow:none}
+.actions-inner{padding:12px 24px}
+.tab[aria-selected=true]{color:var(--ink);border-bottom-color:var(--ink);border-bottom-width:2px}
+
+/* below 1024px: the sidebar is a drawer behind the menu button */
+@media (max-width:1023px){
+  .sidebar{transform:translateX(-100%);visibility:hidden;box-shadow:var(--shadow-lg);transition:transform var(--dur-move) var(--ease),visibility 0s linear var(--dur-move)}
+  .menu-open .sidebar{transform:none;visibility:visible;transition:transform var(--dur-move) var(--ease)}
+  .sidebar ~ .top,.sidebar ~ .notices,.sidebar ~ main{margin-left:0}
+  .sidebar ~ .actions{left:0}
+  .top{padding:8px 12px;flex-wrap:nowrap}
+  .menu-toggle{order:-1;max-width:none;display:inline-grid;place-items:center;flex:none;width:40px;min-height:40px;padding:0;border-radius:var(--radius-sm);color:var(--ink);background:var(--panel);border:1px solid var(--line);box-shadow:var(--shadow)}
+  .menu-toggle-bars,.menu-toggle-bars::before,.menu-toggle-bars::after{display:block;width:16px;height:2px;border-radius:2px;background:currentColor}
+  .menu-toggle-bars{position:relative}
+  .menu-toggle-bars::before,.menu-toggle-bars::after{content:"";position:absolute;left:0}
+  .menu-toggle-bars::before{top:-5px}.menu-toggle-bars::after{top:5px}
+  .top-right{order:0}
+  .user-name{display:none}
+}
+@media (max-width:640px){
+  main{padding:16px 12px}.notices{padding:0 12px}
+  .top .connection span:last-child{display:none}
+  .top .connection{padding:8px}
+}
+/* touch screens keep the step 6 target sizes over the rules above */
+@media (hover:none) and (pointer:coarse){
+  button,.multi summary,input:not([type=checkbox]):not([type=radio]),select{min-height:44px}
+  button.small,.presets button,.price-input,.care-as{min-height:40px}
+  .nav-list a{min-height:44px}
+  .menu-toggle{width:44px;min-height:44px}
+}

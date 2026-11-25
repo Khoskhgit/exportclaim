@@ -432,12 +432,6 @@ async function showUser() {
 }
 setupDateInputs();
 showUser();
-// The drop-down menus (SSO, KHH LINK) close on a click elsewhere, Escape, or after a link is opened; one is open at a time.
-document.querySelectorAll(".menu .menu-links").forEach((menu) => {
-  document.addEventListener("click", (e) => { if (menu.open && !menu.contains(e.target)) menu.open = false; });
-  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && menu.open) { menu.open = false; menu.querySelector("summary").focus(); } });
-  menu.querySelectorAll("a").forEach((a) => a.addEventListener("click", () => { menu.open = false; }));
-});
 
 // ------------------------------------------------- keyboard: rows and the drawer
 document.addEventListener("keydown", (e) => {
@@ -505,15 +499,21 @@ document.querySelectorAll(".fdh-pop").forEach((pop) => {
 });
 
 // ------------------------------------------------ main menu on narrow screens
-// Below 900px the menu folds behind one button that names the current page; it closes after a link or on Escape.
+// Below 1024px the sidebar slides in from the left behind one button; it closes after a link, on the backdrop or on Escape.
 (() => {
-  const toggle = $("menu-toggle"), top = toggle?.closest(".top");
-  if (!toggle) return;
-  const current = document.querySelector("#main-menu a[aria-current=page]");
-  if (current) toggle.querySelector(".menu-toggle-text").textContent = current.textContent.replace("↗", "").trim();
-  const set = (open) => { top.classList.toggle("menu-open", open); toggle.setAttribute("aria-expanded", String(open)); };
-  toggle.onclick = () => set(!top.classList.contains("menu-open"));
-  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && top.classList.contains("menu-open")) { set(false); toggle.focus(); } });
-  document.addEventListener("click", (e) => { if (top.classList.contains("menu-open") && !top.contains(e.target)) set(false); });
-  $("main-menu").querySelectorAll("a").forEach((a) => a.addEventListener("click", () => set(false)));
+  const toggle = $("menu-toggle"), side = $("sidebar"), backdrop = $("sidebar-backdrop");
+  if (!toggle || !side) return;
+  const isOpen = () => document.body.classList.contains("menu-open");
+  const set = (open) => {
+    document.body.classList.toggle("menu-open", open);
+    toggle.setAttribute("aria-expanded", String(open));
+    toggle.setAttribute("aria-label", open ? "ปิดเมนู" : "เปิดเมนู");
+    if (backdrop) backdrop.hidden = !open;
+    if (open) (side.querySelector("a[aria-current=page]") || side.querySelector("a"))?.focus({ preventScroll: true });
+  };
+  toggle.onclick = () => set(!isOpen());
+  backdrop?.addEventListener("click", () => set(false));
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && isOpen()) { set(false); toggle.focus(); } });
+  side.querySelectorAll("a").forEach((a) => a.addEventListener("click", () => set(false)));
+  matchMedia("(min-width:1024px)").addEventListener("change", (e) => { if (e.matches && isOpen()) set(false); });
 })();

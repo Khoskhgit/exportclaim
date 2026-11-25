@@ -38,9 +38,18 @@ def test_menu_shows_the_sso_group(tmp_path):
     client = TestClient(create_app(settings(), hosxp=FakeHosxp(), store=Store(tmp_path / "s.sqlite3")))
     page = client.get("/aipn").text
     group = page[page.index('id="sso-menu"'):page.index("</details>", page.index('id="sso-menu"'))]
-    assert "menu-group is-current" in page and all(f'href="/{p}"' in group for p in ("ssop", "aipn", "dental"))
+    assert 'menu-group is-current" id="sso-menu"' in page and all(f'href="/{p}"' in group for p in ("ssop", "aipn", "dental"))
     assert page.count('href="/dental"') == 1
-    assert "menu-group is-current" not in client.get("/").text
+    home = client.get("/").text
+    assert 'menu-group" id="sso-menu"' in home and 'menu-group is-current" id="home-menu"' in home
+
+
+def test_breadcrumb_names_group_and_page(tmp_path):
+    client = TestClient(create_app(settings(), hosxp=FakeHosxp(), store=Store(tmp_path / "s.sqlite3")))
+    crumbs = client.get("/aipn").text.split('class="crumbs"')[1].split("</ol>")[0]
+    assert "<li>ประกันสังคม (SSO)</li>" in crumbs and '<li aria-current="page">AIPN ผู้ป่วยใน</li>' in crumbs
+    home = client.get("/").text.split('class="crumbs"')[1].split("</ol>")[0]
+    assert '<li aria-current="page">Dashboard</li>' in home and home.count("<li") == 1
 
 
 def test_home_is_the_dashboard_and_ssop_moved(tmp_path):

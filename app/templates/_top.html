@@ -1,43 +1,73 @@
+{#- Sidebar layout (UI step 7, shadcn/ui look): menu groups by fund on the left, a thin bar on top with where you are. -#}
+{%- set icons = {
+  "home": '<rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/>',
+  "ssop": '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
+  "aipn": '<path d="M2 4v16M2 8h18a2 2 0 0 1 2 2v10M2 17h20M6 8v9"/>',
+  "dental": '<path d="M7 3C4.5 3 3 5 3 7.5c0 3 1.5 4.5 2 7 .5 3 1 6.5 2.5 6.5S9.5 18 10 16s1-2 2-2 1.5 0 2 2 1 5 2.5 5 2-3.5 2.5-6.5c.5-2.5 2-4 2-7C21 5 19.5 3 17 3c-2 0-3 1-5 1S9 3 7 3z"/>',
+  "disabled": '<circle cx="12" cy="4.5" r="1.5"/><path d="M6 8h12M12 8v6l-3 7M12 14l3 7"/>',
+  "nhso18": '<path d="M4 5a1 1 0 0 1 1-1h5l2 2h7a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z"/>',
+  "ppfs": '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1M9 10h6M9 14h6M9 18h3"/>',
+  "labwalkin": '<path d="M9 3h6M10 3v6l-5.5 9.5A1.5 1.5 0 0 0 5.8 21h12.4a1.5 1.5 0 0 0 1.3-2.5L14 9V3M7 15h10"/>',
+  "ntip": '<path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M12 7v10M9 10l3 2 3-2M9 14l3 2 3-2"/>',
+  "approve": '<circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.5 2.5 4.5-5"/>',
+  "repstm": '<path d="M5 3h14v18l-3-2-2 2-2-2-2 2-2-2-3 2z"/><path d="M9 8h6M9 12h6"/>',
+  "links": '<path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>',
+} -%}
+{%- set groups = [
+  ("home-menu", "ภาพรวม", [("home", "/", "Dashboard")]),
+  ("sso-menu", "ประกันสังคม (SSO)", [("ssop", "/ssop", "SSOP ผู้ป่วยนอก"), ("aipn", "/aipn", "AIPN ผู้ป่วยใน"), ("dental", "/dental", "ทันตกรรม ปกส."), ("disabled", "/disabled", "ทุพพลภาพ ปกส.")]),
+  ("nhso-menu", "สปสช.", [("nhso18", "/nhso18", "18 แฟ้ม สปสช."), ("ppfs", "/ppfs", "รายการ PPFS"), ("labwalkin", "/labwalkin", "LAB Walk-in"), ("ntip", "/ntip", "NTIP")]),
+  ("cgd-menu", "กรมบัญชีกลาง", [("approve", "/approve", "Approve Code ขรก.")]),
+  ("rep-menu", "ติดตามผล", [("repstm", "/repstm", "REP / STM")]),
+] -%}
+{%- macro icon(name) %}<svg class="nav-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{{ icons[name] | safe }}</svg>{% endmacro -%}
 <a class="skip-link" href="#main">ข้ามไปที่เนื้อหา</a>
-<header class="top">
-  <div class="brand">
-    <div class="logo" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.8 4.5 5.6v6.1c0 4.6 3.1 8.2 7.5 9.5 4.4-1.3 7.5-4.9 7.5-9.5V5.6z"/><path d="m8.6 12.1 2.4 2.4 4.6-4.9"/></svg></div>
-    <div><h1>KHH Claim Sure</h1><p>{{ hname or "ตรวจและส่งข้อมูลเบิกชดเชย" }}</p></div>
+<aside class="sidebar" id="sidebar" aria-label="เมนู">
+  <div class="side-brand">
+    <div class="logo" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.8 4.5 5.6v6.1c0 4.6 3.1 8.2 7.5 9.5 4.4-1.3 7.5-4.9 7.5-9.5V5.6z"/><path d="m8.6 12.1 2.4 2.4 4.6-4.9"/></svg></div>
+    <div class="side-brand-text"><h1>KHH Claim Sure</h1><p>{{ hname or "ตรวจและส่งข้อมูลเบิกชดเชย" }}</p></div>
   </div>
-  <button type="button" class="menu-toggle" id="menu-toggle" aria-expanded="false" aria-controls="main-menu">
-    <span class="menu-toggle-bars" aria-hidden="true"></span><span class="menu-toggle-text">เมนู</span></button>
-  <nav class="menu" id="main-menu" aria-label="เมนูหลัก">
-    <a href="/"{% if active == "home" %} aria-current="page"{% endif %}>Dashboard</a>
-    <details class="menu-links menu-group{% if active in ("ssop", "aipn", "dental", "disabled") %} is-current{% endif %}" id="sso-menu">
-      <summary>SSO</summary>
-      <div class="menu-links-list" role="list">
-        <a href="/ssop"{% if active == "ssop" %} aria-current="page"{% endif %}>SSOP ผู้ป่วยนอก</a>
-        <a href="/aipn"{% if active == "aipn" %} aria-current="page"{% endif %}>AIPN ผู้ป่วยใน</a>
-        <a href="/dental"{% if active == "dental" %} aria-current="page"{% endif %}>ทันตกรรม ปกส.</a>
-        <a href="/disabled"{% if active == "disabled" %} aria-current="page"{% endif %}>ทุพพลภาพ ปกส.</a>
+  <nav class="side-nav" id="main-menu" aria-label="เมนูหลัก">
+    {%- for gid, label, items in groups %}
+    {%- set here = active in items | map(attribute=0) | list %}
+    <details class="nav-group menu-group{% if here %} is-current{% endif %}" id="{{ gid }}" open>
+      <summary>{{ label }}</summary>
+      <div class="nav-list" role="list">
+        {%- for key, href, text in items %}
+        <a href="{{ href }}"{% if active == key %} aria-current="page"{% endif %}>{{ icon(key) }}<span>{{ text }}</span></a>
+        {%- endfor %}
       </div>
     </details>
-    <a href="/nhso18"{% if active == "nhso18" %} aria-current="page"{% endif %}>18 แฟ้ม สปสช.</a>
-    <a href="/repstm"{% if active == "repstm" %} aria-current="page"{% endif %}>REP / STM</a>
-    <a href="/approve"{% if active == "approve" %} aria-current="page"{% endif %}>Approve Code ขรก.</a>
-    <a href="/ppfs"{% if active == "ppfs" %} aria-current="page"{% endif %}>รายการ PPFS</a>
-    <a href="/labwalkin"{% if active == "labwalkin" %} aria-current="page"{% endif %}>LAB Walk-in</a>
-    <a href="/ntip"{% if active == "ntip" %} aria-current="page"{% endif %}>NTIP</a>
-    <details class="menu-links" id="khh-links">
+    {%- endfor %}
+    <details class="nav-group" id="khh-links">
       <summary>KHH LINK</summary>
-      <div class="menu-links-list" role="list">
-        <a href="https://mms.sso.go.th/portal/" target="_blank" rel="noopener noreferrer">SSO-ทันตกรรม<span class="ext" aria-hidden="true">↗</span></a>
-        <a href="https://fdh.moph.go.th/hospital/" target="_blank" rel="noopener noreferrer">FDH<span class="ext" aria-hidden="true">↗</span></a>
-        <a href="https://www.bizgrowing.krungthai.com/corporate/" target="_blank" rel="noopener noreferrer">KTB Online<span class="ext" aria-hidden="true">↗</span></a>
-        <a href="https://www.healthplatform.krungthai.com/healthPlatform/login" target="_blank" rel="noopener noreferrer">KTB-Digital Health Platform<span class="ext" aria-hidden="true">↗</span></a>
-        <a href="https://eclaim.nhso.go.th/Client/login" target="_blank" rel="noopener noreferrer">NEW E-claim<span class="ext" aria-hidden="true">↗</span></a>
-        <a href="https://eclaim.nhso.go.th/webComponent/main/MainWebAction.do" target="_blank" rel="noopener noreferrer">E-Claim<span class="ext" aria-hidden="true">↗</span></a>
-        <a href="https://seamlessfordmis.nhso.go.th/seamlessfordmis/faces/login.jsf" target="_blank" rel="noopener noreferrer">Seamless For DMIS<span class="ext" aria-hidden="true">↗</span></a>
-        <a href="https://authenservice.nhso.go.th/authencode/claimcode" target="_blank" rel="noopener noreferrer">AuthenCode/Endpoint<span class="ext" aria-hidden="true">↗</span></a>
-        <a href="http://192.168.80.88:5174" target="_blank" rel="noopener noreferrer">NHSO Tracker<span class="ext" aria-hidden="true">↗</span></a>
+      <div class="nav-list" role="list">
+        {%- for href, text in [
+          ("https://mms.sso.go.th/portal/", "SSO-ทันตกรรม"),
+          ("https://fdh.moph.go.th/hospital/", "FDH"),
+          ("https://www.bizgrowing.krungthai.com/corporate/", "KTB Online"),
+          ("https://www.healthplatform.krungthai.com/healthPlatform/login", "KTB-Digital Health Platform"),
+          ("https://eclaim.nhso.go.th/Client/login", "NEW E-claim"),
+          ("https://eclaim.nhso.go.th/webComponent/main/MainWebAction.do", "E-Claim"),
+          ("https://seamlessfordmis.nhso.go.th/seamlessfordmis/faces/login.jsf", "Seamless For DMIS"),
+          ("https://authenservice.nhso.go.th/authencode/claimcode", "AuthenCode/Endpoint"),
+          ("http://192.168.80.88:5174", "NHSO Tracker"),
+        ] %}
+        <a href="{{ href }}" target="_blank" rel="noopener noreferrer">{{ icon("links") }}<span>{{ text }}</span><span class="sr-only"> (เปิดแท็บใหม่)</span></a>
+        {%- endfor %}
       </div>
     </details>
   </nav>
+</aside>
+<div class="sidebar-backdrop" id="sidebar-backdrop" hidden></div>
+<header class="top">
+  <button type="button" class="menu-toggle" id="menu-toggle" aria-expanded="false" aria-controls="sidebar" aria-label="เปิดเมนู">
+    <span class="menu-toggle-bars" aria-hidden="true"></span></button>
+  <nav class="crumbs" aria-label="ตำแหน่งปัจจุบัน"><ol>
+    {%- for gid, label, items in groups %}{% for key, href, text in items if key == active %}
+    {%- if gid != "home-menu" %}<li>{{ label }}</li>{% endif %}<li aria-current="page">{{ text }}</li>
+    {%- endfor %}{% endfor %}
+  </ol></nav>
   <div class="top-right">
     <div id="connection" class="connection"><span class="dot" aria-hidden="true"></span><span>กำลังตรวจการเชื่อมต่อ…</span></div>
     <div id="user-slot"></div>
