@@ -993,3 +993,27 @@ tbody tr.current td{background:var(--accent-soft)}
 .nav-list a[aria-current=page]{background:#f3d7e6;color:var(--accent-2)}
 .page-head h2,.dash-title h2{color:#4f1635}
 ::selection{background:#e8afce;color:#4f1635}
+
+/* ================================================================ UI step 11 (2026-11-25): Blushing Nightfall, with gradients
+   Scale #f9c1e3 #f67db8 #f05499 #e62a7e #d61067 #b70057 #9a0048 #7a003a #5b002e #3d0024. Overrides step 10.
+   Buttons run #d61067 to #9a0048 (white text 5.1:1 at the light end), hover #b70057 to #7a003a.
+   Text stays solid: no gradient text. Status and chart colours unchanged. */
+:root{
+  --accent:#b70057;--accent-2:#9a0048;--accent-soft:#fdf0f6;--bar:#d61067;--accent-ink:#fff;
+  --grad:linear-gradient(135deg,#d61067 0%,#9a0048 100%);
+  --grad-hover:linear-gradient(135deg,#b70057 0%,#7a003a 100%);
+  --grad-soft:linear-gradient(90deg,#f9c1e3 0%,#fdf0f6 100%);
+  --bg:#fdf7fa;--panel-2:#fdf7fa;--hover:#fbe9f2;--line:#f1d9e5;--line-2:#f8ecf2;--ring:#b7005759;
+}
+body{background:radial-gradient(1100px 380px at 100% 0,#f9c1e366 0%,#f9c1e300 70%),var(--bg);background-repeat:no-repeat}
+button.primary{background:var(--grad);border-color:transparent;box-shadow:0 1px 2px #3d00241a,0 4px 12px #d6106733}
+button.primary:hover:not(:disabled){background:var(--grad-hover);border-color:transparent;box-shadow:0 1px 2px #3d00241a,0 6px 16px #9a004840}
+.side-brand .logo,.logo,.skip-link{background:var(--grad);color:#fff}
+.sidebar{background:linear-gradient(180deg,#fdf0f6 0%,#fff 60%)}
+.nav-list a:hover,.nav-group summary:hover{background:var(--hover);color:#7a003a}
+.nav-list a[aria-current=page]{background:var(--grad-soft);color:#7a003a;box-shadow:none}
+.top{border-bottom-color:transparent}
+.top::after{content:"";display:block;position:absolute;left:0;right:0;bottom:-1px;height:2px;background:linear-gradient(90deg,#f67db8 0%,#d61067 50%,#7a003a 100%);pointer-events:none}
+.page-head h2,.dash-title h2{color:#5b002e}
+.card[aria-pressed=true]{background:linear-gradient(180deg,#fff 0%,#fdf0f6 100%)}
+::selection{background:#f9c1e3;color:#3d0024}
