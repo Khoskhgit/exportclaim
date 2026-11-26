@@ -9,7 +9,7 @@ import hashlib
 import logging
 import re
 from datetime import date, timedelta
-from typing import Any, Iterable
+from typing import Any, Callable, Iterable
 
 from fastapi import Body, FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse
@@ -37,6 +37,7 @@ def _visit(v: dict) -> dict:
 class Approvals:
     def __init__(self, store: ApproveStore, hosxp: Any, pttypes: tuple[str, ...]):
         self.store, self.hosxp, self.pttypes = store, hosxp, pttypes
+        self.import_data: Callable[[str, bytes, str], dict] = lambda name, data, user: {}  # set by register()
 
     def match(self, rows: list[dict], visits: list[dict]) -> tuple[dict[str, dict], dict[str, str]]:
         """(Approve Code -> visit, payment Approve Code -> the refund that took it back)."""
@@ -67,28 +68,20 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
     def page(request: Request):
         return templates.TemplateResponse(request, "approve.html", {"hname": settings.hname})
 
-    @app.post("/api/approve/import")
-    async def import_file(request: Request, name: str = ""):
-        data = await request.body()
-        if not data:
-            raise HTTPException(400, "ไม่ได้เลือกไฟล์")
-        if len(data) > MAX_UPLOAD:
-            raise HTTPException(413, "ไฟล์ใหญ่เกินไป")
+    def import_data(name: str, data: bytes, user: str) -> dict:
+        """Read one upload (TXT, CSV or ZIP), keep the file and save its transactions. Raises ApproveError."""
         name = safe_name(name)
-        try:
-            files, skipped = parse_upload(name, data)
-        except ApproveError as exc:
-            raise HTTPException(400, f"{name}: {exc}") from None
+        files, skipped = parse_upload(name, data)
         for member, parsed in files:
             if settings.hcode and parsed.hcode and parsed.hcode != settings.hcode:  # an EDC-only CSV names no hospital
-                raise HTTPException(400, f"{member}: เป็นไฟล์ของสถานพยาบาล {parsed.hcode} ไม่ใช่ {settings.hcode}")
+                raise ApproveError(f"{member}: เป็นไฟล์ของสถานพยาบาล {parsed.hcode} ไม่ใช่ {settings.hcode}")
         digest = hashlib.sha256(data).hexdigest()
         before = store.seen(digest)
         folder.mkdir(parents=True, exist_ok=True)
         saved = folder / f"{digest[:12]}_{name}"
         if not saved.exists():
             saved.write_bytes(data)
-        user, results = auth.user_label(request), []
+        results = []
         for member, parsed in files:
             result = store.save(parsed, member, digest, saved.name, created_by=user)
             payments = [r for r in parsed.rows if r.kind == PAYMENT]
@@ -98,6 +91,21 @@ def register(app: FastAPI, settings: Settings, hosxp: Any, local: Store, templat
             log.info("approve import %s rows=%s", member, len(parsed.rows))
         return {"name": name, "files": results, "skipped": skipped,
                 "again": f"เคยนำเข้าไฟล์นี้แล้วเมื่อ {before['at'].replace('T', ' ')}" if before else ""}
+
+    approvals.import_data = import_data
+
+    @app.post("/api/approve/import")
+    async def import_file(request: Request, name: str = ""):
+        data = await request.body()
+        if not data:
+            raise HTTPException(400, "ไม่ได้เลือกไฟล์")
+        if len(data) > MAX_UPLOAD:
+            raise HTTPException(413, "ไฟล์ใหญ่เกินไป")
+        try:
+            return import_data(name, data, auth.user_label(request))
+        except ApproveError as exc:
+            message = str(exc)
+            raise HTTPException(400, message if message.startswith(safe_name(name)) else f"{safe_name(name)}: {message}") from None
 
     @app.post("/api/approve/find")
     def find(body: dict = Body(...)):

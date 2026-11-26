@@ -128,6 +128,42 @@ function setupDrop() {
   drop.addEventListener("drop", (e) => importFiles([...e.dataTransfer.files]));
 }
 
+const KTB_RUN = "ดึงจาก KTB วันนี้";
+const stamp = (iso) => (iso ? `${toDmy(iso.slice(0, 10))} ${iso.slice(11, 16)}` : "");
+
+function showKtb(s) {
+  const box = $("ktb");
+  box.hidden = !s.ready;
+  if (!s.ready) return;
+  const button = $("ktb-run");
+  button.disabled = s.running;
+  button.textContent = s.running ? "กำลังดึงจาก KTB…" : KTB_RUN;
+  const parts = [s.time ? `ดึงอัตโนมัติทุกวัน ${s.time} น.` : "ยังไม่ได้ตั้งเวลาดึงอัตโนมัติ (KTB_PULL_TIME)"];
+  const last = s.last || {};
+  if (last.finished_at) parts.push(`ล่าสุด ${stamp(last.finished_at)}: ${last.ok ? last.text.split("\n").slice(1).join(" · ") : `ไม่สำเร็จ ${last.error}`}`);
+  if (last.line) parts.push(last.line);
+  $("ktb-status").textContent = parts.join(" · ");
+}
+
+async function ktbStatus() {
+  try { return await api("/api/approve/ktb"); } catch (err) { return { ready: false }; }
+}
+
+async function runKtb() {
+  const before = (await ktbStatus()).last?.finished_at || "";
+  try { await api("/api/approve/ktb/run", {}); } catch (err) { notice(err.message, "error"); return; }
+  for (;;) {
+    const s = await ktbStatus();
+    showKtb({ ...s, running: s.running || (s.last?.finished_at || "") === before });
+    if (!s.running && (s.last?.finished_at || "") !== before) {
+      if (s.last && !s.last.ok) notice(`ดึงจาก KTB ไม่สำเร็จ: ${s.last.error}`, "error");
+      await load();
+      return;
+    }
+    await new Promise((r) => setTimeout(r, 2000));
+  }
+}
+
 async function connection() {
   try {
     const status = await api("/api/status");
@@ -152,5 +188,7 @@ $("filter").addEventListener("input", async (e) => {
 bindSort($("thead"), state.sort, render);
 setupPresets($("search"));
 setupDrop();
+$("ktb-run").onclick = runKtb;
+ktbStatus().then(showKtb);
 load();
 connection();

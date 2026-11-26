@@ -249,6 +249,11 @@ session อยู่ได้ `SESSION_HOURS` ชั่วโมง (ค่า�
 - หน้า 18 แฟ้ม: visit OPD สิทธิ 21 ใช้ Approve Code เป็น ClaimCode และใส่ใน `INS.PERMITNO` แทน `visit_pttype.claim_code`
   (ไม่เขียนกลับ HOSxP) ถ้ายังไม่มี Approve Code จะขึ้น Error "ไม่พบ Approve Code" และส่งออกไม่ได้ ยอดรูดไม่ตรงค่าใช้จ่ายขึ้นคำเตือน
 - การ์ด "visit สิทธิเบิกจ่ายตรง ยังไม่มี Approve Code" นับเฉพาะวันที่นำเข้าไฟล์ของวันนั้นแล้ว
+- ดึงจาก KTB อัตโนมัติ: ตั้ง `KTB_COMPANY_ID`, `KTB_USER_ID`, `KTB_PASSWORD` (หรือชื่อเดิม `CompanyID`, `UserID`, `Password`)
+  โปรแกรมเปิด Chrome เบื้องหลัง เข้า KTB Corporate Online > Healthcare Online ค้นทุก Merchant No. ของวันนี้ กด Export CSV แล้วนำเข้า
+  ทุกวันเวลา `KTB_PULL_TIME` (ค่าเริ่มต้น 23:00) และส่งสรุปทาง LINE / MOPH Alert กดเองได้ที่ปุ่ม "ดึงจาก KTB วันนี้"
+  อ่านอย่างเดียว ไม่แตะเมนู Manual Keyin / Adjustment และ logout ทุกครั้ง ถ้าเข้าสู่ระบบไม่ผ่านจะไม่ลองซ้ำ (กันบัญชีถูกล็อก)
+  เว็บให้ดึงเฉพาะวันนี้ รายการหลังเวลาที่ดึงจะเข้ารอบถัดไปไม่ได้ ให้นำเข้า TXT001 ของวันนั้นเพิ่ม
 
 ## ทดสอบ
 

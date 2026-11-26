@@ -432,6 +432,8 @@ dl.sum dt{color:var(--muted)}dl.sum dd{margin:0;font-weight:600;font-variant-num
 /* ------------------------------------------------------------ REP/STM */
 body.no-footer{padding-bottom:24px}
 .import-panel{padding:12px 16px;display:grid;gap:8px}
+.ktb-pull{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin-top:12px}
+.ktb-pull[hidden]{display:none}
 .drop{display:grid;justify-items:center;gap:4px;padding:24px 16px;border:2px dashed var(--line);border-radius:var(--radius);background:var(--panel-2);cursor:pointer;text-align:center;color:var(--ink);font-size:var(--text-sm);transition:border-color var(--dur-fast) var(--ease),background var(--dur-fast) var(--ease)}
 .drop:hover,.drop.over{border-color:var(--accent);background:var(--accent-soft)}
 .drop:focus-within{outline:2px solid var(--accent);outline-offset:2px}

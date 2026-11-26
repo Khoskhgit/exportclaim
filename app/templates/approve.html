@@ -18,6 +18,10 @@
       <span class="sub">HCG…_TXT001_yyyymmdd.txt, healthcare_online_dd-mm-yyyy.csv หรือ ZIP ของโฟลเดอร์ DWN_HOSPITAL_… · ไฟล์ PDF (HCD001–004) ไม่ต้องนำเข้า · เลือกได้หลายไฟล์</span>
       <input id="files" type="file" multiple accept=".txt,.csv,.zip,.pdf" class="sr-only">
     </label>
+    <div id="ktb" class="ktb-pull" hidden>
+      <button type="button" id="ktb-run" class="primary">ดึงจาก KTB วันนี้</button>
+      <span id="ktb-status" class="sub" role="status" aria-live="polite"></span>
+    </div>
     <ul id="import-log" class="import-log"></ul>
   </section>
 

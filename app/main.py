@@ -17,7 +17,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
-from . import aipn_routes, approve_routes, auth, autopull, dashboard, dental_routes, disabled_routes, labwalkin_routes, mms_routes, nhso18_routes, ntip_routes, ppfs_routes, repstm_routes, seamless_routes
+from . import aipn_routes, approve_routes, auth, autopull, dashboard, dental_routes, disabled_routes, ktb_pull, labwalkin_routes, mms_routes, nhso18_routes, ntip_routes, ppfs_routes, repstm_routes, seamless_routes
 from .aipn_db import AipnDb
 from .config import Settings, load_settings
 from .export import ExportError, build_export, normalise_station, is_excluded, item_name, send_amounts, usage_fields
@@ -77,7 +77,7 @@ def asset_version() -> str:
 
 def create_app(settings: Settings | None = None, hosxp: Any = None, store: Store | None = None,
                aipn_db: Any = None, moph_fetch: Any = None, eclaim: Any = None, seamless: Any = None,
-               line_send: Any = None, aipn: Any = None, mms: Any = None) -> FastAPI:
+               line_send: Any = None, aipn: Any = None, mms: Any = None, ktb: Any = None) -> FastAPI:
     settings = settings or load_settings()
     db = hosxp or Hosxp(settings)
     local = store or Store(settings.data_dir / "ssop.sqlite3")
@@ -132,7 +132,8 @@ def create_app(settings: Settings | None = None, hosxp: Any = None, store: Store
     labwalkin_routes.register(app, settings, db, local, templates)
     ntip_routes.register(app, settings, db, local, templates)
     dashboard.register(app, settings, local, templates)
-    autopull.register(app, settings, line_send, **({"poll": 0.02} if line_send else {}))
+    auto = autopull.register(app, settings, line_send, **({"poll": 0.02} if line_send else {}))
+    ktb_pull.register(app, settings, approvals.import_data, line_send, **({"client": ktb} if ktb else {}))
 
     def with_results(visits: list[dict]) -> list[dict]:
         """Imported REP/STM files win over rcmdb: STM means paid, otherwise the newest REP line gives A or C."""

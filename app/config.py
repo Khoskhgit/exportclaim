@@ -111,6 +111,11 @@ class Settings:
     moph_alert_client_key: str = field(default="", repr=False)
     moph_alert_secret_key: str = field(default="", repr=False)
     moph_alert_url: str = ""
+    # KTB Corporate Online (Healthcare Online): today's Approve Codes downloaded and imported every day at KTB_PULL_TIME
+    ktb_company_id: str = ""
+    ktb_user_id: str = ""
+    ktb_password: str = field(default="", repr=False)
+    ktb_pull_time: str = "23:00"
     # MMS ประกันสังคม (mms.sso.go.th): dental REP / STM reports
     mms_user: str = ""
     mms_password: str = field(default="", repr=False)
@@ -240,6 +245,11 @@ def load_settings(env_file: Path | None = None) -> Settings:
         moph_alert_client_key=(get("MOPH_ALERT_CLIENT_KEY") or "").strip(),
         moph_alert_secret_key=(get("MOPH_ALERT_SECRET_KEY") or "").strip(),
         moph_alert_url=(get("MOPH_ALERT_URL") or "").strip(),
+        # CompanyID / UserID / Password: the names first used in .env
+        ktb_company_id=(get("KTB_COMPANY_ID") or get("CompanyID") or "").strip(),
+        ktb_user_id=(get("KTB_USER_ID") or get("UserID") or "").strip(),
+        ktb_password=get("KTB_PASSWORD") or (get("Password") if get("CompanyID") else "") or "",
+        ktb_pull_time=(get("KTB_PULL_TIME") if get("KTB_PULL_TIME") is not None else "23:00").strip(),
         mms_user=(get("MMS_USER") or "").strip(),
         mms_password=get("MMS_PASSWORD") or "",
         mms_hosp_code=(get("MMS_HOSP_CODE") or "").strip() or (f"00{(get('HCODE') or '').strip().zfill(5)}00" if (get("HCODE") or "").strip() else ""),
