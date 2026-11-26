@@ -958,3 +958,57 @@ button.primary:hover:not(:disabled){background:var(--grad-hover);border-color:tr
 /* page */
 tr.picked td,tbody tr.current td{background:var(--tint)}
 .tab[aria-selected=true]{color:var(--accent-2);border-bottom-color:var(--accent)}
+
+/* ================================================================ login (2026-11-26): night wall, lamp and glass card
+   A navy brick wall lit by a warm lamp above the card; the card is frosted glass with a thin blue edge; title, MOPH
+   button and HOSxP button run cyan to green with dark text (#05202a on #22d3ee 10:1, on #34d399 9:1).
+   The ring of bars is hidden; its states (busy / ok / fail, login.js) now show on the card's edge. */
+.login-page{
+  background-color:#0a1430;
+  background-image:
+    radial-gradient(ellipse 560px 400px at 50% -20px,#ffc97aa6 0%,#ffc97a33 40%,#ffc97a00 75%),
+    radial-gradient(ellipse 900px 600px at 50% 55%,#1d4ed840 0%,#1d4ed800 70%),
+    radial-gradient(ellipse at 50% 50%,#0000 40%,#000a 100%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='60'%3E%3Crect width='120' height='60' fill='%23122150'/%3E%3Crect x='62' y='32' width='56' height='26' fill='%23142556'/%3E%3Crect x='3' y='3' width='56' height='26' fill='%23101d48'/%3E%3Cpath d='M0 1.5H120M0 31.5H120M1.5 0V30M61.5 30V60' stroke='%23060c22' stroke-width='3' fill='none'/%3E%3C/svg%3E");
+  background-attachment:fixed;color:#e2e8f0;padding:96px 16px 32px;align-content:start}
+.ring-login{position:static;gap:16px}
+/* the lamp: a dark metal shade with a glowing bottom edge, fixed at the top centre */
+.ring-login::before{content:"";position:fixed;top:0;left:50%;width:180px;height:44px;margin-left:-90px;background:linear-gradient(180deg,#2b3242 0%,#151a26 100%);clip-path:polygon(18% 0,82% 0,100% 100%,0 100%);z-index:0}
+.ring-login::after{content:"";position:fixed;top:40px;left:50%;width:150px;height:8px;margin-left:-75px;border-radius:0 0 8px 8px;background:#ffe2a8;box-shadow:0 6px 24px 6px #ffc97a99;z-index:0}
+.ring-stage{--size:auto;width:min(440px,100%);height:auto;display:block;position:relative;z-index:1}
+.ring{display:none}
+.ring-card{width:100%;gap:16px;padding:40px 32px 32px;border-radius:24px;background:linear-gradient(180deg,#14234acc 0%,#0b1633e6 100%);border:1px solid #3b82f699;backdrop-filter:blur(12px) saturate(1.2);-webkit-backdrop-filter:blur(12px) saturate(1.2);box-shadow:0 30px 60px -20px #000c,0 0 48px -8px #3b82f666;transition:border-color var(--dur-fast) var(--ease),box-shadow var(--dur-fast) var(--ease)}
+.ring-brand{flex-direction:column;gap:12px}
+.ring-mark{width:48px;height:48px;border-radius:14px;color:#22d3ee;background:#22d3ee14;border-color:#22d3ee55}
+.ring-brand h1{font-size:clamp(28px,7vw,40px);line-height:1.25;padding:.1em 0;color:#22d3ee}
+/* the title gradient lives in login.html, the only page that uses it */
+.ring-sub{margin:-8px 0 4px;color:#b6c3dc}
+.ring-form input{min-height:52px;padding:8px 20px;border:1px solid #ffffff33;background:#0a142e99;color:#fff}
+.ring-form input::placeholder{color:#a9b6cf}
+.ring-form input:hover{border-color:#ffffff55}
+.ring-form input:focus{border-color:#22d3ee;background:#0a142ecc;box-shadow:0 0 0 3px #22d3ee33}
+.ring-eye{border-radius:999px;color:#22d3ee}
+.ring-eye:hover:not(:disabled){background:#22d3ee1f;color:#22d3ee}
+.ring-submit,.ring-moph{background:linear-gradient(90deg,#22d3ee 0%,#34d399 100%);color:#05202a;border:0;box-shadow:0 10px 24px -10px #22d3ee99}
+.ring-submit:hover:not(:disabled),.ring-moph:hover{background:linear-gradient(90deg,#67e8f9 0%,#6ee7b7 100%);color:#05202a;box-shadow:0 14px 28px -10px #22d3eebb}
+.ring-moph{min-height:56px;margin-top:8px;gap:12px;font-weight:700}
+.ring-moph img{height:30px;padding:2px 8px;border-radius:8px;background:#fff;box-sizing:content-box}
+.ring-moph:focus-visible,.ring-submit:focus-visible,.ring-link:focus-visible{outline:2px solid #fff;outline-offset:3px;box-shadow:none}
+.ring-link{color:#34d399}
+.ring-link:hover{background:#34d3991a}
+.ring-caps{color:#fcd34d}
+.ring-foot{position:relative;z-index:1;color:#94a3b8}
+.ring-notice{position:relative;z-index:1;width:min(440px,100%)}
+/* the old ring's states on the card edge */
+.ring.busy ~ .ring-card{animation:card-wait 1.2s ease-in-out infinite}
+.ring.ok ~ .ring-card{border-color:#34d399;box-shadow:0 30px 60px -20px #000c,0 0 48px -8px #34d39988}
+.ring.fail ~ .ring-card{border-color:#f87171;box-shadow:0 30px 60px -20px #000c,0 0 48px -8px #f8717188}
+@keyframes card-wait{50%{border-color:#22d3ee;box-shadow:0 30px 60px -20px #000c,0 0 56px -4px #22d3ee88}}
+@media (max-width:640px){
+  .login-page{padding-top:80px}
+  .ring-card{padding:32px 20px 24px}
+  .ring-moph{gap:8px;padding:8px 12px;min-height:52px}
+  .ring-moph img{height:26px}
+  .ring-login{overflow:visible}
+}
+@media (prefers-reduced-motion:reduce){.ring.busy ~ .ring-card{animation:none;border-color:#22d3ee}}

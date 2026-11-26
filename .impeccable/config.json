@@ -110,6 +110,24 @@
         ],
         "createdAt": "2026-11-25T13:37:36.863Z",
         "reason": "Claude: shadow #103026 is a neutral elevation shadow on a light page; rendered scan of all pages at 1280 and 390 found no glow"
+      },
+      {
+        "rule": "gradient-text",
+        "value": "*",
+        "files": [
+          "app/templates/login.html"
+        ],
+        "createdAt": "2026-11-26T00:58:51.190Z",
+        "reason": "Claude: user-requested login look (night wall, glass card, cyan-green gradient title and blue edge glow), 2026-11-26"
+      },
+      {
+        "rule": "dark-glow",
+        "value": "*",
+        "files": [
+          "app/templates/login.html"
+        ],
+        "createdAt": "2026-11-26T00:58:51.208Z",
+        "reason": "Claude: user-requested login look (night wall, glass card, cyan-green gradient title and blue edge glow), 2026-11-26"
       }
     ]
   }
