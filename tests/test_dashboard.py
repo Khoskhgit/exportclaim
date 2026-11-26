@@ -92,3 +92,29 @@ def test_approve_tile_counts_payments_by_transaction_date(tmp_path):
     tile = next(m for m in data["menus"] if m["key"] == "approve")
     assert (tile["items"], tile["amount"], tile["href"]) == (2, 750.0, "/approve")
     assert [m["items"] for m in tile["months"]] == [1, 1]
+
+
+def test_visit_counts_by_fund(tmp_path):
+    class Visits(FakeHosxp):
+        def visit_counts(self, start, end):
+            self.asked = (start, end)
+            return {"opd": [{"hipdata": "UCS", "n": 10}, {"hipdata": "WEL", "n": 2}, {"hipdata": "SSS", "n": 5},
+                            {"hipdata": "", "n": 1}, {"hipdata": "OFC", "n": 3}],
+                    "ipd": [{"hipdata": "UCS", "n": 4}]}
+
+    db = Visits()
+    client = TestClient(create_app(settings(), db, Store(tmp_path / "s.sqlite3")))
+    data = client.get("/api/dashboard/visits?start=2026-11-01&end=2026-11-26").json()
+    assert db.asked == ("2026-11-01", "2026-11-26")
+    assert data["opd"] == {"total": 21, "funds": [{"fund": "UCS", "n": 12}, {"fund": "OFC", "n": 3},
+                                                  {"fund": "SSS", "n": 5}, {"fund": "อื่น ๆ", "n": 1}]}
+    assert data["ipd"]["total"] == 4
+
+    class Down(FakeHosxp):
+        def visit_counts(self, start, end):
+            raise OSError("Can't connect")
+
+    down = TestClient(create_app(settings(), Down(), Store(tmp_path / "d.sqlite3")))
+    r = down.get("/api/dashboard/visits")
+    assert r.status_code == 503 and "อ่านยอด visit จาก HOSxP ไม่ได้" in r.json()["detail"]
+    assert down.get("/api/dashboard").status_code == 200  # the rest of the page does not need HOSxP

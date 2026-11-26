@@ -1,5 +1,6 @@
 """The home page: an overview of every menu from what the app keeps itself (REP/STM imports, export and send
-history). It never reads HOSxP, so it opens at once; the unsent counts are on each menu's own page.
+history), so it opens at once; the one HOSxP read, the visit count, comes apart (/api/dashboard/visits). The unsent
+counts are on each menu's own page.
 
 REP lines are counted once per visit (InvNo) and account: the newest line, skipping a resend refused only as a
 duplicate after the visit was accepted (as REP / STM does). The period is the visit date of the REP line (DTTRAN) and
@@ -9,6 +10,8 @@ from __future__ import annotations
 import sqlite3
 from collections import Counter
 from datetime import date
+
+from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse
@@ -22,6 +25,17 @@ from .store import Store
 ACCOUNTS = {"UCS": "บัตรทอง (UCS)", "OFC": "ข้าราชการ (OFC)", "LGO": "อปท. (LGO)", "SOCD": "ประกันสังคม OPD (SSOP)",
             "SIGN": "ประกันสังคม IPD (AIPN)"}
 ORDER = list(ACCOUNTS)
+# HOSxP pttype.hipdata_code -> the fund shown under the visit count
+FUNDS = {"UCS": "UCS", "WEL": "UCS", "OFC": "OFC", "LGO": "LGO", "SSS": "SSS", "SSI": "SSS"}
+FUND_ORDER = ["UCS", "OFC", "LGO", "SSS", "อื่น ๆ"]
+
+
+def by_fund(rows: list[dict]) -> dict:
+    """[{hipdata, n}] -> {total, funds: [{fund, n}]} in a fixed order, unknown codes as อื่น ๆ."""
+    got: Counter = Counter()
+    for row in rows:
+        got[FUNDS.get(str(row.get("hipdata") or "").upper(), "อื่น ๆ")] += int(row.get("n") or 0)
+    return {"total": sum(got.values()), "funds": [{"fund": f, "n": got[f]} for f in FUND_ORDER if got[f]]}
 
 
 # Each menu's export / send history: the table, the date it is counted by, and what it adds up.
@@ -191,8 +205,31 @@ class DashboardStore:
         return {"reps": reps, "rep_months": rep_months(lines, start, end), "menus": menus, "uploads": uploads}
 
 
-def register(app: FastAPI, settings: Settings, local: Store, templates: Jinja2Templates) -> None:
+def _range(start: str, end: str) -> tuple[date, date]:
+    try:
+        first = date.fromisoformat(start) if start else fiscal_start(date.today())
+        last = date.fromisoformat(end) if end else date.today()
+    except ValueError:
+        raise HTTPException(400, "วันที่ไม่ถูกต้อง") from None
+    if last < first:
+        raise HTTPException(400, "วันที่สิ้นสุดต้องไม่ก่อนวันที่เริ่ม")
+    return first, last
+
+
+def register(app: FastAPI, settings: Settings, local: Store, templates: Jinja2Templates, hosxp: Any = None) -> None:
     store = DashboardStore(local)
+
+    @app.get("/api/dashboard/visits")
+    def visits(start: str = "", end: str = ""):
+        """The one HOSxP read of the home page, asked for apart so the rest opens at once."""
+        first, last = _range(start, end)
+        if hosxp is None:
+            raise HTTPException(503, "ยังไม่ได้ตั้งค่าฐานข้อมูล HOSxP")
+        try:
+            counts = hosxp.visit_counts(first.isoformat(), last.isoformat())
+        except Exception as exc:  # noqa: BLE001 - HOSxP down: the card says so, the rest of the page still works
+            raise HTTPException(503, f"อ่านยอด visit จาก HOSxP ไม่ได้: {str(exc)[:160]}") from None
+        return {"opd": by_fund(counts["opd"]), "ipd": by_fund(counts["ipd"])}
 
     @app.get("/", response_class=HTMLResponse)
     def home(request: Request):
@@ -200,11 +237,5 @@ def register(app: FastAPI, settings: Settings, local: Store, templates: Jinja2Te
 
     @app.get("/api/dashboard")
     def overview(start: str = "", end: str = ""):
-        try:
-            first = date.fromisoformat(start) if start else fiscal_start(date.today())
-            last = date.fromisoformat(end) if end else date.today()
-        except ValueError:
-            raise HTTPException(400, "วันที่ไม่ถูกต้อง") from None
-        if last < first:
-            raise HTTPException(400, "วันที่สิ้นสุดต้องไม่ก่อนวันที่เริ่ม")
+        first, last = _range(start, end)
         return {"start": first.isoformat(), "end": last.isoformat(), **store.overview(first, last)}

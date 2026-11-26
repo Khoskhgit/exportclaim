@@ -416,6 +416,15 @@ class Hosxp:
             ORDER BY o.vstdate, o.vsttime""",
             [start, end, *pttypes])
 
+    def visit_counts(self, start, end) -> dict[str, list[dict]]:
+        """OPD visits (ovst by visit date) and admissions (ipt by admit date) between start and end, per hipdata_code."""
+        def count(table: str, day: str) -> list[dict]:
+            return self._select(
+                f"""SELECT IFNULL(NULLIF(ptt.hipdata_code,''),'') AS hipdata, COUNT(*) AS n
+                FROM {table} t LEFT JOIN pttype ptt ON ptt.pttype=t.pttype
+                WHERE t.{day} BETWEEN %s AND %s GROUP BY hipdata""", [start, end])
+        return {"opd": count("ovst", "vstdate"), "ipd": count("ipt", "regdate")}
+
     def disabled_visits(self, start, end, pttypes: Iterable[str] = (), cids: Iterable[str] = ()) -> list[dict]:
         """OPD visits and admissions between start and end (visit date / admit date) under these rights (the SSO
         disability right) or of these patients, with the total charge and the part billed to the right."""

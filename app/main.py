@@ -131,7 +131,7 @@ def create_app(settings: Settings | None = None, hosxp: Any = None, store: Store
     ppfs_routes.register(app, settings, db, local, templates)
     labwalkin_routes.register(app, settings, db, local, templates)
     ntip_routes.register(app, settings, db, local, templates)
-    dashboard.register(app, settings, local, templates)
+    dashboard.register(app, settings, local, templates, db)
     auto = autopull.register(app, settings, line_send, **({"poll": 0.02} if line_send else {}))
     ktb_pull.register(app, settings, approvals.import_data, line_send, **({"client": ktb} if ktb else {}))
 

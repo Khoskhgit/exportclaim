@@ -11,7 +11,7 @@
 <main id="main" tabindex="-1" class="dash-one">
   <div class="dash-top">
     <div class="dash-title"><h2>Dashboard ภาพรวม</h2>
-      <p>จากไฟล์ REP/STM ที่นำเข้าและประวัติการส่งในแอป (ไม่ดึง HOSxP) · <span id="last-upload">—</span></p></div>
+      <p>จากไฟล์ REP/STM ที่นำเข้าและประวัติการส่งในแอป (ยอด visit อ่านจาก HOSxP) · <span id="last-upload">—</span></p></div>
     <form id="search" class="dash-range">
       <label>ตั้งแต่<input type="date" name="start" required></label>
       <label>ถึง<input type="date" name="end" required></label>
@@ -40,6 +40,7 @@
     </div>
     <div class="panel dash-panel dash-wide">
       <div class="dash-head"><h3>การส่งของแต่ละเมนู</h3><span class="muted-note">รายเดือน · แต่ละเมนูใช้สเกลของตัวเอง · กดเพื่อเปิดเมนู</span></div>
+      <div class="viz-legend" aria-hidden="true"><span><i class="sw fund-sso"></i>ประกันสังคม</span><span><i class="sw fund-nhso"></i>สปสช.</span><span><i class="sw fund-cgd"></i>กรมบัญชีกลาง</span></div>
       <div id="menus" class="dash-menus"></div>
     </div>
     <div class="panel dash-panel">

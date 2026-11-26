@@ -131,16 +131,43 @@ function renderReps(reps) {
   const card = (label, value, unit, sub, tone) => el("div", { class: `card tone-${tone}` }, el("span", { class: "card-label" }, label),
     el("span", { class: "card-count" }, value, el("small", {}, ` ${unit}`)), el("span", { class: "card-amount" }, sub));
   $("cards").replaceChildren(
+    visitCard(),
     card("ส่งแล้ว (มี REP)", count.format(t.sent.n), "visit", `${baht.format(t.sent.amount)} บาท`, "sent"),
     card("ผ่าน (A)", count.format(t.passed.n), "visit", `${pct(t)} · ${baht.format(t.passed.amount)} บาท`, "ok"),
     card("ติด C", count.format(t.c.n), "visit", `${baht.format(t.c.amount)} บาท`, "warn"),
     card("Deny", count.format(t.deny.n), "visit", `${baht.format(t.deny.amount)} บาท`, "error"),
-    card("ตอบกลับ (REP)", t.has_paid ? baht.format(t.paid) : "—", "บาท", "e-Claim ที่มียอดชดเชยใน REP", "paid"),
+    card("ตอบกลับ (REP)", t.has_paid ? baht.format(t.paid) : "—", "บาท", "e-Claim ที่มียอดชดเชยใน REP", "rep"),
     card("STM จ่าย", baht.format(t.stm_paid), "บาท", "ตาม Statement ที่นำเข้า", "paid"));
 }
 
+// The visit count comes from HOSxP apart from the rest (/api/dashboard/visits), so its card fills in later.
+let visits = null;
+const FUND_NAMES = { UCS: "บัตรทอง (UCS)", OFC: "ข้าราชการ (OFC)", LGO: "อปท. (LGO)", SSS: "ประกันสังคม (SSS)" };
+function visitCard() {
+  const v = visits;
+  const ok = v && !v.error;
+  const row = (label, n) => el("li", {}, el("span", {}, label), el("b", {}, count.format(n)));
+  return el("div", { class: "card tone-visit", id: "visit-card" },
+    el("span", { class: "card-label" }, "ยอด visit OPD (HOSxP)"),
+    el("span", { class: "card-count" }, ok ? count.format(v.opd.total) : "—", el("small", {}, " visit")),
+    el("span", { class: "card-amount" }, v?.error ? v.error : ok ? `ผู้ป่วยใน ${count.format(v.ipd.total)} AN` : "กำลังอ่าน HOSxP…"),
+    ok && v.opd.funds.length ? el("ul", { class: "visit-funds", "aria-label": "visit OPD ตามกองทุน" },
+      ...v.opd.funds.map((f) => row(FUND_NAMES[f.fund] || f.fund, f.n))) : null);
+}
+
+async function loadVisits(q) {
+  visits = null;
+  $("visit-card")?.replaceWith(visitCard());
+  try { visits = await api(`/api/dashboard/visits?${q}`); } catch (err) { visits = { error: err.message }; }
+  $("visit-card")?.replaceWith(visitCard());
+}
+
+// Each menu card is tinted by the fund it claims from.
+const FUND_OF = { ssop: "sso", aipn: "sso", dental: "sso", disabled: "sso", nhso18: "nhso", fdh: "nhso", eclaim: "nhso",
+  ppfs: "nhso", ntip: "nhso", labwalkin: "nhso", approve: "cgd" };
+
 function renderMenus(menus) {
-  $("menus").replaceChildren(...menus.map((m) => el("a", { class: m.items ? "dash-menu" : "dash-menu idle", href: m.href,
+  $("menus").replaceChildren(...menus.map((m) => el("a", { class: `dash-menu fund-${FUND_OF[m.key] || "other"}${m.items ? "" : " idle"}`, href: m.href,
     title: m.last ? `${m.label} · ล่าสุด ${thaiDateTime(m.last)}` : `${m.label} · ยังไม่มีในช่วงนี้` },
     el("span", { class: "dash-menu-head" }, el("span", { class: "dash-menu-label" }, m.label),
       el("span", { class: "dash-menu-count" }, count.format(m.items || 0), el("small", {}, ` ${m.unit}`))),
@@ -165,6 +192,7 @@ async function load() {
   try {
     const q = new URLSearchParams({ start: form.elements.start.value, end: form.elements.end.value });
     const data = await api(`/api/dashboard?${q}`);
+    loadVisits(q);
     renderReps(data.reps);
     $("chart-months").replaceChildren(...monthsChart(data.rep_months || []));
     renderMenus(data.menus);
