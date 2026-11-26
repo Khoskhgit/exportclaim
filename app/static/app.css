@@ -90,6 +90,13 @@ input[type=checkbox]:disabled{cursor:not-allowed}
 .search-inline .actions-cell{flex-wrap:nowrap}
 .drawer tr.outlab td{background:#fff7e0}
 .presets{display:flex;gap:4px;grid-column:1/-1;margin-top:-4px}
+/* the main search forms (SSOP, AIPN, 18 แฟ้ม, Approve, dental) wrap as a flex row, so the search button sits beside the
+   last field instead of dropping to its own row when the fields only just fit */
+.search:not(.search-inline):not(.ppfs-search):not(.vn-search){display:flex;flex-wrap:wrap;align-items:flex-end}
+.search:not(.search-inline):not(.ppfs-search):not(.vn-search)>label{flex:1 1 120px}
+.search:not(.search-inline):not(.ppfs-search):not(.vn-search)>.wide{flex:2 1 220px}
+.search:not(.search-inline):not(.ppfs-search):not(.vn-search)>.actions-cell{flex:0 0 auto}
+.search:not(.search-inline):not(.ppfs-search):not(.vn-search)>.presets{flex:1 1 100%}
 .presets span{font-size:var(--text-xs);color:var(--faint);align-self:center}
 .presets button{padding:0 8px;font-size:var(--text-xs)}
 .multi{position:relative;min-width:0;max-width:100%}
@@ -353,7 +360,7 @@ dl.sum dt{color:var(--muted)}dl.sum dd{margin:0;font-weight:600;font-variant-num
 }
 @media (max-width:900px){
   body{font-size:var(--text-sm);padding-bottom:200px}
-  .search .wide{grid-column:1/-1}
+  .search .wide{grid-column:1/-1;flex-basis:100%}
   .table-wrap{max-height:none}
   .actions-inner{padding:8px 12px;gap:8px}.actions label{width:calc(50% - 4px)}.totals{width:100%}.actions .arrow{display:none}
   .actions label.type{width:calc(60% - 4px)}.actions button.big{width:calc(40% - 4px);min-height:38px;font-size:var(--text-base)}
