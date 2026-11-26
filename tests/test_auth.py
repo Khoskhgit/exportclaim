@@ -37,6 +37,7 @@ def fake_moph(profile):
         calls.append(url)
         if url == auth.MOPH_TOKEN:
             assert kw["form"]["grant_type"] == "authorization_code" and kw["form"]["code"] == "CODE"
+            fetch.redirect_uri = kw["form"]["redirect_uri"]
             return {"data": {"access_token": "H"}}
         if url == auth.PROVIDER_TOKEN:
             assert kw["body"]["token"] == "H" and kw["body"]["token_by"] == "Health ID"
@@ -155,6 +156,22 @@ def test_moph_off_and_host_redirect(tmp_path):
     elsewhere = make(tmp_path / "c", moph_redirect_uri="http://localhost:5180/auth/moph/callback")
     r = elsewhere.get("/auth/moph/start", follow_redirects=False)
     assert r.headers["location"] == "http://localhost:5180/auth/moph/start"
+
+
+def test_moph_returns_to_the_address_the_login_started_on(tmp_path):
+    lan, public = "https://192.168.80.88:5180/auth/moph/callback", "http://testserver/auth/moph/callback"
+    config = replace(settings(), export_dir=tmp_path / "exports", login_required=True, moph_health_id_client="h",
+                     moph_health_id_secret="hs", moph_provider_id_client="p", moph_provider_id_secret="ps",
+                     moph_redirect_uri=f"{lan}, {public}")
+    fetch = fake_moph(PROFILE)
+    client = TestClient(create_app(config, LoginHosxp(), Store(tmp_path / "s.sqlite3"), moph_fetch=fetch))
+    # Opened on testserver (listed second): stays here, and MOPH and the token exchange both get that URL.
+    state = moph_start(client)
+    assert client.get(f"/auth/moph/callback?code=CODE&state={state}", follow_redirects=False).headers["location"] == "/"
+    assert fetch.redirect_uri == public
+    # A host that is not listed goes to the first URL; every listed host is allowed.
+    assert config.moph_redirect_for("other.example") == lan and config.moph_redirect_for("192.168.80.88:5180") == lan
+    assert {"192.168.80.88", "testserver"} <= set(config.allowed_hosts)
 
 
 def test_export_records_who_made_it(tmp_path):

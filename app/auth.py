@@ -95,19 +95,19 @@ def _http_json(url: str, *, form: dict | None = None, body: dict | None = None,
         raise
 
 
-def moph_authorize_url(settings: Settings, state: str) -> str:
+def moph_authorize_url(settings: Settings, state: str, redirect_uri: str = "") -> str:
     return _url(settings, MOPH_AUTHORIZE) + "?" + urllib.parse.urlencode({
-        "client_id": settings.moph_health_id_client, "redirect_uri": settings.moph_redirect_uri,
+        "client_id": settings.moph_health_id_client, "redirect_uri": redirect_uri or settings.moph_redirect_for(""),
         "response_type": "code", "state": state,
     })
 
 
-def moph_profile(settings: Settings, code: str, fetch: Callable[..., dict] = _http_json) -> dict:
+def moph_profile(settings: Settings, code: str, fetch: Callable[..., dict] = _http_json, redirect_uri: str = "") -> dict:
     """Exchange the code: Health ID token -> Provider ID token -> provider profile."""
     if fetch is _http_json:
         fetch = functools.partial(_http_json, user_agent=settings.moph_user_agent)
     health = fetch(_url(settings, MOPH_TOKEN), form={
-        "grant_type": "authorization_code", "code": code, "redirect_uri": settings.moph_redirect_uri,
+        "grant_type": "authorization_code", "code": code, "redirect_uri": redirect_uri or settings.moph_redirect_for(""),
         "client_id": settings.moph_health_id_client, "client_secret": settings.moph_health_id_secret,
     })
     health_token = text((health.get("data") or {}).get("access_token"))
@@ -215,15 +215,17 @@ def register(app: FastAPI, settings: Settings, db: Any, local: Store, templates:
     def moph_start(request: Request):
         if not settings.moph_ready:
             return RedirectResponse("/login?error=moph_off", status_code=303)
-        # The state cookie must live on the same host MOPH ID redirects back to.
-        target = urllib.parse.urlsplit(settings.moph_redirect_uri)
+        # The state cookie must live on the same host MOPH ID redirects back to: stay on this host when one of
+        # the registered redirect URLs is on it, else move to the first one.
+        redirect_uri = settings.moph_redirect_for(request.headers.get("host", ""))
+        target = urllib.parse.urlsplit(redirect_uri)
         if target.netloc and target.netloc != request.headers.get("host"):
             return RedirectResponse(f"{target.scheme}://{target.netloc}/auth/moph/start", status_code=303)
         state = secrets.token_urlsafe(24)
         local.save_login_state(token_hash(state))
-        response = RedirectResponse(moph_authorize_url(settings, state), status_code=303)
+        response = RedirectResponse(moph_authorize_url(settings, state, redirect_uri), status_code=303)
         response.set_cookie(STATE_COOKIE, state, max_age=600, httponly=True, samesite="lax", path="/auth",
-                            secure=settings.moph_redirect_uri.startswith("https://"))
+                            secure=redirect_uri.startswith("https://"))
         return response
 
     @app.get("/auth/healthid/callback")
@@ -241,7 +243,8 @@ def register(app: FastAPI, settings: Settings, db: Any, local: Store, templates:
         if not state or not hmac.compare_digest(state, cookie_state) or not local.take_login_state(token_hash(state)):
             return fail("moph_state")
         try:
-            profile = moph_profile(settings, code, moph_fetch)
+            profile = moph_profile(settings, code, moph_fetch,
+                                   settings.moph_redirect_for(request.headers.get("host", "")))
         except (urllib.error.URLError, TimeoutError, ValueError, json.JSONDecodeError, OSError) as exc:
             where = getattr(exc, "url", "") or ""
             reason = f"{exc.__class__.__name__} {getattr(exc, 'code', '')} {urllib.parse.urlsplit(where).netloc}".strip()

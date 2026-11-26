@@ -123,10 +123,23 @@ class Settings:
         names = ["127.0.0.1", "localhost", *self.extra_hosts]
         if self.host not in {"0.0.0.0", "::", ""}:
             names.append(self.host)
-        redirect = urlsplit(self.moph_redirect_uri).hostname
-        if redirect:
-            names.append(redirect)
+        for uri in self.moph_redirect_uris:
+            redirect = urlsplit(uri).hostname
+            if redirect:
+                names.append(redirect)
         return list(dict.fromkeys(n.strip() for n in names if n.strip()))
+
+    @property
+    def moph_redirect_uris(self) -> tuple[str, ...]:
+        """MOPH_REDIRECT_URI may list several URLs (comma-separated), one per address people use."""
+        return tuple(u.strip() for u in self.moph_redirect_uri.split(",") if u.strip())
+
+    def moph_redirect_for(self, host: str) -> str:
+        """The redirect URL on the host the browser is using now, else the first one listed."""
+        from urllib.parse import urlsplit
+        uris = self.moph_redirect_uris
+        host = (host or "").lower()
+        return next((u for u in uris if urlsplit(u).netloc.lower() == host), uris[0] if uris else "")
 
     @property
     def moph_ready(self) -> bool:

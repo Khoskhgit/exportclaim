@@ -53,7 +53,7 @@ HEALTHID_REDIRECT_URI=https://192.168.80.88:5180/auth/healthid/callback
 ทุกหน้าต้องเข้าสู่ระบบก่อน มี 2 วิธี:
 
 1. **บัญชี HOSxP:** ใช้ชื่อผู้ใช้และรหัสผ่านเดียวกับ HOSxP โปรแกรมอ่าน `opduser` อย่างเดียว ไม่ให้เข้าถ้าบัญชีถูกปิด (`account_disable='Y'`) หรือรหัสผ่านหมดอายุ จำกัดกลุ่มผู้ใช้ได้ด้วย `LOGIN_GROUPS` ถ้ากรอกรหัสผิด 5 ครั้งจะล็อก 15 นาที
-2. **MOPH ID:** ปุ่ม "เข้าสู่ระบบด้วย MOPH ID" ใช้ Health ID ของ moph.id.th แล้วอ่านโปรไฟล์จาก Provider ID ให้เข้าได้เฉพาะผู้ที่สังกัด `HCODE` หรือรหัสใน `MOPH_ALLOWED_HCODES` ต้องขอ client ID และ secret key ของ Health ID และ Provider ID แล้วใส่ใน `.env` พร้อมลงทะเบียน redirect URL ให้ตรงกับ `MOPH_REDIRECT_URI`
+2. **MOPH ID:** ปุ่ม "เข้าสู่ระบบด้วย MOPH ID" ใช้ Health ID ของ moph.id.th แล้วอ่านโปรไฟล์จาก Provider ID ให้เข้าได้เฉพาะผู้ที่สังกัด `HCODE` หรือรหัสใน `MOPH_ALLOWED_HCODES` ต้องขอ client ID และ secret key ของ Health ID และ Provider ID แล้วใส่ใน `.env` พร้อมลงทะเบียน redirect URL ให้ตรงกับ `MOPH_REDIRECT_URI` ถ้าเปิดใช้หลายที่อยู่ (เช่น IP ในโรงพยาบาลและโดเมนภายนอก) ใส่ได้หลาย URL คั่นด้วยจุลภาค และลงทะเบียนทุก URL โปรแกรมจะพากลับที่อยู่เดียวกับที่ผู้ใช้เปิดเข้ามา
 
 โปรแกรมอ่านชื่อตัวแปรตามเอกสาร key ได้ด้วย ได้แก่ `HEALTHID_CLIENT_ID`, `HEALTHID_CLIENT_SECRET`, `HEALTHID_REDIRECT_URI`, `HEALTHID_BASE_URL`, `PROVIDERID_CLIENT_ID`, `PROVIDERID_CLIENT_SECRET`, `PROVIDERID_API_URL` และ `HOSPITAL_CODE` (รหัสโรงพยาบาลที่อนุญาตให้เข้า)
 
