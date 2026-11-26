@@ -9,9 +9,9 @@
 :root{
   /* type, spacing, motion */
   --text-xs:12px;--text-sm:14px;--text-base:16px;--text-lg:18px;--text-xl:20px;--text-2xl:24px;--text-3xl:30px;--sp-1:4px;--sp-2:8px;--sp-3:12px;--sp-4:16px;--sp-6:24px;--sp-8:32px;--ease:cubic-bezier(.22,1,.36,1);--dur-fast:.2s;--dur-move:.3s;
-  /* theme: Deep Pink #FF1493 frame with dark text (white on it is only 3.6:1; --brand-ink on --brand 4.6:1, --ink 4.9:1),
+  /* theme: Pink #F5078F frame with dark text (white on it is only 4.0:1; --brand-ink on --brand 4.7:1, --ink 4.5:1),
      actions a deeper pink from the same hue (white on --accent 5.7:1, on --accent-2 8.2:1) */
-  --brand:#ff1493;--brand-hover:#ff5cb0;--brand-light:#ff8cc8;--brand-line:#e0007a;--brand-ink:#3d0623;--brand-dark:#6d0038;--accent:#c8006a;--accent-2:#9e0052;--accent-soft:#ffe3f1;--accent-ink:#fff;--bar:#c8006a;--grad:linear-gradient(135deg,#e0007a 0%,#c8006a 55%,#9e0052 100%);--grad-hover:linear-gradient(135deg,#c8006a 0%,#9e0052 100%);--tint:#fff0f7;--ring:#ff149359;--focus-ring:0 0 0 3px var(--ring);
+  --brand:#f5078f;--brand-hover:#f752ab;--brand-light:#fa8cc6;--brand-line:#d9007b;--brand-ink:#2b0317;--brand-dark:#6d0038;--accent:#c8006a;--accent-2:#9e0052;--accent-soft:#ffe3f1;--accent-ink:#fff;--bar:#c8006a;--grad:linear-gradient(135deg,#e0007a 0%,#c8006a 55%,#9e0052 100%);--grad-hover:linear-gradient(135deg,#c8006a 0%,#9e0052 100%);--tint:#fff0f7;--ring:#f5078f59;--focus-ring:0 0 0 3px var(--ring);
   /* surfaces and text (ink 16.9:1, muted 10:1, faint 6.1:1 on --bg) */
   --bg:#fdf7fa;--panel:#fff;--panel-2:#fffafc;--hover:#fdeef6;--line:#f3dbe7;--line-2:#fdeef6;--ink:#1f1419;--muted:#4a3a42;--faint:#6b5a62;
   /* status colours (meaning, not brand: keep across themes) */
@@ -911,9 +911,9 @@ body{font-family:"Prompt","Sarabun","Noto Sans Thai","Leelawadee UI",Tahoma,syst
 button,input,select,textarea{font-family:inherit}
 .notice-close{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;font-size:var(--text-xl)}  /* Prompt draws a very small multiplication sign */
 
-/* ================================================================ Theme: Deep Pink #FF1493
-   One set of colours, all from the :root tokens at the top. The frame (sidebar and top bar) is --brand #ff1493 with very
-   dark text, because white on it is only 3.6:1; actions use --accent #c8006a from the same hue. The logo block in the
+/* ================================================================ Theme: Pink #F5078F
+   One set of colours, all from the :root tokens at the top. The frame (sidebar and top bar) is --brand #f5078f with very
+   dark text, because white on it is only 4.0:1; actions use --accent #c8006a from the same hue. The logo block in the
    sidebar is exactly as tall as the top bar and shares its bottom line, so the two read as one band. Status and chart
    colours stay as they are: they carry meaning. */
 ::selection{background:var(--brand-light);color:var(--brand-ink)}
