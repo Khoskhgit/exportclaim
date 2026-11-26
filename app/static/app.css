@@ -897,8 +897,15 @@ dialog{border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(-
 .tone-paid{--tone:#0d6b55}
 
 /* ================================================================ Fonts
-   Prompt, as on the hospital website (khos.moph.go.th), stored in /static/fonts (SIL OFL, OFL-Prompt.txt): Thai and Latin
-   subsets only, so pages never wait on Google Fonts and work without internet. Sarabun stays as the fallback. */
+   Two families, both stored in /static/fonts (SIL OFL) with Thai and Latin subsets only, so pages never wait on Google
+   Fonts and work without internet:
+   - Prompt (as on khos.moph.go.th, OFL-Prompt.txt) for what is read at a glance: headings, the brand, card figures, main
+     buttons. Its wide geometric shapes look right big but tire the eye in long Thai text and dense tables.
+   - Noto Sans Thai (OFL-NotoSansThai.txt, one variable file per subset, weights 400-700) for everything else: loopless,
+     narrow and even, so table rows, forms and notes stay easy to read (ui-ux-pro-max pairing "Thai Modern").
+   Figures use tabular widths in tables and cards so columns of baht line up. Sarabun stays as the fallback. */
+@font-face{font-family:"Noto Sans Thai";src:url("/static/fonts/NotoSansThai-thai.woff2") format("woff2");font-weight:400 700;font-display:swap;unicode-range:U+02D7,U+0303,U+0331,U+0E01-0E5B,U+200C-200D,U+25CC}
+@font-face{font-family:"Noto Sans Thai";src:url("/static/fonts/NotoSansThai-latin.woff2") format("woff2");font-weight:400 700;font-display:swap;unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
 @font-face{font-family:"Prompt";src:url("/static/fonts/Prompt-400-thai.woff2") format("woff2");font-weight:400;font-display:swap;unicode-range:U+02D7,U+0303,U+0331,U+0E01-0E5B,U+200C-200D,U+25CC}
 @font-face{font-family:"Prompt";src:url("/static/fonts/Prompt-400-latin.woff2") format("woff2");font-weight:400;font-display:swap;unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
 @font-face{font-family:"Prompt";src:url("/static/fonts/Prompt-500-thai.woff2") format("woff2");font-weight:500;font-display:swap;unicode-range:U+02D7,U+0303,U+0331,U+0E01-0E5B,U+200C-200D,U+25CC}
@@ -907,9 +914,11 @@ dialog{border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(-
 @font-face{font-family:"Prompt";src:url("/static/fonts/Prompt-600-latin.woff2") format("woff2");font-weight:600;font-display:swap;unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
 @font-face{font-family:"Prompt";src:url("/static/fonts/Prompt-700-thai.woff2") format("woff2");font-weight:700;font-display:swap;unicode-range:U+02D7,U+0303,U+0331,U+0E01-0E5B,U+200C-200D,U+25CC}
 @font-face{font-family:"Prompt";src:url("/static/fonts/Prompt-700-latin.woff2") format("woff2");font-weight:700;font-display:swap;unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
-body{font-family:"Prompt","Sarabun","Noto Sans Thai","Leelawadee UI",Tahoma,system-ui,sans-serif}
+body{font-family:"Noto Sans Thai","Sarabun","Leelawadee UI",Tahoma,system-ui,sans-serif;line-height:1.6}
+h1,h2,h3,.side-brand h1,.page-head h2,.dash-title h2,.card-count,.dash-menu-count,button.primary,.crumbs li[aria-current=page],.ring-login{font-family:"Prompt","Noto Sans Thai","Sarabun",system-ui,sans-serif}
+table,.card-count,.card-amount,.dash-menu-count,.num,.mono{font-variant-numeric:tabular-nums}
 button,input,select,textarea{font-family:inherit}
-.notice-close{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;font-size:var(--text-xl)}  /* Prompt draws a very small multiplication sign */
+.notice-close{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;font-size:var(--text-xl)}  /* the text fonts draw a very small multiplication sign */
 
 /* ================================================================ Theme: #B92D5D with white text
    One set of colours, all from the :root tokens at the top. The frame (sidebar and top bar) is --brand #b92d5d with
