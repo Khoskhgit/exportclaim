@@ -51,10 +51,10 @@ function renderRows() {
     return el("tr", { class: state.current === r.key ? "current" : "", onclick: () => openDrawer(r) },
       el("td", { class: "check" }, box), el("td", {}, resultBadge(r)),
       el("td", {}, r.status ? el("span", { class: "badge b-sent" }, r.status) : (r.approve_required && r.claimcode ? null : el("span", { class: "muted" }, "—")), ktbTag(r), walkinTag(r), uucTag(r), referTag(r), fdhClaimTag(r)),
-      el("td", {}, r.kind), el("td", { class: "mono" }, r.key, r.admit_an ? el("span", { class: "sub admit-an", title: "visit นี้ Admit แล้ว" }, `AN ${r.admit_an}`) : null),
+      el("td", { class: "mono" }, r.key, el("span", { class: "sub" }, r.kind), r.admit_an ? el("span", { class: "sub admit-an", title: "visit นี้ Admit แล้ว" }, `AN ${r.admit_an}`) : null),
       el("td", { class: "mono" }, r.hn),
-      el("td", { class: "name-cell", title: r.ptname }, r.ptname, el("span", { class: "sub" }, r.pttype)),
-      el("td", { class: "mono" }, toDmy(r.date)), el("td", {}, r.maininscl), el("td", {}, r.pdx || el("span", { class: "muted" }, "—")),
+      el("td", { class: "name-cell", title: r.ptname }, r.ptname, el("span", { class: "sub" }, [r.maininscl, r.pttype].filter(Boolean).join(" · "))),
+      el("td", { class: "mono" }, toDmy(r.date)), el("td", {}, r.pdx || el("span", { class: "muted" }, "—")),
       el("td", { class: "num" }, baht.format(Number(r.money)), r.excluded_count ? el("span", { class: "excluded-note" }, `ไม่ส่ง ${r.excluded_count} รายการ`) : ""),
       el("td", { class: "num paid" }, r.paid_amount ? baht.format(Number(r.paid_amount)) : el("span", { class: "muted" }, "—")),
       el("td", { class: "problems" }, problemText(problems)));
