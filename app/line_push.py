@@ -2,8 +2,8 @@
 
 LINE_CHANNEL_TOKEN is the channel access token (long-lived) of a LINE Official Account. A LINE ID such as
 "somsak-t" can't be addressed through the API: the message goes to LINE_TO, a user ID ("U" + 32 hex, shown as
-"Your user ID" in the LINE Developers console of the person who made the channel), or, with LINE_TO empty, to
-every friend of the account (broadcast).
+"Your user ID" in the LINE Developers console of the person who made the channel) or LINE_GROUP_ID, a group
+("C" + 32 hex) the account has been invited into, or, with both empty, to every friend of the account (broadcast).
 """
 from __future__ import annotations
 

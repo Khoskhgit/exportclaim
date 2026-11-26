@@ -103,8 +103,8 @@ class Settings:
     # Daily automatic REP pull (e-Claim + Seamless) at HH:MM (Asia/Bangkok); empty = off
     auto_pull_time: str = ""
     auto_pull_months: int = 2
-    # LINE Messaging API (LINE Official Account): the summary goes to LINE_TO (a user ID "U..."), or to every
-    # friend of the account (broadcast) when LINE_TO is empty
+    # LINE Messaging API (LINE Official Account): the summary goes to LINE_GROUP_ID (a group "C..." the account
+    # has joined) when set, else LINE_TO (a user ID "U..."), or to every friend of the account (broadcast) when both are empty
     line_channel_token: str = field(default="", repr=False)
     line_to: str = ""
     # MOPH Alert (MOPH Notify): the keys of one LINE group; used instead of LINE_CHANNEL_TOKEN when set
@@ -236,7 +236,7 @@ def load_settings(env_file: Path | None = None) -> Settings:
         auto_pull_time=(get("AUTO_PULL_TIME") or "").strip(),
         auto_pull_months=int(get("AUTO_PULL_MONTHS") or 2),
         line_channel_token=(get("LINE_CHANNEL_TOKEN") or "").strip(),
-        line_to=(get("LINE_TO") or "").strip(),
+        line_to=(get("LINE_GROUP_ID") or get("LINE_TO") or "").strip(),
         moph_alert_client_key=(get("MOPH_ALERT_CLIENT_KEY") or "").strip(),
         moph_alert_secret_key=(get("MOPH_ALERT_SECRET_KEY") or "").strip(),
         moph_alert_url=(get("MOPH_ALERT_URL") or "").strip(),

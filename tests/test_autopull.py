@@ -152,6 +152,19 @@ def test_autopull_prefers_line_oa_over_moph_alert(tmp_path):
     assert status["line_ready"] and status["line_to"] == "ผู้ใช้ที่ตั้งไว้"
 
 
+def test_line_group_id_wins_over_line_to(tmp_path, monkeypatch):
+    from app.config import load_settings
+    env = tmp_path / ".env"
+    env.write_text('LINE_CHANNEL_TOKEN=tok\nLINE_TO=U%s\nLINE_GROUP_ID="C%s"\n' % ("0" * 32, "1" * 32), encoding="utf-8")
+    for name in ("LINE_CHANNEL_TOKEN", "LINE_TO", "LINE_GROUP_ID"):
+        monkeypatch.delenv(name, raising=False)
+    s = load_settings(env)
+    assert s.line_to == "C" + "1" * 32
+    app = create_app(replace(settings(), export_dir=tmp_path / "e", line_channel_token="tok", line_to=s.line_to),
+                     FakeHosxp(), Store(tmp_path / "s.sqlite3"))
+    assert TestClient(app).get("/api/autopull").json()["line_to"] == "กลุ่ม LINE ที่ตั้งไว้"
+
+
 def test_flex_summary_card():
     import json
     eclaim = {"funds": ["ucs"], "months": 2, "found": 3, "total": 2, "imported": 2, "errors": 1, "lines": [

@@ -326,6 +326,7 @@ class AutoPull:
                 "next_at": self.next_at.isoformat(timespec="minutes") if self.next_at else "",
                 "line_ready": self.moph or bool(self.settings.line_channel_token),
                 "line_to": "กลุ่ม LINE ของ MOPH Alert" if self.moph else
+                           "กลุ่ม LINE ที่ตั้งไว้" if self.settings.line_to.startswith("C") else
                            "ผู้ใช้ที่ตั้งไว้" if self.settings.line_to else "ทุกคนที่เป็นเพื่อนกับบัญชี (broadcast)",
                 "last": self.last, "steps": self._live_steps()}
 
