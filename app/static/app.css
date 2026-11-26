@@ -9,15 +9,15 @@
 :root{
   /* type, spacing, motion */
   --text-xs:12px;--text-sm:14px;--text-base:16px;--text-lg:18px;--text-xl:20px;--text-2xl:24px;--text-3xl:30px;--sp-1:4px;--sp-2:8px;--sp-3:12px;--sp-4:16px;--sp-6:24px;--sp-8:32px;--ease:cubic-bezier(.22,1,.36,1);--dur-fast:.2s;--dur-move:.3s;
-  /* theme: Pink #F5078F frame with dark text (white on it is only 4.0:1; --brand-ink on --brand 4.7:1, --ink 4.5:1),
-     actions a deeper pink from the same hue (white on --accent 5.7:1, on --accent-2 8.2:1) */
-  --brand:#f5078f;--brand-hover:#f752ab;--brand-light:#fa8cc6;--brand-line:#d9007b;--brand-ink:#2b0317;--brand-dark:#6d0038;--accent:#c8006a;--accent-2:#9e0052;--accent-soft:#ffe3f1;--accent-ink:#fff;--bar:#c8006a;--grad:linear-gradient(135deg,#e0007a 0%,#c8006a 55%,#9e0052 100%);--grad-hover:linear-gradient(135deg,#c8006a 0%,#9e0052 100%);--tint:#fff0f7;--ring:#f5078f59;--focus-ring:0 0 0 3px var(--ring);
+  /* theme: frame #B92D5D with white text (--on-brand on --brand 5.8:1, on --brand-hover 4.7:1, on --brand-light 7.1:1);
+     actions from the same hue (white on --accent 5.8:1, on --accent-2 7.7:1); --brand-ink is the brand colour as text on white (5.8:1) */
+  --brand:#b92d5d;--brand-hover:#cc3d6e;--brand-light:#a3264f;--brand-line:#9a2350;--on-brand:#fff;--brand-ink:#b92d5d;--brand-dark:#6d1a36;--accent:#b92d5d;--accent-2:#9a2350;--accent-soft:#fbe4ec;--accent-ink:#fff;--bar:#b92d5d;--grad:linear-gradient(135deg,#b92d5d 0%,#9a2350 100%);--grad-hover:linear-gradient(135deg,#9a2350 0%,#8f1f49 100%);--tint:#fdf2f6;--ring:#b92d5d59;--focus-ring:0 0 0 3px var(--ring);
   /* surfaces and text (ink 16.9:1, muted 10:1, faint 6.1:1 on --bg) */
-  --bg:#fdf7fa;--panel:#fff;--panel-2:#fffafc;--hover:#fdeef6;--line:#f3dbe7;--line-2:#fdeef6;--ink:#1f1419;--muted:#4a3a42;--faint:#6b5a62;
+  --bg:#fcf7f9;--panel:#fff;--panel-2:#fefafb;--hover:#f9ecf1;--line:#efd9e1;--line-2:#f9ecf1;--ink:#1f1419;--muted:#4a3a42;--faint:#6b5a62;
   /* status colours (meaning, not brand: keep across themes) */
   --ok:#11663d;--ok-mark:#1fa463;--ok-bg:#e1f4e8;--warn:#875a00;--warn-mark:#d99a00;--warn-bg:#fff4d6;--error:#b3261e;--error-bg:#fde9e7;--c:#8a4b00;--c-bg:#ffe8c4;--special:#4b3d93;--special-bg:#eeebfb;--sent:#3c5562;--sent-bg:#e7eef1;
   /* shape and layout */
-  --radius:12px;--radius-sm:8px;--shadow:0 1px 2px #6d00380f;--shadow-lg:0 10px 30px -8px #6d003833,0 4px 8px -4px #6d00381f;--side-w:256px;--top-h:56px;
+  --radius:12px;--radius-sm:8px;--shadow:0 1px 2px #6d1a360f;--shadow-lg:0 10px 30px -8px #6d1a3633,0 4px 8px -4px #6d1a361f;--side-w:256px;--top-h:56px;
   /* status icons (stroke SVG, drawn in currentColor through a mask) */
   --i-dot:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='black'%3E%3Ccircle cx='12' cy='12' r='5'/%3E%3C/svg%3E");--i-check:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7'/%3E%3C/svg%3E");--i-x:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M7 7l10 10M17 7L7 17'/%3E%3C/svg%3E");--i-warn:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 5v9M12 18.5v.5'/%3E%3C/svg%3E");--i-send:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 12l16-7-6 16-3-6z'/%3E%3C/svg%3E");--i-star:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 4l2.4 5 5.6.6-4.2 3.8 1.2 5.6L12 16.3 7 19l1.2-5.6L4 9.6l5.6-.6z'/%3E%3C/svg%3E");--i-search:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='6.5'/%3E%3Cpath d='M20 20l-4.2-4.2'/%3E%3C/svg%3E");--i-none:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 13l2.5-7h11L20 13v5H4z'/%3E%3Cpath d='M4 13h5l1 2h4l1-2h5'/%3E%3C/svg%3E");--i-filter:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 5h16l-6 7.5V18l-4 2v-7.5z'/%3E%3C/svg%3E");--i-error:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpath d='M12 7.5v5.5M12 16.5v.5'/%3E%3C/svg%3E");
 }
@@ -516,7 +516,7 @@ td.funds{min-width:180px}
 .top .menu{background:#0000001f;border:1px solid #ffffff3d;padding:4px;gap:2px;box-shadow:inset 0 1px 2px #00000014}
 .top .menu>a,.top .menu-links>summary{color:#fff;padding:8px 16px;text-shadow:0 1px 1px #00000026}
 .top .menu>a:hover,.top .menu-links>summary:hover,.top .menu-links[open]>summary{color:#fff;background:#ffffff33}
-.top .menu>a[aria-current=page]{background:#fff;color:var(--bar);text-shadow:none;box-shadow:0 4px 14px #6d003840}
+.top .menu>a[aria-current=page]{background:#fff;color:var(--bar);text-shadow:none;box-shadow:0 4px 14px #6d1a3640}
 .top .menu-links-list{border:0;border-radius:12px;padding:8px;box-shadow:var(--shadow-lg)}
 .top .menu .menu-links-list a{color:var(--ink);border-radius:8px}
 .top .menu .menu-links-list a:hover{background:var(--accent-soft);color:var(--accent)}
@@ -579,7 +579,7 @@ th{padding:0 12px}
 @media (max-width:900px){.dash-uploads li{grid-template-columns:1fr}.dash-uploads .sub{grid-column:1}}
 /* SSO drop-down: opens under its own button; the group button looks current when one of its pages is open */
 .menu-group .menu-links-list{left:0;right:auto;min-width:200px}
-.top .menu-group.is-current>summary{background:#fff;color:var(--bar);text-shadow:none;box-shadow:0 4px 14px #6d003840}
+.top .menu-group.is-current>summary{background:#fff;color:var(--bar);text-shadow:none;box-shadow:0 4px 14px #6d1a3640}
 .top .menu .menu-links-list a[aria-current=page]{background:var(--accent-soft);color:var(--accent);font-weight:700}
 /* Dashboard charts: status steps for REP results, three categorical slots for money, one hue for monthly sends */
 .viz{--s1:#2a78d6;--s2:#eb6834;--s3:#1baf7a;--good:#0ca30c;--warning:#fab219;--critical:#d03b3b;--viz-surface:var(--panel)}
@@ -911,12 +911,12 @@ body{font-family:"Prompt","Sarabun","Noto Sans Thai","Leelawadee UI",Tahoma,syst
 button,input,select,textarea{font-family:inherit}
 .notice-close{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;font-size:var(--text-xl)}  /* Prompt draws a very small multiplication sign */
 
-/* ================================================================ Theme: Pink #F5078F
-   One set of colours, all from the :root tokens at the top. The frame (sidebar and top bar) is --brand #f5078f with very
-   dark text, because white on it is only 4.0:1; actions use --accent #c8006a from the same hue. The logo block in the
+/* ================================================================ Theme: #B92D5D with white text
+   One set of colours, all from the :root tokens at the top. The frame (sidebar and top bar) is --brand #b92d5d with
+   white text (--on-brand, 5.8:1); actions use the same colour. The logo block in the
    sidebar is exactly as tall as the top bar and shares its bottom line, so the two read as one band. Status and chart
    colours stay as they are: they carry meaning. */
-::selection{background:var(--brand-light);color:var(--brand-ink)}
+::selection{background:var(--brand);color:var(--on-brand)}
 .side-brand .logo,.logo,.skip-link{background:var(--grad);color:#fff}
 .card[aria-pressed=true]{background:linear-gradient(180deg,#fff 0%,var(--tint) 100%)}
 
@@ -926,35 +926,33 @@ button{border-radius:999px}
 .card{border-radius:var(--radius)}
 .page-head h2,.dash-title h2{color:var(--ink);font-weight:700}
 body{background:var(--bg)}
-button.primary{background:var(--grad);border-color:transparent;box-shadow:inset 0 1px 0 #ffffff40,0 6px 16px -8px #6d003866}
-button.primary:hover:not(:disabled){background:var(--grad-hover);border-color:transparent;box-shadow:inset 0 1px 0 #ffffff33,0 8px 20px -8px #6d003880}
+button.primary{background:var(--grad);border-color:transparent;box-shadow:inset 0 1px 0 #ffffff40,0 6px 16px -8px #6d1a3666}
+button.primary:hover:not(:disabled){background:var(--grad-hover);border-color:transparent;box-shadow:inset 0 1px 0 #ffffff33,0 8px 20px -8px #6d1a3680}
 
 /* sidebar */
-.sidebar{background:linear-gradient(180deg,var(--brand) 0%,var(--brand-light) 100%);border-right:1px solid var(--brand-line);color:var(--ink);scrollbar-color:#6d003855 transparent}
+.sidebar{background:linear-gradient(180deg,var(--brand) 0%,var(--brand-light) 100%);border-right:1px solid var(--brand-line);color:var(--on-brand);scrollbar-color:#ffffff59 transparent}
 .side-brand{box-sizing:border-box;height:var(--top-h);min-height:0;margin:0 0 8px;padding:0 16px;border-radius:0;flex:none;background:var(--brand);border-bottom:1px solid var(--brand-line)}
-.side-brand h1{color:var(--ink)}
-.side-brand p{color:var(--brand-ink)}
-.side-brand .logo{background:var(--brand-ink);color:#fff;box-shadow:none}
-.nav-group summary{color:var(--brand-ink);font-weight:600}
-.nav-group summary:hover{background:var(--brand-hover);color:var(--ink)}
-.nav-list a,.nav-list a .nav-icon{color:var(--ink)}
-.nav-list a:hover{background:var(--brand-hover);color:var(--ink)}
-.nav-list a[aria-current=page]{background:#fff;color:var(--brand-ink);box-shadow:0 1px 3px #6d003826;font-weight:600}
-.nav-list a[aria-current=page] .nav-icon{color:var(--accent)}
-.sidebar :focus-visible,.top :focus-visible{box-shadow:0 0 0 2px var(--brand-ink)}
+.side-brand h1,.side-brand p{color:var(--on-brand)}
+.side-brand .logo{background:#fff;color:var(--brand);box-shadow:none}
+.nav-group summary{color:var(--on-brand);font-weight:600}
+.nav-group summary:hover{background:var(--brand-hover);color:var(--on-brand)}
+.nav-list a,.nav-list a .nav-icon{color:var(--on-brand)}
+.nav-list a:hover{background:var(--brand-hover);color:var(--on-brand)}
+.nav-list a[aria-current=page]{background:#fff;color:var(--brand-ink);box-shadow:0 1px 3px #6d1a3640;font-weight:600}
+.nav-list a[aria-current=page] .nav-icon{color:var(--brand-ink)}
+.sidebar :focus-visible,.top :focus-visible{box-shadow:0 0 0 2px var(--on-brand)}
 
 /* top bar */
-.top{height:var(--top-h);min-height:0;padding-top:0;padding-bottom:0;backdrop-filter:none;background:var(--brand);border-bottom:1px solid var(--brand-line);color:var(--ink)}
-.crumbs ol{color:var(--brand-ink)}
-.crumbs li+li::before{color:var(--brand-ink)}
-.crumbs li[aria-current=page]{color:var(--ink);font-weight:700}
-.menu-toggle{background:transparent;border-color:transparent;box-shadow:none;color:var(--brand-ink)}
-.menu-toggle:hover:not(:disabled){background:var(--brand-hover);color:var(--ink)}
+.top{height:var(--top-h);min-height:0;padding-top:0;padding-bottom:0;backdrop-filter:none;background:var(--brand);border-bottom:1px solid var(--brand-line);color:var(--on-brand)}
+.crumbs ol,.crumbs li+li::before{color:var(--on-brand)}
+.crumbs li[aria-current=page]{color:var(--on-brand);font-weight:700}
+.menu-toggle{background:transparent;border-color:transparent;box-shadow:none;color:var(--on-brand)}
+.menu-toggle:hover:not(:disabled){background:var(--brand-hover);color:var(--on-brand)}
 .top .connection{background:#fff;border-color:var(--brand-line);color:var(--muted)}
-.top .dot.ok{background:#7ef0b8;box-shadow:0 0 0 2px #fff}
+.top .dot.ok{background:#1fa463;box-shadow:0 0 0 2px #fff}
 .top .dot.bad{background:var(--error);box-shadow:0 0 0 2px #fff}
 .top .avatar{background:#fff;border-color:var(--brand-line);color:var(--brand-ink)}
-.top .user-name{color:var(--ink)}.top .user-name small{color:var(--brand-ink)}
+.top .user-name,.top .user-name small{color:var(--on-brand)}
 .top .user-box button.ghost{background:#fff;border-color:var(--brand-line);color:var(--ink);box-shadow:none}
 .top .user-box button.ghost:hover:not(:disabled){background:var(--accent-soft);border-color:var(--brand-ink);color:var(--ink)}
 
