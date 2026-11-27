@@ -38,6 +38,10 @@ class MmsWebError(Exception):
     pass
 
 
+class MmsSlow(MmsWebError):
+    """The login page neither moved on nor showed a message: the site was slow, not the password."""
+
+
 def hosp_code9(hcode: str) -> str:
     """MMS hospital code: 10866 -> 001086600."""
     return f"00{str(hcode).strip().zfill(5)}00" if hcode else ""
@@ -261,7 +265,11 @@ class MmsWeb:
 
     def login(self) -> None:
         try:
-            self._login()
+            try:
+                self._login()
+            except MmsSlow:  # no answer and no message: the site was slow, not the password; once more
+                log.warning("mms login: no answer, trying once more")
+                self._login()
         except MmsWebError:
             raise
         except Exception as exc:  # noqa: BLE001 - Playwright timeouts
@@ -281,7 +289,9 @@ class MmsWeb:
             except Exception:  # noqa: BLE001 - still on the login page: show the site's message
                 body = re.sub(r"\s+", " ", page.inner_text("body"))
                 hint = next((m for m in ("ไม่ถูกต้อง", "ไม่พบ", "ล็อก", "หมดอายุ") if m in body), "")
-                raise MmsWebError("login MMS ไม่ผ่าน" + (f" ({hint})" if hint else " ตรวจ MMS_USER / MMS_PASSWORD")) from None
+                if hint:  # the site said why: the account or the password
+                    raise MmsWebError(f"login MMS ไม่ผ่าน ({hint}) ตรวจ MMS_USER / MMS_PASSWORD") from None
+                raise MmsSlow("เว็บ MMS ไม่ตอบหลังกดเข้าสู่ระบบ (รอ 60 วินาที 2 รอบ) เว็บอาจช้าหรือปิดปรับปรุง ลองใหม่ภายหลัง") from None
             log.info("mms login ok as %s", self.user)
         finally:
             page.close()

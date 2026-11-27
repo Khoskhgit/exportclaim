@@ -168,7 +168,12 @@ def test_pull_2570_and_a_year_the_site_does_not_offer(tmp_path):
     assert app.post("/api/seamless", json={"year": 2570}).status_code == 200
     wait(app)
     assert ("1", 2027) in fake.searches
-    fake.years, fake.searches = {2026}, []  # the site's drop-down has no 2570 yet
+    fake.years, fake.searches = {2026}, []  # the site's drop-down has no 2570 yet: pull 2569, not an error
     app.post("/api/seamless", json={"year": 2570})
     job = wait(app)["job"]
-    assert fake.searches == [] and job["errors"] == 1 and "ยังไม่มีปีงบ 2570" in job["lines"][-1]["text"]
+    assert ("1", 2026) in fake.searches and not any("ไม่มีปีงบ" in l.get("text", "") for l in job["lines"] if l.get("ok") is False)
+    assert any("ยังไม่เปิดปีงบ 2570 ดึงปีงบ 2569 แทน" in l["text"] for l in job["lines"] if l.get("text"))
+    fake.years, fake.searches = {2027, 2026}, []  # an old year the site no longer lists is still an error
+    app.post("/api/seamless", json={"year": 2568})
+    job = wait(app)["job"]
+    assert fake.searches == [] and job["errors"] == 1 and "ไม่มีปีงบ 2568" in job["lines"][-1]["text"]

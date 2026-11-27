@@ -40,7 +40,13 @@ def register(app: FastAPI, settings: Settings, local: Store, client: SeamlessWeb
             projects = web.enter()
             offered = getattr(web, "years", None)  # the site's own year drop-down (ค.ศ.)
             if offered and year not in offered:
-                raise SeamlessError(f"เว็บ Seamless ยังไม่มีปีงบ {year_be} ให้เลือก (มี {', '.join(str(y + 543) for y in sorted(offered, reverse=True))})")
+                listed = ", ".join(str(y + 543) for y in sorted(offered, reverse=True))
+                if year < max(offered):
+                    raise SeamlessError(f"เว็บ Seamless ไม่มีปีงบ {year_be} ให้เลือก (มี {listed})")
+                # A new fiscal year (from 1 October) the site has not opened yet: its REPs are still the year before's.
+                year = max(offered)
+                job.update({"kind": "list", "text": f"เว็บ Seamless ยังไม่เปิดปีงบ {year_be} ดึงปีงบ {year + 543} แทน"})
+                year_be = year + 543
             todo_by_project = {}
             found = known = 0
             for p in projects:  # 1) list every project's REPs
