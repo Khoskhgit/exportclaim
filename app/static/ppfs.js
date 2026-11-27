@@ -333,8 +333,8 @@ function referBox(r, data) {
         draw();
         notice(data.no_refer ? `VN ${r.vn}: ไม่ส่งข้อมูลการส่งต่อ / รับเข้า` : `VN ${r.vn}: ส่งข้อมูลการส่งต่อ / รับเข้า`, "ok");
       } catch (err) { e.target.checked = !e.target.checked; notice(err.message); }
-    } }), "ไม่ส่งข้อมูลการส่งต่อ / รับเข้า") : null,
-    refers.length ? el("p", { class: "muted-note" }, "ติ๊กแล้วจะไม่ส่งแฟ้ม ORF/IRF และช่อง Refer ใน AER ของ visit นี้ ทั้ง ZIP และ FDH (ใช้ค่าเดียวกับหน้า 18 แฟ้ม) ไม่แก้ข้อมูลใน HOSxP") : null);
+    } }), "ไม่ส่งข้อมูลการส่งต่อ / รับเข้า") : "",
+    refers.length ? el("p", { class: "muted-note" }, "ติ๊กแล้วจะไม่ส่งแฟ้ม ORF/IRF และช่อง Refer ใน AER ของ visit นี้ ทั้ง ZIP และ FDH (ใช้ค่าเดียวกับหน้า 18 แฟ้ม) ไม่แก้ข้อมูลใน HOSxP") : "");
   draw();
   return el("div", {}, el("h3", {}, "ข้อมูลส่งต่อ / รับเข้า"), box);
 }

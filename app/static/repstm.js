@@ -64,8 +64,8 @@ async function importFiles(files) {
       if (!response.ok) throw new Error(data.detail || `ผิดพลาด (${response.status})`);
       line.className = "ok";
       line.replaceChildren(el("strong", {}, `✓ ${file.name}`), ` · ${data.summary}`,
-        data.again ? el("span", { class: "sub" }, data.again) : null,
-        data.skipped.length ? el("span", { class: "sub" }, `ไม่รู้จักไฟล์: ${data.skipped.join(", ")}`) : null);
+        data.again ? el("span", { class: "sub" }, data.again) : "",
+        data.skipped.length ? el("span", { class: "sub" }, `ไม่รู้จักไฟล์: ${data.skipped.join(", ")}`) : "");
     } catch (err) {
       line.className = "error";
       line.replaceChildren(el("strong", {}, `✕ ${file.name}`), ` · ${err.message}`);
@@ -282,9 +282,9 @@ function pullPanel({ p, url, body, line, after }) {
       el("span", { class: "badge" }, `พบ ${job.found} REP`),
       el("span", { class: "badge" }, `มีอยู่แล้ว ${job.known}`),
       el("span", { class: "badge b-ok" }, `ใหม่ ${job.imported} / ${job.total}`),
-      sent ? el("span", { class: "badge" }, `${sent.toLocaleString()} รายการ`) : null,
-      failed ? el("span", { class: "badge b-error" }, `ติด C ${failed.toLocaleString()} รายการ`) : null,
-      job.errors ? el("span", { class: "badge b-error" }, `ไม่สำเร็จ ${job.errors}`) : null);
+      sent ? el("span", { class: "badge" }, `${sent.toLocaleString()} รายการ`) : "",
+      failed ? el("span", { class: "badge b-error" }, `ติด C ${failed.toLocaleString()} รายการ`) : "",
+      job.errors ? el("span", { class: "badge b-error" }, `ไม่สำเร็จ ${job.errors}`) : "");
     const log = $(`${p}-log`);
     if (job.lines.length < st.shown) { log.replaceChildren(); st.shown = 0; }
     for (const l of job.lines.slice(st.shown)) log.prepend(line(l));

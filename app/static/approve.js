@@ -109,8 +109,8 @@ async function importFiles(files) {
       line.className = "ok";
       line.replaceChildren(el("strong", {}, `✓ ${file.name}`),
         ...data.files.map((f) => ` · ${f.file_date ? toDmy(f.file_date) : f.name}: ชำระ ${f.payments} คืนเงิน ${f.refunds} รวม ${money(f.total)} บาท (ใหม่ ${f.added}, อัปเดต ${f.updated})`),
-        data.skipped.length ? el("span", { class: "sub" }, `ข้ามไฟล์: ${data.skipped.join(", ")}`) : null,
-        data.again ? el("span", { class: "sub" }, data.again) : null);
+        data.skipped.length ? el("span", { class: "sub" }, `ข้ามไฟล์: ${data.skipped.join(", ")}`) : "",
+        data.again ? el("span", { class: "sub" }, data.again) : "");
     } catch (err) {
       line.className = "error";
       line.replaceChildren(el("strong", {}, `✕ ${file.name}`), ` · ${err.message}`);

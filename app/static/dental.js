@@ -169,7 +169,7 @@ async function importFiles(files) {
       line.className = "ok";
       line.replaceChildren(el("strong", {}, `✓ ${file.name}`),
         ` · ${data.kind} ${toDmy(data.period_start)} – ${toDmy(data.period_end)} · ${data.rows} รายการ ${money(data.total)} บาท (ใหม่ ${data.added}, อัปเดต ${data.updated})`,
-        data.again ? el("span", { class: "sub" }, data.again) : null);
+        data.again ? el("span", { class: "sub" }, data.again) : "");
     } catch (err) {
       line.className = "error";
       line.replaceChildren(el("strong", {}, `✕ ${file.name}`), ` · ${err.message}`);
